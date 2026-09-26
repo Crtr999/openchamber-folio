@@ -1,3 +1,4 @@
+import { useFolioStore } from '@/lib/folio/store';
 import { OpenCodeCompatibilityGate } from '@/components/update/OpenCodeCompatibilityGate';
 import React from 'react';
 import { AppStartupOverlay } from '@/components/ui/AppStartupOverlay';
@@ -277,6 +278,7 @@ function App({ apis }: AppProps) {
 
   const initializeApp = useConfigStore((s) => s.initializeApp);
   const isInitialized = useConfigStore((s) => s.isInitialized);
+  const localNotebookReady = useFolioStore(s => Boolean(s.api && s.status));
   const isConnected = useConfigStore((s) => s.isConnected);
   const providersCount = useConfigStore((state) => state.providers.length);
   const agentsCount = useConfigStore((state) => state.agents.length);
@@ -404,6 +406,7 @@ function App({ apis }: AppProps) {
       isInitialized,
       bootOutcomeKnown,
       bootViewIsMain,
+      localNotebookReady,
     })) {
       return;
     }
@@ -419,7 +422,7 @@ function App({ apis }: AppProps) {
     }, 150);
 
     return () => clearTimeout(timer);
-  }, [isDesktopRuntime, isInitialized, bootOutcomeKnown, bootViewIsMain]);
+  }, [isDesktopRuntime, isInitialized, bootOutcomeKnown, bootViewIsMain, localNotebookReady]);
 
   // Deterministic malformed handling: update splash text so the user
   // sees a specific error instead of a generic spinner, but do NOT
@@ -959,7 +962,7 @@ function App({ apis }: AppProps) {
     );
   }
 
-  if (initRetryExhausted && !isInitialized && !isVSCodeRuntime && !embeddedSessionChat) {
+  if (initRetryExhausted && !isInitialized && !localNotebookReady && !isVSCodeRuntime && !embeddedSessionChat) {
     return (
       <ErrorBoundary>
         <StartupInitializationRecovery
@@ -987,7 +990,7 @@ function App({ apis }: AppProps) {
                   <OpenCodeUpdateToast />
                   <ProjectConfigErrorToast />
                   <MainLayout />
-                  <AppStartupOverlay ready={isInitialized && (!isDesktopRuntime || (bootOutcomeKnown && bootViewIsMain))} />
+                  <AppStartupOverlay ready={(isInitialized || (isDesktopRuntime && localNotebookReady)) && (!isDesktopRuntime || (bootOutcomeKnown && bootViewIsMain))} />
                   <Toaster />
                   <AppLinkConfirmDialog />
                   <SharedTrustConfirmDialog />

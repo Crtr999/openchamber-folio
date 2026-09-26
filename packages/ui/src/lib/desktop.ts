@@ -1,3 +1,4 @@
+import { responseSchema, requestSchema } from '@/lib/folio/schema';
 import { z } from 'zod';
 import type { RuntimeAPIs } from '@/lib/api/types';
 import { getInjectedBootOutcome } from '@/lib/desktopBoot';
@@ -854,4 +855,9 @@ export const fetchDesktopInstalledApps = async (
     console.warn('Failed to fetch installed apps', error);
     return { apps: [], success: false, hasCache: false, isCacheStale: false };
   }
+};
+
+export const createDesktopFolioAPI = (): RuntimeAPIs['folio'] => {
+  if (!canUseElectronDesktopIPC() || getElectronPlatform() !== 'darwin') return undefined;
+  return { async request(input) { const payload = requestSchema.parse(input); return responseSchema.parse(await invokeDesktop('desktop_folio', payload)); } };
 };

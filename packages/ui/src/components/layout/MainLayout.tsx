@@ -1,3 +1,6 @@
+import { FolioWorkspace } from '@/components/folio/FolioWorkspace';
+import { useFolioStore } from '@/lib/folio/store';
+import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import React from 'react';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
@@ -42,6 +45,23 @@ const SettingsWindow = lazyWithChunkRecovery(() => import('@/components/views/Se
  * crossing the threshold reloads into it (see watchHostedSurfaceViewport).
  */
 export const MainLayout: React.FC = () => {
+    const { folio } = useRuntimeAPIs();
+    const folioOpen = useFolioStore(state => state.open);
+    React.useEffect(() => {
+        useFolioStore.getState().bind(folio);
+        if (!folio) return;
+        void useFolioStore.getState().refresh();
+        const timer = setInterval(() => void useFolioStore.getState().refresh(), 1500);
+        const guardUnsavedChanges = (event: BeforeUnloadEvent) => {
+            const store = useFolioStore.getState();
+            if (store.saving || Object.keys(store.drafts).length) {
+                event.preventDefault();
+                void store.flush().catch(() => undefined);
+            }
+        };
+        window.addEventListener('beforeunload', guardUnsavedChanges);
+        return () => { clearInterval(timer); window.removeEventListener('beforeunload', guardUnsavedChanges); };
+    }, [folio]);
     useSessionListSync({ isVSCode: false });
     useTerminalSessionKeepalive();
     const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
@@ -76,10 +96,10 @@ export const MainLayout: React.FC = () => {
     // Any full-page surface replacing the chat area. While open, the chat is
     // fully hidden (not just covered) so none of its floating chrome bleeds
     // through, and selecting a session or draft anywhere closes the surface.
-    const isSurfacePageOpen = isScheduledTasksPageOpen || isArchivePageOpen || isUsageStatsPageOpen || Boolean(worktreesPageProjectId) || isMultiRunLauncherOpen || Boolean(guestPage);
+    const isSurfacePageOpen = folioOpen || isScheduledTasksPageOpen || isArchivePageOpen || isUsageStatsPageOpen || Boolean(worktreesPageProjectId) || isMultiRunLauncherOpen || Boolean(guestPage);
 
     React.useEffect(() => {
-        const closeSurfacePages = () => useUIStore.getState().closeMainSurfaces();
+        const closeSurfacePages = () => { useUIStore.getState().closeMainSurfaces(); void useFolioStore.getState().close(); };
         const unsubscribeSession = useSessionUIStore.subscribe((state, prev) => {
             const sessionSelected = Boolean(state.currentSessionId) && state.currentSessionId !== prev.currentSessionId;
             // Draft identity change covers re-opening a draft while one is
@@ -163,6 +183,7 @@ export const MainLayout: React.FC = () => {
                                                 </div>
                                             )}
                                             <ErrorBoundary><WorktreesView /></ErrorBoundary>
+                                            {folioOpen && <div className="absolute inset-0 z-10 bg-background"><ErrorBoundary><FolioWorkspace /></ErrorBoundary></div>}
                                             {guestPage && <div className="absolute inset-0 z-10 bg-background">
                                                 <ErrorBoundary><PluginPane mode={`plugin:${guestPage.id}`} surface="page" item={null}
                                                     onDismiss={() => useUIStore.getState().setOpenGuestPage(null)} /></ErrorBoundary>

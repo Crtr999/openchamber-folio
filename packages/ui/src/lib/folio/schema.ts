@@ -1,0 +1,27 @@
+import { z } from 'zod';
+export const blockKinds = ['text','heading1','heading2','heading3','heading4','toggleHeading1','toggleHeading2','toggleHeading3','toggleHeading4','bullet','numbered','task','toggle','quote','callout','code','equation','divider','page','pageIn','attachment'] as const;
+export const colorNames = ['none','gray','brown','orange','yellow','green','blue','purple','pink','red'] as const;
+export const columnKinds = ['title','text','select','status','number','date','rating'] as const;
+export const blockKindSchema=z.enum(blockKinds);
+export const colorNameSchema=z.enum(colorNames);
+export const columnKindSchema=z.enum(columnKinds);
+const inlineMarkSchema=z.object({start:z.number().int().nonnegative(),length:z.number().int().nonnegative(),style:z.enum(['bold','italic','underline','strike','code','highlight','color','link']),value:z.string().optional()});
+const blockSchema=z.object({id:z.string().uuid(),kind:blockKindSchema,text:z.string(),checked:z.boolean(),highlight:colorNameSchema,asset:z.string().optional(),marks:z.array(inlineMarkSchema).optional()});
+const tableSchema=z.object({columns:z.array(z.object({id:z.string(),name:z.string(),kind:columnKindSchema,options:z.array(z.string())})),rows:z.array(z.object({id:z.string(),values:z.record(z.string(),z.string())})),view:z.enum(['table','board','chart']),groupBy:z.string().optional(),chartBy:z.string().optional()});
+const noteSchema=z.object({id:z.string().uuid(),title:z.string(),icon:z.string(),parentID:z.string().uuid().optional(),blocks:z.array(blockSchema),tags:z.array(z.string()),favorite:z.boolean(),excludedFromAI:z.boolean(),isMeeting:z.boolean(),isChat:z.boolean().optional(),table:tableSchema.optional(),trashed:z.boolean(),created:z.number(),modified:z.number()});
+const eventSchema=z.object({id:z.string(),title:z.string(),start:z.number(),end:z.number(),calendar:z.string(),joinURL:z.string().optional()});
+const segmentSchema=z.object({id:z.string(),filename:z.string(),speaker:z.string(),start:z.number(),duration:z.number(),hasSound:z.boolean()});
+const transcriptSchema=z.object({id:z.string(),start:z.number(),text:z.string(),speaker:z.string()});
+const meetingSchema=z.object({id:z.string(),noteID:z.string(),started:z.number(),ended:z.number().optional(),segments:z.array(segmentSchema),transcript:z.array(transcriptSchema),completedSegmentIDs:z.array(z.string())});
+export const statusSchema=z.object({selectedID:z.string().optional(),notes:z.array(noteSchema),status:z.string(),error:z.string().optional(),importing:z.boolean(),importProgress:z.string(),listening:z.boolean(),dictation:z.string(),speaking:z.boolean(),paused:z.boolean(),voiceID:z.string(),rate:z.number(),voices:z.array(z.object({id:z.string(),name:z.string()})),recording:z.boolean(),recordingStarting:z.boolean(),transcribing:z.boolean(),recordingProgress:z.string(),microphoneLevel:z.number(),systemLevel:z.number(),meeting:meetingSchema.optional(),calendarConnected:z.boolean(),events:z.array(eventSchema),calendarPrompt:eventSchema.optional(),reminders:z.boolean(),fontSize:z.number(),highlightStrength:z.number(),aiBusy:z.boolean(),messages:z.array(z.object({id:z.string(),role:z.string(),content:z.string(),sourceIDs:z.array(z.string())}))});
+const folioCommands=['state','select','create','save','trash','duplicate','search','markdown','export','export-library','import','cancel-import','attach','open-attachment','read','pause-reading','stop-reading','voice','listen','stop-listening','record','stop-recording','import-audio','transcribe','cancel-transcription','summarize','calendar-connect','calendar-refresh','calendar-reminders','calendar-dismiss','calendar-prepare','utility','history','restore-revision','append','stop-ai','clear-error','shutdown'] as const;
+export const requestSchema=z.object({command:z.enum(folioCommands),noteID:z.string().uuid().optional(),note:noteSchema.optional(),expectedModified:z.number().optional(),text:z.string().max(2_000_000).optional(),kind:z.string().max(50).optional(),parentID:z.string().uuid().optional(),flag:z.boolean().optional(),voiceID:z.string().optional(),rate:z.number().finite().optional(),blockID:z.string().uuid().optional(),revisionID:z.number().int().optional(),eventID:z.string().optional()}).strict();
+export const responseSchema=z.object({id:z.string(),ok:z.boolean(),state:statusSchema.optional(),error:z.string().optional(),text:z.string().optional(),revisions:z.array(z.object({id:z.number(),date:z.number(),note:noteSchema})).optional()});
+export type FolioNote=z.infer<typeof noteSchema>;
+export type FolioBlock=z.infer<typeof blockSchema>;
+export type FolioTable=z.infer<typeof tableSchema>;
+export type FolioStatus=z.infer<typeof statusSchema>;
+export type FolioRequest=z.infer<typeof requestSchema>;
+export type FolioResponse=z.infer<typeof responseSchema>;
+export interface FolioAPI { request(input:FolioRequest):Promise<FolioResponse> }
+export const makeBlock=():FolioBlock=>({id:crypto.randomUUID().toUpperCase(),kind:'text',text:'',checked:false,highlight:'none',marks:[]});

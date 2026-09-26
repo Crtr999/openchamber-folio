@@ -223,6 +223,8 @@ export type InitialLoadingState = {
    * When true or absent, splash also requires isInitialized.
    */
   bootViewIsMain?: boolean;
+  /** The local notebook can operate while OpenCode is still connecting. */
+  localNotebookReady?: boolean;
 };
 
 export type DesktopBootFlowRestartInput = {
@@ -237,7 +239,7 @@ export type DesktopBootFlowRestartInput = {
  * For non-main views (chooser, recovery), the splash can dismiss as soon as
  * the outcome is known — `isInitialized` is not required because OpenCode
  * may not be available in those flows.
- * For main views, both `isInitialized` and `bootOutcomeKnown` are required.
+ * For main views, a valid boot outcome and either OpenCode or the local notebook must be ready.
  * Non-desktop shells only need the app to be initialized.
  */
 export function canDismissInitialLoading(state: InitialLoadingState): boolean {
@@ -254,7 +256,7 @@ export function canDismissInitialLoading(state: InitialLoadingState): boolean {
     return true;
   }
 
-  return state.isInitialized;
+  return state.isInitialized || state.localNotebookReady === true;
 }
 
 /**

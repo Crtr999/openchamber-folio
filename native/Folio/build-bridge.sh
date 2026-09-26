@@ -1,0 +1,20 @@
+#!/bin/zsh
+set -euo pipefail
+project_dir="${0:A:h}"
+output_dir="${1:-$project_dir/dist}"
+export CLANG_MODULE_CACHE_PATH="$project_dir/.build/module-cache"
+export SWIFTPM_MODULECACHE_OVERRIDE="$CLANG_MODULE_CACHE_PATH"
+swift build --package-path "$project_dir" --disable-sandbox -c release
+app_dir="$output_dir/Folio Engine.app"
+mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources"
+cp "$project_dir/.build/release/Folio" "$app_dir/Contents/MacOS/Folio"
+cp "$project_dir/Resources/Info.plist" "$app_dir/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier com.carterlaborde.openchamber.folio-engine' "$app_dir/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Set :CFBundleName Folio Engine' "$app_dir/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName Folio Engine' "$app_dir/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Add :LSUIElement bool true' "$app_dir/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Delete :CFBundleURLTypes' "$app_dir/Contents/Info.plist"
+chmod -R u+w "$app_dir/Contents/Resources"
+cp "$project_dir/Resources/"*LICENSE* "$app_dir/Contents/Resources/"
+xattr -cr "$app_dir"
+codesign --force --sign - --options runtime --entitlements "$project_dir/Resources/entitlements.plist" "$app_dir"

@@ -27,7 +27,7 @@ recordEarlyStartupMark('electron.entry');
 
 // Set the product name early so electron-log derives its log directory as
 // ~/Library/Logs/OpenChamber/ (not ~/Library/Logs/@openchamber/electron/).
-app.setName('OpenChamber');
+app.setName('OpenChamber Folio');
 if (process.platform === 'linux') {
   app.setDesktopName('openchamber.desktop');
 }

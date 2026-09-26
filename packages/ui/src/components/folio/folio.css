@@ -1,0 +1,14 @@
+.folio-rich-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
+.folio-rich-text p { margin: 0; }
+.folio-rich-text a { text-decoration: underline; color: var(--primary-text); }
+.folio-rich-text mark { border-radius: 3px; color: #171b19; padding: 1px 0; }
+.folio-rich-text code { background: var(--secondary); border-radius: 4px; padding: 2px 4px; font-family: monospace; }
+.folio-block[data-kind$="Heading1"], .folio-block[data-kind="heading1"] { font-size: 2em; font-weight: 700; padding-top: 1rem; }
+.folio-block[data-kind$="Heading2"], .folio-block[data-kind="heading2"] { font-size: 1.65em; font-weight: 650; padding-top: .75rem; }
+.folio-block[data-kind$="Heading3"], .folio-block[data-kind="heading3"] { font-size: 1.35em; font-weight: 600; padding-top: .5rem; }
+.folio-block[data-kind$="Heading4"], .folio-block[data-kind="heading4"] { font-size: 1.1em; font-weight: 600; padding-top: .5rem; }
+.folio-block[data-kind="quote"] { border-left: 3px solid var(--border); padding-left: 12px; font-style: italic; }
+.folio-block[data-kind="callout"] { background: var(--secondary); border-radius: 8px; padding: 12px; }
+.folio-block[data-kind="code"], .folio-block[data-kind="equation"] { font-family: monospace; background: var(--secondary); padding: 12px; border-radius: 8px; }
+.folio-block[data-kind="task"][data-checked="true"] .folio-rich-text { text-decoration: line-through; color: var(--muted-foreground); }
+.folio-workspace input, .folio-workspace select { color-scheme: dark light; }

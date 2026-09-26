@@ -414,3 +414,10 @@ describe('canDismissInitialLoading with malformed injection', () => {
     ).toBe(true);
   });
 });
+
+test('a ready local notebook releases desktop loading without bypassing boot validation', () => {
+  const state = {isDesktopShell:true,isInitialized:false,bootOutcomeKnown:true,bootViewIsMain:true,localNotebookReady:true};
+  expect(canDismissInitialLoading(state)).toBe(true);
+  expect(canDismissInitialLoading({...state,bootOutcomeKnown:false})).toBe(false);
+  expect(canDismissInitialLoading({...state,isDesktopShell:false})).toBe(false);
+});

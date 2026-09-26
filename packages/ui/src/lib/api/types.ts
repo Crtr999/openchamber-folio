@@ -1467,6 +1467,8 @@ export interface ClientAuthAPI {
 }
 
 export interface RuntimeAPIs {
+  /** Present only on a trusted local macOS desktop page. Folio is always local, even when chats use a remote runtime. */
+  folio?: import('@/lib/folio/schema').FolioAPI;
   /** Native local picker. Web/mobile fall back to their browser file input; VS Code does not import themes. */
   themeFiles?: {
     pick(): Promise<{ status: 'unsupported' } | { status: 'picked'; file: { name: string; size: number; text: string } | null }>;

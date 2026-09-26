@@ -79,3 +79,8 @@ workspaces/
 .maintenance-clone
 test-results/
 artifacts/
+
+# Folio native build products
+native/Folio/.build/
+packages/electron/resources/folio/
+native/Folio/dist/
