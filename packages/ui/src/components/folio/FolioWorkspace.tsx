@@ -7,10 +7,10 @@ import { cn } from '@/lib/utils';
 import { useFolioStore } from '@/lib/folio/store';
 import { blockKinds, colorNames, makeBlock, type FolioBlock, type FolioNote, type FolioRequest } from '@/lib/folio/schema';
 import { folioColors } from '@/lib/folio/rich-text';
-import { folioSymbols } from '@/lib/folio/icons';
 import { useInputStore } from '@/sync/input-store';
 import { FolioDatabase } from './FolioDatabase';
 import { FolioIcon } from './FolioIcon';
+import { FolioIconPicker } from './FolioIconPicker';
 import { FolioRichBlock, type FocusAt, type SlashState } from './FolioRichBlock';
 import './folio.css';
 
@@ -21,6 +21,9 @@ type SlashCommand = { id: string; glyph?: string; kind?: BlockKind; database?: '
 
 const menuItem = 'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-interactive-hover disabled:opacity-40';
 const quiet = 'rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-interactive-hover hover:text-foreground';
+const tool = 'flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-interactive-hover hover:text-foreground disabled:opacity-40';
+// Pulses blue while running, like the chat mic; clicking again stops it.
+const toolLive = 'animate-pulse bg-[color-mix(in_srgb,var(--status-info)_16%,transparent)] text-[var(--status-info)] hover:text-[var(--status-info)]';
 
 /** Shows each color itself, not just its name. Keeps the text selection while clicking. */
 function Swatches({ kind, label, onPick, compact }: { kind: Paint; label: (color: ColorName) => string; onPick: (color: ColorName) => void; compact?: boolean }) {
@@ -58,6 +61,8 @@ export function FolioWorkspace() {
   const saving = useFolioStore((s) => s.saving);
   const error = useFolioStore((s) => s.error);
   const home = useFolioStore((s) => s.home);
+  const found = useFolioStore((s) => s.found);
+  const articleRef = React.useRef<HTMLElement>(null);
   const { edit, run, close } = useFolioStore.getState();
   const [active, setActive] = React.useState<{ id: string; editor: Editor }>();
   const [blockMenuID, setBlockMenuID] = React.useState<string>();
@@ -199,6 +204,42 @@ export function FolioWorkspace() {
     return false;
   };
 
+  // Read aloud speaks only the highlighted text; with nothing highlighted it reads the whole page.
+  const selectedText = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !articleRef.current?.contains(selection.anchorNode)) return '';
+    return selection.toString().trim();
+  };
+  const readAloud = () => {
+    if (status?.speaking) { call({ command: 'stop-reading' }); return; }
+    const text = selectedText();
+    call(text ? { command: 'read', text } : { command: 'read' });
+  };
+
+  // Opened from search: scroll to the matching line and highlight it, like Notion.
+  React.useEffect(() => {
+    if (!found || found.noteID !== note?.id) return;
+    let clear: ReturnType<typeof setTimeout> | undefined;
+    const frame = requestAnimationFrame(() => {
+      useFolioStore.getState().setFound(undefined);
+      const element = articleRef.current?.querySelector(`[data-block-id="${CSS.escape(found.blockID)}"]`);
+      if (!(element instanceof HTMLElement)) return;
+      element.scrollIntoView({ block: 'center' });
+      element.classList.remove('folio-found'); void element.offsetWidth; element.classList.add('folio-found');
+      const needle = found.query.toLowerCase();
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const at = (node.textContent ?? '').toLowerCase().indexOf(needle);
+        if (at < 0 || !needle) continue;
+        const range = document.createRange(); range.setStart(node, at); range.setEnd(node, at + needle.length);
+        CSS.highlights.set('folio-found', new Highlight(range));
+        break;
+      }
+      clear = setTimeout(() => { CSS.highlights.delete('folio-found'); element.classList.remove('folio-found'); }, 6000);
+    });
+    return () => { cancelAnimationFrame(frame); if (clear) { clearTimeout(clear); CSS.highlights.delete('folio-found'); } };
+  }, [found, note?.id]);
+
   const compose = async () => {
     setMenuOpen(false);
     const response = await run({ command: 'markdown', noteID: note?.id, flag: true });
@@ -236,12 +277,27 @@ export function FolioWorkspace() {
     {/* One slim bar replaces the old stacked toolbars; everything else lives in the ⋯ menu. */}
     <header className="flex h-11 shrink-0 items-center gap-1 px-3">
       <button type="button" className={quiet} onClick={() => void close()} title={t('folio.back')}><Icon name="arrow-left-s" className="inline size-4" /> {t('folio.back')}</button>
-      <nav className="flex min-w-0 flex-1 items-center gap-1 truncate pl-2 text-sm text-muted-foreground" aria-label={t('folio.pages')}>
+      <nav className="flex min-w-0 shrink items-center gap-1 truncate pl-2 text-sm text-muted-foreground" aria-label={t('folio.pages')}>
         {home ? <span className="text-foreground">{t('folio.notes')}</span> : <>
           {crumbs.map((crumb) => <React.Fragment key={crumb.id}><button type="button" className="truncate hover:text-foreground" onClick={() => call({ command: 'select', noteID: crumb.id })}>{crumb.title || t('folio.untitled')}</button><span>/</span></React.Fragment>)}
           {note && <span className="truncate text-foreground">{note.title || t('folio.untitled')}</span>}
         </>}
       </nav>
+      {note && <div className="ml-2 flex shrink-0 items-center gap-0.5" role="toolbar" aria-label={t('folio.more')} onMouseDown={(e) => e.preventDefault()}>
+        <button type="button" className={cn(tool, status.speaking && toolLive)} aria-pressed={status.speaking} title={status.speaking ? t('folio.stopReading') : t('folio.read')} aria-label={status.speaking ? t('folio.stopReading') : t('folio.read')} onClick={readAloud}>
+          {status.speaking ? <Icon name="stop" className="size-4" /> : <Icon name="volume-up" className="size-4" />}
+        </button>
+        <button type="button" className={cn(tool, status.listening && toolLive)} aria-pressed={status.listening} title={status.listening ? t('folio.stopDictating') : t('folio.dictate')} aria-label={status.listening ? t('folio.stopDictating') : t('folio.dictate')} onClick={() => call({ command: status.listening ? 'stop-listening' : 'listen' })}>
+          <Icon name="mic" className="size-4" />
+        </button>
+        <button type="button" className={cn(tool, status.recording && toolLive)} aria-pressed={status.recording} title={status.recording ? t('folio.stopRecording') : t('folio.recordings')} aria-label={status.recording ? t('folio.stopRecording') : t('folio.recordings')} onClick={() => status.recording ? call({ command: 'stop-recording' }) : utility('meeting')}>
+          <Icon name="record-circle" className="size-4" />
+        </button>
+        <button type="button" className={tool} title={t('folio.attach')} aria-label={t('folio.attach')} onClick={() => call({ command: 'attach' })}>
+          <Icon name="attachment-2" className="size-4" />
+        </button>
+      </div>}
+      <div className="flex-1" />
       <span className="px-2 text-xs text-muted-foreground" aria-live="polite">{saving || Object.keys(drafts).length ? t('folio.saving') : t('folio.saved')}</span>
       {note && <button type="button" className={quiet} disabled={note.excludedFromAI} onClick={() => void compose()}>{t('folio.addToChat')}</button>}
       <div className="relative">
@@ -257,11 +313,6 @@ export function FolioWorkspace() {
               <label className={cn(menuItem, 'cursor-default')}><Icon name="folder" className="size-4 text-muted-foreground" /><select className="min-w-0 flex-1 bg-transparent text-sm" aria-label={t('folio.parent')} value={note.parentID || ''} onChange={(e) => edit({ ...note, parentID: e.target.value || undefined })}><option value="">{t('folio.parent')}: {t('folio.root')}</option>{status.notes.filter((n) => !isDescendant(n.id) && !n.trashed).map((n) => <option key={n.id} value={n.id}>{n.title || t('folio.untitled')}</option>)}</select></label>
               <button type="button" className={menuItem} onClick={() => call({ command: 'duplicate' })}><Icon name="file-copy" className="size-4 text-muted-foreground" />{t('folio.duplicate')}</button>
               <button type="button" className={menuItem} onClick={() => utility('history')}><Icon name="history" className="size-4 text-muted-foreground" />{t('folio.history')}</button>
-              <div className="my-1 border-t border-border" />
-              <button type="button" className={menuItem} onClick={() => call(status.speaking ? { command: 'stop-reading' } : { command: 'read' })}><Icon name="volume-up" className="size-4 text-muted-foreground" />{status.speaking ? t('folio.stop') : t('folio.read')}</button>
-              <button type="button" className={menuItem} onClick={() => call({ command: status.listening ? 'stop-listening' : 'listen' })}><Icon name="mic" className="size-4 text-muted-foreground" />{t('folio.dictate')}{status.listening ? ' ●' : ''}</button>
-              <button type="button" className={menuItem} onClick={() => utility('meeting')}><Icon name="mic" className="size-4 text-muted-foreground" />{t('folio.recordings')}</button>
-              <button type="button" className={menuItem} onClick={() => call({ command: 'attach' })}><Icon name="clipboard" className="size-4 text-muted-foreground" />{t('folio.attach')}</button>
               <div className="my-1 border-t border-border" />
               <div className="px-2 pt-1 text-xs text-muted-foreground">{t('folio.import')}</div>
               {['notes', 'documents', 'ocr', ...(note.table ? ['csv'] : [])].map((kind) => <button key={kind} type="button" className={cn(menuItem, 'pl-4')} onClick={() => call({ command: 'import', kind, flag: kind === 'ocr' })}>{kind === 'notes' ? t('folio.pages') : kind === 'documents' ? t('folio.attach') : kind.toUpperCase()}</button>)}
@@ -282,7 +333,7 @@ export function FolioWorkspace() {
     {status.calendarPrompt && <div className="mx-4 mb-2 flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-sm"><span className="flex-1">{status.calendarPrompt.title}</span><button type="button" className={quiet} onClick={() => call({ command: 'calendar-prepare', eventID: status.calendarPrompt?.id })}>{t('folio.meeting')}</button><button type="button" className={quiet} onClick={() => call({ command: 'calendar-dismiss' })}>×</button></div>}
 
     <div className="min-h-0 flex-1 overflow-auto" onScroll={() => { setBubble(undefined); setSlash(null); }}>
-      {!note && <div className="mx-auto max-w-3xl px-12 py-10">
+      {!note && <div className="mx-auto w-full max-w-5xl pl-14 pr-8 py-10">
         <h1 className="mb-6 text-3xl font-bold">{t('folio.notes')}</h1>
         <div className="mb-10 grid grid-cols-3 gap-2">
           {createKinds.map(([kind, icon, label]) => <button key={kind} type="button" className="flex items-center gap-2 rounded-lg border border-border px-3 py-3 text-left text-sm hover:bg-interactive-hover" onClick={() => void createFromMenu(kind)}><Icon name={icon} className="size-4 text-muted-foreground" />{t(label)}</button>)}
@@ -293,12 +344,14 @@ export function FolioWorkspace() {
         </button>)}
       </div>}
 
-      {note && <article className="mx-auto max-w-3xl px-14 pb-40 pt-10" style={{ fontSize: status.fontSize }}>
+      {note && <article ref={articleRef} className="mx-auto w-full max-w-5xl pb-40 pl-14 pr-8 pt-10" style={{ fontSize: status.fontSize }}>
         <div className="group/title relative mb-1">
-          <button type="button" className="mb-2 rounded-md p-1 text-5xl leading-none hover:bg-interactive-hover" aria-label={t('folio.icon')} onClick={() => setIconOpen(!iconOpen)}><FolioIcon value={note.icon} /></button>
-          {iconOpen && <div className="absolute left-0 top-16 z-30 w-72 rounded-xl border border-border bg-background p-3 shadow-xl">
-            <div className="grid grid-cols-8 gap-1">{Object.entries(folioSymbols).map(([name, symbol]) => <button key={name} type="button" className="rounded p-1 text-lg hover:bg-interactive-hover" onClick={() => { edit({ ...note, icon: name }); setIconOpen(false); }}>{symbol}</button>)}</div>
-          </div>}
+          {note.icon
+            ? <button type="button" className="mb-2 rounded-md p-1 text-5xl leading-none hover:bg-interactive-hover" aria-label={t('folio.icon')} onClick={() => setIconOpen(!iconOpen)}><FolioIcon value={note.icon} large /></button>
+            : <button type="button" className={cn(quiet, 'mb-2 flex items-center gap-1.5 opacity-0 focus-visible:opacity-100 group-hover/title:opacity-100', iconOpen && 'opacity-100')} onClick={() => setIconOpen(!iconOpen)}><Icon name="emotion-happy" className="size-4" />{t('folio.addIcon')}</button>}
+          {iconOpen && <FolioIconPicker onClose={() => setIconOpen(false)}
+            onPick={(icon) => { const current = latestNote(); if (current) edit({ ...current, icon }); setIconOpen(false); }}
+            onRemove={() => { const current = latestNote(); if (current) edit({ ...current, icon: '' }); setIconOpen(false); }} />}
         </div>
         <input aria-label={t('folio.title')} placeholder={t('folio.untitled')} className="mb-1 w-full bg-transparent text-[2.5em] font-bold leading-tight outline-none placeholder:text-muted-foreground/50" value={note.title}
           onChange={(e) => edit({ ...note, title: e.target.value })}
@@ -312,7 +365,7 @@ export function FolioWorkspace() {
           if (hidden.has(block.id)) return null;
           const toggled = block.checked, isToggle = block.kind.startsWith('toggle');
           const linked = (block.kind === 'page' || block.kind === 'pageIn') && block.asset ? status.notes.find((n) => n.id === block.asset) : undefined;
-          return <div key={block.id} className="folio-block group/block relative flex items-start gap-1.5 rounded-sm" data-kind={block.kind} data-checked={block.checked}
+          return <div key={block.id} data-block-id={block.id} className="folio-block group/block relative flex items-start gap-1.5 rounded-sm" data-kind={block.kind} data-checked={block.checked}
             style={{ backgroundColor: block.highlight === 'none' ? undefined : `color-mix(in srgb, ${folioColors[block.highlight]} ${status.highlightStrength * 100}%, transparent)` }}>
             {/* Handles only appear on hover, in the left margin, like Notion. */}
             <div className={cn('absolute -left-12 top-0.5 flex opacity-0 transition-opacity group-hover/block:opacity-100', blockMenuID === block.id && 'opacity-100')}>

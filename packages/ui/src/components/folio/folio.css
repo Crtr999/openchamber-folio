@@ -21,3 +21,8 @@
 .folio-block[data-kind="code"], .folio-block[data-kind="equation"] { font-family: ui-monospace, monospace; font-size: .9em; background: var(--secondary); padding: 12px 14px; border-radius: 6px; margin: 4px 0; }
 .folio-block[data-kind="task"][data-checked="true"] .folio-rich-text { text-decoration: line-through; color: var(--muted-foreground); }
 .folio-workspace select { color-scheme: dark light; }
+
+/* Opened from search: the matching line flashes and the matching words stay marked for a moment. */
+.folio-found { animation: folio-found 4s ease-out; }
+@keyframes folio-found { 0%, 55% { background-color: color-mix(in srgb, var(--status-warning) 22%, transparent); } 100% { background-color: transparent; } }
+::highlight(folio-found) { background-color: color-mix(in srgb, var(--status-warning) 55%, transparent); }

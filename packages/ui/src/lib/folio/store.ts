@@ -10,6 +10,9 @@ interface FolioStore {
   /** Notes home (all pages) instead of a single page. */
   home: boolean;
   openHome: () => Promise<void>;
+  /** Set by search: the page opens scrolled to this block with the query highlighted. */
+  found?: { noteID: string; blockID: string; query: string };
+  setFound: (found?: { noteID: string; blockID: string; query: string }) => void;
   error?: string;
   saving: boolean;
   bind: (api?: FolioAPI) => void;
@@ -71,6 +74,7 @@ export const useFolioStore = create<FolioStore>((set, get) => {
   return {
     drafts: {}, open: false, home: false, saving: false,
     openHome: async () => { try { await get().flush(); set({ open: true, home: true }); } catch { /* Keep the unsaved page visible. */ } },
+    setFound: found => set({ found }),
     bind: api => set({ api }),
     refresh: async () => {
       if (refreshing || saving || !get().api || Object.keys(get().drafts).length) return;
