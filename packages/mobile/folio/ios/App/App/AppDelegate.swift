@@ -47,3 +47,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
 }
+
+// iOS 27 requires the UIScene lifecycle; the window comes from Main.storyboard via Info.plist.
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+    var window: UIWindow?
+}
