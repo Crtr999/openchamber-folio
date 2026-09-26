@@ -72,6 +72,8 @@ struct BridgeResponse: Encodable {
     let calendar = CalendarController()
     let recorder = MeetingRecorder()
     let chat = ChatModel()
+    /// Opened on first use by the iPhone app's "read aloud"; the phone plays the audio it returns.
+    private var bella: BellaVoiceEngine?
     private var windows: [String:NSWindow] = [:]
     private var subscriptions = Set<AnyCancellable>()
     init() {
@@ -115,6 +117,8 @@ struct BridgeResponse: Encodable {
             if let startup=model.startupError { throw AppError(message:startup) }
             var text: String?
             var revisions: [BridgeRevision]?
+            // Sync-only commands answer without the whole notebook state.
+            var lean=false
             let id=request.noteID ?? model.selectedID
             func selected() throws -> Note { guard let id, let note=model.notes.first(where:{$0.id==id}) else {throw AppError(message:"Choose a Folio page first")}; return note }
             switch request.command {
@@ -149,12 +153,17 @@ struct BridgeResponse: Encodable {
                 guard incoming.title.count<=1000,incoming.blocks.count<=10000 else {throw AppError(message:"Page is too large")}
                 let existing=model.notes.first(where:{$0.id==incoming.id})
                 let knownAssets=Set(existing?.blocks.compactMap(\.asset) ?? [])
+                let assetRoot=model.library.resolvingSymlinksInPath().standardizedFileURL
+                func inLibrary(_ asset: String) -> Bool {
+                    let file=assetRoot.appendingPathComponent(asset).resolvingSymlinksInPath().standardizedFileURL
+                    return file.path.hasPrefix(assetRoot.path+"/assets/") && FileManager.default.fileExists(atPath:file.path)
+                }
                 for index in incoming.blocks.indices {
                     let block=incoming.blocks[index]
                     let count=(block.text as NSString).length
                     guard (block.marks ?? []).allSatisfy({$0.start>=0 && $0.length>=0 && $0.start<=count && $0.length<=count-$0.start}) else {throw AppError(message:"Invalid text formatting range")}
-                    // Only files already in this Mac library may be referenced; phone attachments stay on the phone.
-                    if block.kind == .attachment, let asset=block.asset, !knownAssets.contains(asset) {incoming.blocks[index].asset=nil}
+                    // Only files already in this Mac library may be referenced. The phone uploads its files first (asset-write).
+                    if block.kind == .attachment, let asset=block.asset, !knownAssets.contains(asset), !inLibrary(asset) {incoming.blocks[index].asset=nil}
                 }
                 var seen=Set<UUID>();var parent=incoming.parentID
                 while let value=parent {
@@ -216,6 +225,46 @@ struct BridgeResponse: Encodable {
                 let note=try selected();guard let revision=try model.database?.revisions(for:note.id).first(where:{$0.id==request.revisionID}) else {throw AppError(message:"Revision was not found")};model.edit(note.id,{$0=revision.note},checkpoint:true)
             case "append":let note=try selected();model.appendAI(request.text ?? "",noteID:note.id,replace:request.flag == true)
             case "stop-ai":chat.stop()
+            case "chat-list":
+                // Every assistant conversation, keyed by the page it lives on, for iPhone sync.
+                lean=true
+                var all: [String:[ChatMessage]] = [:]
+                for chatID in model.chatIDs { chat.load(chatID, model:model); if let list=chat.messages[chatID], !list.isEmpty { all[chatID.uuidString]=list } }
+                text=String(data:try JSONEncoder().encode(all),encoding:.utf8)
+            case "chat-put":
+                lean=true
+                guard let target=request.noteID, model.notes.contains(where:{$0.id==target}) else {throw AppError(message:"Page was not found")}
+                guard chat.busyNote != target else {throw AppError(message:"The assistant is still answering in this chat on your Mac.")}
+                let incoming=try JSONDecoder().decode([ChatMessage].self,from:Data((request.text ?? "[]").utf8))
+                guard incoming.count<=5000 else {throw AppError(message:"Chat is too long")}
+                try model.database?.saveChat(incoming,id:target)
+                chat.messages[target]=incoming
+                if incoming.isEmpty {model.chatIDs.remove(target)} else {model.chatIDs.insert(target)}
+            case "asset-read":
+                lean=true
+                let root=model.library.resolvingSymlinksInPath().standardizedFileURL
+                let file=root.appendingPathComponent(request.text ?? "").resolvingSymlinksInPath().standardizedFileURL
+                guard file.path.hasPrefix(root.path+"/assets/") else {throw AppError(message:"Attachment is outside the library")}
+                let size=(try FileManager.default.attributesOfItem(atPath:file.path)[.size] as? NSNumber)?.intValue ?? 0
+                guard size<=40_000_000 else {throw AppError(message:"This attachment is too large to copy to iPhone")}
+                text=try Data(contentsOf:file).base64EncodedString()
+            case "asset-write":
+                lean=true
+                guard let data=Data(base64Encoded:request.text ?? ""),data.count<=40_000_000 else {throw AppError(message:"Attachment could not be read")}
+                let ext=String(URL(fileURLWithPath:request.kind ?? "file").pathExtension.filter{$0.isLetter || $0.isNumber}.prefix(10))
+                let relative="assets/"+UUID().uuidString+(ext.isEmpty ? "" : "."+ext)
+                try FileManager.default.createDirectory(at:model.library.appendingPathComponent("assets"),withIntermediateDirectories:true)
+                try data.write(to:model.library.appendingPathComponent(relative),options:.atomic)
+                text=relative
+            case "bella":
+                lean=true
+                guard let directory=BellaVoiceEngine.modelDirectory else {throw AppError(message:"Bella is not installed on this Mac")}
+                let words=String((request.text ?? "").prefix(1500))
+                guard !words.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else {throw AppError(message:"Nothing to read")}
+                if bella == nil {bella=try await Task.detached(priority:.userInitiated){try BellaVoiceEngine(directory:directory)}.value}
+                guard let engine=bella else {throw AppError(message:"Bella could not start")}
+                let speed=Float(max(0.75,min(1.4,request.rate ?? 1)))
+                text=try await Task.detached(priority:.userInitiated){try engine.wav(for:words,speed:speed)}.value.base64EncodedString()
             case "clear-error":model.error=nil;voice.error=nil;recorder.error=nil;calendar.error=nil
             case "shutdown":
                 if recorder.isRecording {await recorder.stop()};voice.stopReading();voice.stopListening();chat.stop();model.flush()
@@ -223,7 +272,7 @@ struct BridgeResponse: Encodable {
             default:throw AppError(message:"Unsupported Folio command")
             }
             model.flush()
-            return BridgeResponse(id:request.id,ok:true,state:snapshot(),text:text,revisions:revisions)
+            return BridgeResponse(id:request.id,ok:true,state:lean ? nil : snapshot(),text:text,revisions:revisions)
         } catch {return BridgeResponse(id:request.id,ok:false,state:snapshot(),error:error.localizedDescription)}
     }
 }
@@ -234,7 +283,7 @@ struct BridgeResponse: Encodable {
         // Requests and replies stay on inherited pipes, never a network listener.
         Thread.detachNewThread {
             while let line=readLine() {
-                guard line.utf8.count<=16_000_000 else {continue}
+                guard line.utf8.count<=72_000_000 else {continue}
                 do {
                     let request=try JSONDecoder().decode(BridgeRequest.self,from:Data(line.utf8))
                     Task { @MainActor in

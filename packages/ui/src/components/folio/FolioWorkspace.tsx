@@ -427,6 +427,10 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
             <Icon name="file-add" className="size-4 shrink-0 text-muted-foreground" />
           </button>)}</div>
         </>}
+        {status.calendarConnected && <label className="-mt-6 mb-8 flex items-center gap-2 px-2 text-sm text-muted-foreground">
+          <input type="checkbox" checked={status.reminders} onChange={(e) => call({ command: 'calendar-reminders', flag: e.target.checked })} />
+          {t('folio.meetingReminders')}
+        </label>}
         {mobile && !status.calendarConnected && <button type="button" className="mb-8 flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm" onClick={() => call({ command: 'calendar-connect' })}><Icon name="calendar" className="size-4 text-muted-foreground" />{t('folio.connectCalendar')}</button>}
         <div className="mb-2 text-xs font-medium text-muted-foreground">{t('folio.recent')}</div>
         {[...status.notes].filter((n) => !n.trashed).sort((a, b) => b.modified - a.modified).map((n) => <button key={n.id} type="button" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-interactive-hover" onClick={() => call({ command: 'select', noteID: n.id })}>

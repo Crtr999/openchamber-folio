@@ -1,7 +1,7 @@
 import http from 'node:http';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { z } from 'zod';
 
@@ -15,7 +15,7 @@ import { z } from 'zod';
 // Dates: the Swift engine writes seconds since 2001; the phone uses milliseconds since 1970.
 
 const DEFAULT_PORT = 47651;
-const MAX_BODY = 24 * 1024 * 1024;
+const MAX_BODY = 64 * 1024 * 1024;
 const MAX_SKEW_MS = 10 * 60 * 1000;
 const APPLE_EPOCH_S = 978_307_200;
 /** Parent page that holds chats started on the iPhone, so they show in the Mac's notes tree. */
@@ -30,10 +30,22 @@ const chatSchema = z.object({
   model: z.object({ name: z.string() }).passthrough(),
   messages: z.array(z.object({ role: z.enum(['system', 'user', 'assistant']), content: z.string() })),
 });
+const assistantMessageSchema = z.object({ id: z.string().uuid(), role: z.enum(['user', 'assistant']), content: z.string().max(400_000), sourceIDs: z.array(z.string().uuid()).max(200) });
+const assistantChatSchema = z.object({ noteID: z.string().uuid(), title: z.string().max(1000), created: z.number(), modified: z.number(), messages: z.array(assistantMessageSchema).max(5000) });
 const requestSchema = z.discriminatedUnion('op', [
-  z.object({ op: z.literal('sync'), t: z.number(), since: z.number(), notes: z.array(noteSchema), chats: z.array(chatSchema) }),
+  z.object({
+    op: z.literal('sync'), t: z.number(), since: z.number(), notes: z.array(noteSchema),
+    // Older iPhone builds sent chats as readable pages; newer ones send assistant chats that both sides can continue.
+    chats: z.array(chatSchema).default([]),
+    assistant: z.array(assistantChatSchema).default([]),
+    assistantHashes: z.record(z.string(), z.string()).default({}),
+  }),
   z.object({ op: z.literal('chat'), t: z.number(), sessionID: z.string().min(1).max(200) }),
+  z.object({ op: z.literal('asset-get'), t: z.number(), path: z.string().regex(/^assets\/[A-Za-z0-9._-]{1,200}$/) }),
+  z.object({ op: z.literal('asset-put'), t: z.number(), name: z.string().max(300), data: z.string().max(56_000_000) }),
+  z.object({ op: z.literal('bella'), t: z.number(), text: z.string().min(1).max(1500) }),
 ]);
+const macMessagesSchema = z.record(z.string(), z.array(z.object({ id: z.string(), role: z.string(), content: z.string(), sourceIDs: z.array(z.string()).default([]) })));
 const sessionListSchema = z.object({ data: z.array(z.object({ id: z.string(), title: z.string().optional(), time: z.object({ updated: z.number().optional(), created: z.number() }), model: z.object({ id: z.string() }).passthrough().optional(), parentID: z.string().optional() }).passthrough()) });
 const messageListSchema = z.object({ data: z.array(z.object({ type: z.string(), time: z.object({ created: z.number() }).passthrough(), text: z.string().optional(), content: z.array(z.object({ type: z.string(), text: z.string().optional() }).passthrough()).optional() }).passthrough()), cursor: z.unknown().optional() });
 
@@ -71,6 +83,27 @@ export function chatToNote(chat) {
   return { id: chat.id.toUpperCase(), title: chat.title || 'iPhone chat', icon: '💬', parentID: PHONE_CHATS_PAGE_ID, blocks, tags: [], favorite: false, excludedFromAI: false, isMeeting: false, trashed: false, created: toMacTime(chat.created), modified: toMacTime(chat.modified) };
 }
 
+/** Same fingerprint the phone computes, so unchanged chats are not sent back and forth. */
+export function chatHash(messages) {
+  return createHash('sha256').update(messages.map((m) => `${m.id.toUpperCase()}\u0000${m.role}\u0000${m.content}`).join('\u0001'), 'utf8').digest('hex');
+}
+
+/**
+ * Joins two copies of one conversation. When one side only added messages, the longer copy wins;
+ * when both added (rare: offline on both), the phone's order is kept and the Mac-only messages follow.
+ */
+export function mergeMessages(mac, phone) {
+  const macIDs = mac.map((m) => m.id.toUpperCase());
+  const phoneIDs = phone.map((m) => m.id.toUpperCase());
+  const prefix = (a, b) => a.length <= b.length && a.every((id, i) => id === b[i]);
+  const size = (list) => list.reduce((n, m) => n + m.content.length, 0);
+  if (macIDs.length === phoneIDs.length && prefix(macIDs, phoneIDs)) return size(phone) >= size(mac) ? phone : mac;
+  if (prefix(macIDs, phoneIDs)) return phone;
+  if (prefix(phoneIDs, macIDs)) return mac;
+  const seen = new Set(phoneIDs);
+  return [...phone, ...mac.filter((m) => !seen.has(m.id.toUpperCase()))];
+}
+
 function lanAddresses() {
   const out = [];
   for (const entries of Object.values(os.networkInterfaces())) for (const entry of entries ?? []) if (entry.family === 'IPv4' && !entry.internal) out.push(entry.address);
@@ -104,6 +137,16 @@ export function createFolioSync({ engine, configPath, getLocalOrigin, log = () =
     if (notes.some((n) => n.id === PHONE_CHATS_PAGE_ID)) return;
     const now = toMacTime(Date.now());
     await upsert({ id: PHONE_CHATS_PAGE_ID, title: 'iPhone chats', icon: '📱', blocks: [textBlock('Chats you started in Folio on your iPhone.')], tags: [], favorite: false, excludedFromAI: false, isMeeting: false, trashed: false, created: now, modified: now });
+  }
+
+  async function internal(input) {
+    const response = await engine.syncRequest(input);
+    if (!response.ok) throw new Error(response.error || 'Folio could not finish that.');
+    return response.text ?? '';
+  }
+
+  async function assistantChats() {
+    return new Map(Object.entries(macMessagesSchema.parse(JSON.parse(await internal({ command: 'chat-list' }) || '{}'))).map(([id, list]) => [id.toUpperCase(), list.map((m) => ({ id: m.id.toUpperCase(), role: m.role === 'user' ? 'user' : 'assistant', content: m.content, sourceIDs: m.sourceIDs.map((x) => x.toUpperCase()) }))]));
   }
 
   async function macChats() {
@@ -163,20 +206,52 @@ export function createFolioSync({ engine, configPath, getLocalOrigin, log = () =
         if (!mac || mac.modified < page.modified - 0.0005) { await upsert(page); applied += 1; }
       }
     }
+    // Assistant chats: the phone's changed conversations are merged in, then every conversation the phone does not already have comes back.
+    const assistant = await assistantChats();
+    if (request.assistant.length) {
+      for (const chat of request.assistant) {
+        const id = chat.noteID.toUpperCase();
+        const page = byID.get(id);
+        if (!page) {
+          await upsert({ id, title: chat.title || 'New conversation', icon: 'bubble.left.and.bubble.right', blocks: [textBlock('')], tags: [], favorite: false, excludedFromAI: false, isMeeting: false, isChat: true, trashed: false, created: toMacTime(chat.created), modified: toMacTime(chat.modified) });
+          applied += 1;
+        } else if (page.parentID === PHONE_CHATS_PAGE_ID && !page.isChat) {
+          // A chat an older build copied as a readable page becomes a real conversation again.
+          await upsert({ ...page, isChat: true, parentID: undefined, icon: 'bubble.left.and.bubble.right', blocks: [textBlock('')], modified: toMacTime(chat.modified) });
+          applied += 1;
+        }
+        const mac = assistant.get(id) ?? [];
+        const phone = chat.messages.map((m) => ({ ...m, id: m.id.toUpperCase(), sourceIDs: m.sourceIDs.map((x) => x.toUpperCase()) }));
+        const merged = mergeMessages(mac, phone);
+        if (chatHash(merged) === chatHash(mac)) continue;
+        try { await internal({ command: 'chat-put', noteID: id, text: JSON.stringify(merged) }); assistant.set(id, merged); }
+        catch (error) { log(`[folio-sync] kept a chat on the phone: ${error instanceof Error ? error.message : 'unknown error'}`); }
+      }
+    }
     if (applied) notes = await engineState();
+    const noteByID = new Map(notes.map((n) => [n.id, n]));
+    const assistantOut = [];
+    for (const [id, messages] of assistant) {
+      const page = noteByID.get(id);
+      if (!page || page.trashed || request.assistantHashes[id] === chatHash(messages)) continue;
+      assistantOut.push({ noteID: id, title: page.title, isChat: page.isChat === true, created: toPhoneTime(page.created), modified: toPhoneTime(page.modified), messages });
+    }
     const phoneChatPages = new Set([PHONE_CHATS_PAGE_ID, ...notes.filter((n) => n.parentID === PHONE_CHATS_PAGE_ID).map((n) => n.id)]);
     const cursor = Date.now();
     const changed = notes
       .filter((n) => !n.isChat && !phoneChatPages.has(n.id) && toPhoneTime(n.modified) > request.since)
       .map((n) => ({ ...n, created: toPhoneTime(n.created), modified: toPhoneTime(n.modified) }));
     lastSync = cursor;
-    return { t: cursor, cursor, notes: changed, macChats: await macChats(), applied };
+    return { t: cursor, cursor, notes: changed, assistant: assistantOut, macChats: await macChats(), applied };
   }
 
   async function handle(body) {
     const request = requestSchema.parse(decrypt(keyBytes(), body));
     if (Math.abs(Date.now() - request.t) > MAX_SKEW_MS) throw new Error('Clock mismatch between iPhone and Mac.');
     if (request.op === 'chat') return { t: Date.now(), messages: await chatMessages(request.sessionID) };
+    if (request.op === 'asset-get') return { t: Date.now(), data: await internal({ command: 'asset-read', text: request.path }) };
+    if (request.op === 'asset-put') return { t: Date.now(), path: await internal({ command: 'asset-write', kind: request.name, text: request.data }) };
+    if (request.op === 'bella') return { t: Date.now(), audio: await internal({ command: 'bella', text: request.text }) };
     return handleSync(request);
   }
 

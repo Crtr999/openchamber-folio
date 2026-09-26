@@ -5,16 +5,42 @@ import { isCapacitorApp } from '@/lib/platform';
 import { defaultModels, type ChatMessage, type ChatModel, type ProviderID } from '@/lib/folio/mobile-chat';
 
 const modelSchema = z.object({ provider: z.enum(['zen', 'openrouter', 'openrouter-zdr']), id: z.string(), name: z.string() });
+/** What the agent did while answering (searched notes, read a page, searched the web), shown above the reply. */
+const toolNoteSchema = z.object({ name: z.string(), label: z.string() });
+const messageSchema = z.object({
+  /** Shared with the Mac's copy of the conversation, so both sides can add to it without duplicates. */
+  id: z.string().optional(),
+  role: z.enum(['system', 'user', 'assistant']),
+  content: z.string(),
+  sourceIDs: z.array(z.string()).optional(),
+  tools: z.array(toolNoteSchema).optional(),
+});
 const chatSchema = z.object({
   id: z.string(),
   title: z.string(),
   model: modelSchema,
-  messages: z.array(z.object({ role: z.enum(['system', 'user', 'assistant']), content: z.string() })),
+  messages: z.array(messageSchema),
   noteIDs: z.array(z.string()),
+  /** Set when this conversation belongs to a regular page on the Mac (its "thinking space"); that page is always context. */
+  pageID: z.string().optional(),
+  /** Context: the attached pages, or the whole library (searched per question, readable by the agent). */
+  scope: z.enum(['notes', 'library']).optional(),
+  web: z.boolean().optional(),
   created: z.number(),
   modified: z.number(),
 });
 export type MobileChat = z.infer<typeof chatSchema>;
+export type StoredMessage = z.infer<typeof messageSchema>;
+export type ToolNote = z.infer<typeof toolNoteSchema>;
+
+export const newMessageID = () => crypto.randomUUID().toUpperCase();
+const HIDDEN = 'folio.chats.hidden';
+const hiddenSchema = z.array(z.string());
+/** Mac conversations removed on the phone; sync leaves them on the Mac but does not bring them back here. */
+export function hiddenChats(): Set<string> {
+  try { const parsed = hiddenSchema.safeParse(JSON.parse(localStorage.getItem(HIDDEN) ?? '[]')); return new Set(parsed.success ? parsed.data : []); } catch { return new Set(); }
+}
+function hideChat(id: string) { try { localStorage.setItem(HIDDEN, JSON.stringify([...hiddenChats(), id.toUpperCase()])); } catch { /* storage blocked */ } }
 
 function promised<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
@@ -37,6 +63,8 @@ interface ChatState {
   /** Handed over from search ("Ask") or a note's "Add to chat". */
   pendingPrompt?: string;
   pendingNoteID?: string;
+  /** The chat that is streaming a reply right now; sync leaves it alone until the reply is saved. */
+  busyID?: string;
   load: () => Promise<void>;
   open: (id?: string) => void;
   save: (chat: MobileChat) => Promise<void>;
@@ -54,6 +82,12 @@ export const useMobileChatStore = create<ChatState>((set, get) => ({
     if (get().loaded) return;
     const rows: unknown[] = await promised((await objects('chats', 'readonly')).getAll());
     const chats = rows.flatMap((row) => { const parsed = chatSchema.safeParse(row); return parsed.success ? [parsed.data] : []; }).sort((a, b) => b.modified - a.modified);
+    // Chats saved before messages had IDs get them once, so they can sync with the Mac.
+    for (const chat of chats) {
+      if (chat.messages.every((m) => m.id)) continue;
+      chat.messages = chat.messages.map((m) => (m.id ? m : { ...m, id: newMessageID() }));
+      await promised((await objects('chats', 'readwrite')).put(chat));
+    }
     const saved = modelSchema.safeParse(await promised((await objects('meta', 'readonly')).get('model')));
     set({ loaded: true, chats, model: saved.success ? saved.data : get().model });
   },
@@ -63,6 +97,7 @@ export const useMobileChatStore = create<ChatState>((set, get) => ({
     await promised((await objects('chats', 'readwrite')).put(chat));
   },
   remove: async (id) => {
+    hideChat(id);
     set((state) => ({ chats: state.chats.filter((c) => c.id !== id), activeID: state.activeID === id ? undefined : state.activeID }));
     await promised((await objects('chats', 'readwrite')).delete(id));
   },
@@ -72,7 +107,7 @@ export const useMobileChatStore = create<ChatState>((set, get) => ({
 
 export function newChat(model: ChatModel): MobileChat {
   const now = Date.now();
-  return { id: crypto.randomUUID(), title: '', model, messages: [], noteIDs: [], created: now, modified: now };
+  return { id: crypto.randomUUID().toUpperCase(), title: '', model, messages: [], noteIDs: [], created: now, modified: now };
 }
 
 export type { ChatMessage };

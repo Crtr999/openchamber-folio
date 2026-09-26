@@ -8,6 +8,8 @@ const host: FolioHost = {
   openFile: () => undefined, utility: (kind) => kind === 'settings',
   startRecording: async (onText) => { onText({ text: 'Hello team', at: 65_000, final: true }); }, stopRecording: async () => new File(['x'], 'Meeting.m4a'),
   calendarAccess: async () => true, calendarEvents: async () => [{ id: 'e1', title: 'Standup', start: 1_800_000_600_000, end: 1_800_002_400_000, calendar: 'Work' }],
+  remindersOn: () => false, scheduleReminders: async (_events, on) => on,
+  downloadAsset: async (path) => (path === 'assets/MAC.pdf' ? new Blob(['mac file']) : undefined),
 };
 
 async function engine() {
@@ -75,4 +77,23 @@ test('records a meeting into the page and makes meeting notes from calendar even
   const meeting = prepared.state?.notes.find((n) => n.id === prepared.state?.selectedID);
   assert.equal(meeting?.title, 'Standup');
   assert.equal(meeting?.isMeeting, true);
+});
+
+test('phone attachments relink to the Mac copy, and Mac attachments download on demand', async () => {
+  const local = await engine();
+  const first = (await local.request({ command: 'state' })).state?.notes[0];
+  assert.ok(first);
+  await local.attachFiles(first.id, [new File(['phone file'], 'Plan.txt')]);
+  const [upload] = await local.pendingUploads();
+  assert.equal(upload.name, 'Plan.txt');
+  await local.relinkAsset(upload.ref, 'assets/NEW.txt', upload.file);
+  assert.equal((await local.pendingUploads()).length, 0);
+  assert.equal(await (await local.attachment(first.id, 'plan.txt'))?.text(), 'phone file');
+  const page = (await local.request({ command: 'state' })).state?.notes[0];
+  assert.ok(page);
+  await local.mergeRemote([{ ...page, blocks: [...page.blocks, { ...page.blocks[0], id: crypto.randomUUID().toUpperCase(), kind: 'attachment', text: 'Mac.pdf', asset: 'assets/MAC.pdf' }], modified: page.modified + 10 }], () => false);
+  assert.deepEqual(await local.missingAssets(), ['assets/MAC.pdf']);
+  assert.equal(await (await local.attachment(first.id, 'Mac.pdf'))?.text(), 'mac file');
+  const reminders = await local.request({ command: 'calendar-reminders', flag: true });
+  assert.equal(reminders.state?.reminders, true);
 });

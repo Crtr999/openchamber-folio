@@ -6,6 +6,8 @@ import { isCapacitorApp } from '@/lib/platform';
 /** AVSpeechSynthesizer in the iOS app (FolioSpeechPlugin in AppDelegate.swift). It plays even with the ringer switch off. */
 interface FolioSpeechPlugin {
   speak(options: { text: string }): Promise<void>;
+  /** Plays base64 audio (Bella's WAV from the Mac) and reports "finished" at the end. */
+  play(options: { data: string }): Promise<void>;
   stop(): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;
@@ -28,10 +30,42 @@ interface FolioCalendarPlugin {
   events(options: { days: number }): Promise<{ events: { id: string; title: string; start: number; end: number; calendar: string; joinURL?: string }[] }>;
 }
 const nativeCalendar = registerPlugin<FolioCalendarPlugin>('FolioCalendar');
+
+/** Local notifications for meeting reminders (FolioNotificationsPlugin). No push service, nothing leaves the phone. */
+interface FolioNotificationsPlugin {
+  requestAccess(): Promise<{ granted: boolean }>;
+  schedule(options: { items: { id: string; title: string; body: string; at: number }[] }): Promise<void>;
+  addListener(event: 'opened', listener: (data: { eventID: string }) => void): Promise<PluginListenerHandle>;
+}
+export const nativeNotifications = registerPlugin<FolioNotificationsPlugin>('FolioNotifications');
+const REMINDERS = 'folio.reminders';
+
+/** Splits text into sentence groups short enough for Bella to answer quickly. */
+export function speechChunks(text: string, limit = 300): string[] {
+  const out: string[] = [];
+  let current = '';
+  for (const sentence of text.split(/(?<=[.!?])\s+|\n+/).map((s) => s.trim()).filter(Boolean)) {
+    const next = current ? `${current} ${sentence}` : sentence;
+    if (next.length > limit && current) { out.push(current); current = sentence; } else current = next;
+  }
+  if (current) out.push(current);
+  return out;
+}
+
 let speechListener: PluginListenerHandle | undefined;
+let speechToken = 0;
+let finishWaiter: (() => void) | undefined;
+
+interface PhoneHostOptions {
+  openScreen: (kind: string) => boolean;
+  showFile: (file: File) => void;
+  /** Bella's audio for one passage from the paired Mac, or undefined to read with the iPhone voice. */
+  bella: (text: string) => Promise<string | undefined>;
+  downloadAsset: (path: string) => Promise<Blob | undefined>;
+}
 
 /** Phone implementations of the things the Mac helper does natively. */
-export function createPhoneHost(openScreen: (kind: string) => boolean, showFile: (file: File) => void): FolioHost {
+export function createPhoneHost({ openScreen, showFile, bella, downloadAsset }: PhoneHostOptions): FolioHost {
   let recognition: SpeechRecognition | undefined;
   const speech = window.speechSynthesis;
   const pick = (accept: string, multiple: boolean) => new Promise<File[]>((resolve) => {
@@ -53,25 +87,55 @@ export function createPhoneHost(openScreen: (kind: string) => boolean, showFile:
     link.href = url; link.download = file.name; link.click();
     setTimeout(() => URL.revokeObjectURL(url), 30_000);
   };
+  const listenForFinish = async () => {
+    if (speechListener) return;
+    speechListener = await nativeSpeech.addListener('finished', () => { const waiter = finishWaiter; finishWaiter = undefined; waiter?.(); });
+  };
+  const playAudio = async (data: string) => {
+    await listenForFinish();
+    await new Promise<void>((resolve) => { finishWaiter = resolve; nativeSpeech.play({ data }).catch(() => { finishWaiter = undefined; resolve(); }); });
+  };
+  const speakWithPhone = (text: string, done: () => void) => {
+    if (isCapacitorApp()) {
+      void listenForFinish().then(() => { finishWaiter = done; return nativeSpeech.speak({ text }); }).catch(() => { finishWaiter = undefined; done(); });
+      return;
+    }
+    speech.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1;
+    utterance.onend = done; utterance.onerror = done;
+    speech.speak(utterance);
+  };
   return {
     speak: (text, done) => {
-      if (isCapacitorApp()) {
-        void speechListener?.remove();
-        void nativeSpeech.addListener('finished', () => { void speechListener?.remove(); speechListener = undefined; done(); }).then((handle) => { speechListener = handle; });
-        nativeSpeech.speak({ text }).catch(() => done());
-        return;
-      }
-      speech.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1;
-      utterance.onend = done; utterance.onerror = done;
-      speech.speak(utterance);
+      const token = ++speechToken;
+      if (!isCapacitorApp()) { speakWithPhone(text, done); return; }
+      void (async () => {
+        // Bella reads when the Mac is reachable: it synthesizes each passage and the phone plays it,
+        // fetching the next one while the current one plays. Otherwise the iPhone voice reads.
+        const pieces = speechChunks(text);
+        const timeout = new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 8000));
+        let next: Promise<string | undefined> | undefined = pieces.length ? Promise.race([bella(pieces[0]).catch(() => undefined), timeout]) : undefined;
+        for (let i = 0; i < pieces.length; i += 1) {
+          const audio = await next;
+          if (token !== speechToken) return;
+          if (!audio) { speakWithPhone(pieces.slice(i).join(' '), done); return; }
+          next = i + 1 < pieces.length ? bella(pieces[i + 1]).catch(() => undefined) : undefined;
+          await playAudio(audio);
+          if (token !== speechToken) return;
+        }
+        done();
+      })();
     },
     pauseSpeaking: (paused) => {
       if (isCapacitorApp()) { void (paused ? nativeSpeech.pause() : nativeSpeech.resume()); return; }
       if (paused) speech.pause(); else speech.resume();
     },
-    stopSpeaking: () => { if (isCapacitorApp()) void nativeSpeech.stop(); else speech.cancel(); },
+    stopSpeaking: () => {
+      speechToken += 1;
+      const waiter = finishWaiter; finishWaiter = undefined; waiter?.();
+      if (isCapacitorApp()) void nativeSpeech.stop(); else speech.cancel();
+    },
     listen: (onWords, done) => {
       // Declared as always present (see lib/voice/browserVoiceService.ts), but iOS web views may lack both.
       const Engine: (new () => SpeechRecognition) | undefined = window.SpeechRecognition ?? window.webkitSpeechRecognition;
@@ -112,6 +176,18 @@ export function createPhoneHost(openScreen: (kind: string) => boolean, showFile:
     },
     calendarAccess: async () => (isCapacitorApp() ? (await nativeCalendar.requestAccess()).granted : false),
     calendarEvents: async (days) => (isCapacitorApp() ? (await nativeCalendar.events({ days })).events : []),
+    remindersOn: () => { try { return localStorage.getItem(REMINDERS) === '1'; } catch { return false; } },
+    scheduleReminders: async (events, on) => {
+      if (!isCapacitorApp()) return false;
+      let enabled = on;
+      if (on) enabled = (await nativeNotifications.requestAccess()).granted;
+      // Like the Mac: a reminder as each video call starts. Tapping it opens meeting notes for that call.
+      const items = enabled ? events.filter((e) => e.joinURL && e.start > Date.now()).slice(0, 50).map((e) => ({ id: e.id, title: e.title, body: 'Your meeting is starting. Tap to take notes in Folio.', at: e.start - 60_000 })) : [];
+      await nativeNotifications.schedule({ items });
+      try { localStorage.setItem(REMINDERS, enabled ? '1' : '0'); } catch { /* storage blocked */ }
+      return enabled;
+    },
+    downloadAsset,
   };
 }
 

@@ -6,6 +6,15 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { requestSchema } from '../ui/src/lib/folio/schema.ts';
 
+// Commands only the iPhone sync route may send (never the renderer): whole chats, attachment bytes, Bella audio.
+const syncCommandSchema = z.object({
+  command: z.enum(['chat-list', 'chat-put', 'asset-read', 'asset-write', 'bella']),
+  noteID: z.string().uuid().optional(),
+  text: z.string().max(60_000_000).optional(),
+  kind: z.string().max(300).optional(),
+  rate: z.number().finite().optional(),
+}).strict();
+
 // Routing envelope only; the renderer validates the full notebook state.
 const envelopeSchema = z.object({ id: z.string(), ok: z.boolean() }).passthrough();
 
@@ -36,8 +45,9 @@ export function createFolioEngine({ resourcesPath, developmentRoot, libraryPath,
     processChild.on('exit',()=>{if(child===processChild)child=null;lines.close();failAll(new Error('Folio stopped. Reopen the notebook to reconnect.'));});
     return processChild;
   }
-  async function request(input) {
-    const payload=requestSchema.parse(input);
+  async function request(input) { return send(requestSchema.parse(input)); }
+  async function syncRequest(input) { return send(syncCommandSchema.parse(input)); }
+  async function send(payload) {
     const processChild=start(),id=randomUUID();
     return new Promise((resolve,reject)=>{
       const timer=setTimeout(()=>{pending.delete(id);reject(new Error('Folio is still waiting for a native operation. Check its open dialog before retrying.'));},300_000);
@@ -53,5 +63,5 @@ export function createFolioEngine({ resourcesPath, developmentRoot, libraryPath,
     processChild.stdin.end();
     await new Promise(resolve=>{if(processChild.exitCode!==null)return resolve();const timer=setTimeout(()=>{processChild.kill('SIGTERM');resolve();},5000);processChild.once('exit',()=>{clearTimeout(timer);resolve();});});
   }
-  return { request,stop };
+  return { request,syncRequest,stop };
 }

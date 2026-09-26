@@ -15,6 +15,7 @@ export interface FolioStorage {
   saveSelected(id: string | undefined): Promise<void>;
   putAsset(id: string, file: Blob): Promise<void>;
   getAsset(id: string): Promise<Blob | undefined>;
+  hasAsset(id: string): Promise<boolean>;
 }
 
 /** Phone features the engine reaches through the app shell (speech, files, sharing). */
@@ -36,7 +37,16 @@ export interface FolioHost {
   stopRecording(): Promise<File | undefined>;
   calendarAccess(): Promise<boolean>;
   calendarEvents(days: number): Promise<FolioStatus['events']>;
+  /** Whether meeting reminders were left on. */
+  remindersOn(): boolean;
+  /** Schedules (or clears) phone notifications for upcoming video calls; returns whether reminders are now on. */
+  scheduleReminders(events: FolioStatus['events'], on: boolean): Promise<boolean>;
+  /** Fetches a file that lives in the Mac library (an "assets/…" path); undefined when the Mac is out of reach. */
+  downloadAsset(path: string): Promise<Blob | undefined>;
 }
+
+/** A phone attachment that has not been copied to the Mac yet. */
+export interface PendingUpload { ref: string; name: string; file: Blob }
 
 export interface LocalEngine extends FolioAPI {
   ready: Promise<void>;
@@ -51,9 +61,21 @@ export interface LocalEngine extends FolioAPI {
   importFiles(files: File[]): Promise<void>;
   exportFile(note: FolioNote, kind: string): File | undefined;
   backupFile(): File;
+  /** Attachments added on the phone that the Mac does not have yet. */
+  pendingUploads(): Promise<PendingUpload[]>;
+  /** After an upload, points every block at the Mac's copy and keeps the bytes under that path. */
+  relinkAsset(ref: string, macPath: string, file: Blob): Promise<void>;
+  /** Mac attachment paths referenced by pages here whose bytes are not on the phone yet. */
+  missingAssets(): Promise<string[]>;
+  storeAsset(path: string, file: Blob): Promise<void>;
+  /** Adds a page without opening it (the phone assistant writing a note). */
+  addNote(note: FolioNote): Promise<void>;
+  /** An attachment's bytes, from the phone or copied from the Mac. */
+  attachment(noteID: string, name: string): Promise<Blob | undefined>;
 }
 
 const assetPrefix = 'asset:';
+const macAssetPrefix = 'assets/';
 
 function freshStatus(): FolioStatus {
   return {
@@ -190,6 +212,7 @@ export function createLocalFolioEngine({ storage, host, onChange, now = () => Da
 
   const ready = (async () => {
     notes = await storage.loadNotes();
+    status.reminders = host.remindersOn();
     selectedID = await storage.loadSelected();
     if (!notes.length) { const first = welcomeNote(now()); notes = [first]; await storage.saveNote(first); }
     if (!selectedID || !notes.some((n) => n.id === selectedID)) selectedID = notes.filter((n) => !n.trashed).sort((a, b) => b.modified - a.modified)[0]?.id;
@@ -297,8 +320,14 @@ export function createLocalFolioEngine({ storage, host, onChange, now = () => Da
       case 'attach': await attach(selected(input.noteID).id, await host.pickFiles('*/*', true)); return {};
       case 'open-attachment': {
         const block = selected(input.noteID).blocks.find((b) => b.id === input.blockID);
-        const file = block?.asset?.startsWith(assetPrefix) ? await storage.getAsset(block.asset.slice(assetPrefix.length)) : undefined;
-        if (!block || !file) throw new Error('This attachment is stored on your Mac.');
+        const asset = block?.asset;
+        let file = asset?.startsWith(assetPrefix) ? await storage.getAsset(asset.slice(assetPrefix.length)) : asset ? await storage.getAsset(asset) : undefined;
+        if (!file && asset?.startsWith(macAssetPrefix)) {
+          // Not copied yet (large, or the last sync missed it): fetch it from the Mac now and keep it.
+          file = await host.downloadAsset(asset);
+          if (file) await storage.putAsset(asset, file);
+        }
+        if (!block || !file) throw new Error('This attachment is on your Mac. Open Folio on your Mac, or connect to it, to download it.');
         host.openFile(file, block.text || 'Attachment');
         return {};
       }
@@ -375,10 +404,17 @@ export function createLocalFolioEngine({ storage, host, onChange, now = () => Da
           status.calendarConnected = await host.calendarAccess();
           if (!status.calendarConnected) throw new Error('Calendar access is off. Turn it on in Settings → Privacy & Security → Calendars → Folio.');
           status.events = await host.calendarEvents(7);
+          if (status.reminders) status.reminders = await host.scheduleReminders(status.events, true);
           // Offer meeting notes for anything starting within 15 minutes or already underway.
           const soon = status.events.find((e) => e.start - now() < 15 * 60_000 && e.end > now());
           status.calendarPrompt = soon && soon.id !== dismissedPrompt ? soon : undefined;
         }
+        return {};
+      }
+      case 'calendar-reminders': {
+        const on = input.flag === true;
+        status.reminders = await host.scheduleReminders(status.events, on);
+        if (on && !status.reminders) throw new Error('Notifications are off for Folio. Turn them on in Settings → Notifications → Folio.');
         return {};
       }
       case 'calendar-dismiss': dismissedPrompt = status.calendarPrompt?.id; status.calendarPrompt = undefined; return {};
@@ -408,6 +444,47 @@ export function createLocalFolioEngine({ storage, host, onChange, now = () => Da
     importFiles: async (files) => { await ready; await importFiles(files); changed(); },
     exportFile,
     backupFile,
+    pendingUploads: async () => {
+      await ready;
+      const out: PendingUpload[] = [];
+      const seen = new Set<string>();
+      for (const note of notes) for (const block of note.blocks) {
+        const ref = block.asset;
+        if (block.kind !== 'attachment' || !ref?.startsWith(assetPrefix) || seen.has(ref)) continue;
+        seen.add(ref);
+        const file = await storage.getAsset(ref.slice(assetPrefix.length));
+        if (file) out.push({ ref, name: block.text || 'Attachment', file });
+      }
+      return out;
+    },
+    relinkAsset: async (ref, macPath, file) => {
+      await ready;
+      await storage.putAsset(macPath, file);
+      for (const note of notes.slice()) {
+        if (!note.blocks.some((b) => b.asset === ref)) continue;
+        await store({ ...note, blocks: note.blocks.map((b) => (b.asset === ref ? { ...b, asset: macPath } : b)), modified: stamp(note.modified) });
+      }
+      changed();
+    },
+    missingAssets: async () => {
+      await ready;
+      const paths = new Set(notes.filter((n) => !n.trashed).flatMap((n) => n.blocks.flatMap((b) => (b.kind === 'attachment' && b.asset?.startsWith(macAssetPrefix) ? [b.asset] : []))));
+      const missing: string[] = [];
+      for (const path of paths) if (!(await storage.hasAsset(path))) missing.push(path);
+      return missing;
+    },
+    storeAsset: async (path, file) => { await storage.putAsset(path, file); },
+    addNote: async (note) => {
+      await ready;
+      await store(note.parentID && !find(note.parentID) ? { ...note, parentID: undefined } : note); changed();
+    },
+    attachment: async (noteID, name) => {
+      await ready;
+      const block = find(noteID)?.blocks.find((b) => b.kind === 'attachment' && b.text.toLowerCase() === name.toLowerCase());
+      const asset = block?.asset;
+      if (!asset) return undefined;
+      return asset.startsWith(assetPrefix) ? storage.getAsset(asset.slice(assetPrefix.length)) : (await storage.getAsset(asset)) ?? (asset.startsWith(macAssetPrefix) ? host.downloadAsset(asset) : undefined);
+    },
     mergeRemote: async (incoming, skip) => {
       await ready;
       let count = 0;
@@ -444,6 +521,7 @@ export function createMemoryStorage(): FolioStorage {
     saveSelected: async (id) => { selected = id; },
     putAsset: async (id, file) => { assets.set(id, file); },
     getAsset: async (id) => assets.get(id),
+    hasAsset: async (id) => assets.has(id),
   };
 }
 
@@ -477,5 +555,6 @@ export function createIndexedDBStorage(name = 'folio'): FolioStorage {
     saveSelected: async (id) => { await promised((await tx('meta', 'readwrite')).put(id, 'selectedID')); },
     putAsset: async (id, file) => { await promised((await tx('assets', 'readwrite')).put(file, id)); },
     getAsset: async (id) => { const value: unknown = await promised((await tx('assets', 'readonly')).get(id)); const parsed = blobSchema.safeParse(value); return parsed.success ? parsed.data : undefined; },
+    hasAsset: async (id) => (await promised((await tx('assets', 'readonly')).count(id))) > 0,
   };
 }

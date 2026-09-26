@@ -21,8 +21,8 @@ import { markdownToNote, noteToMarkdown } from '@/lib/folio/local-engine';
 import { sendChat } from '@/lib/folio/mobile-chat';
 import { makeBlock } from '@/lib/folio/schema';
 import { readKey, useMobileChatStore } from './chatStore';
-import { useSyncStore } from './sync';
-import { createPhoneHost, nativePost } from './host';
+import { macAsset, macBella, useSyncStore } from './sync';
+import { createPhoneHost, nativeNotifications, nativePost } from './host';
 import { FolioMobileChat } from './FolioMobileChat';
 import { FolioMobileSettings } from './FolioMobileSettings';
 import './folio-mobile.css';
@@ -99,11 +99,16 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
   const [drawer, setDrawer] = React.useState(false);
   const viewRef = React.useRef(setView);
   const [sheetFile, setSheetFile] = React.useState<File>();
-  const host = React.useMemo(() => createPhoneHost((kind) => {
-    if (kind === 'settings') { viewRef.current('settings'); return true; }
-    if (kind === 'assistant') { viewRef.current('chat'); return true; }
-    return false;
-  }, setSheetFile), []);
+  const host = React.useMemo(() => createPhoneHost({
+    openScreen: (kind) => {
+      if (kind === 'settings') { viewRef.current('settings'); return true; }
+      if (kind === 'assistant') { viewRef.current('chat'); return true; }
+      return false;
+    },
+    showFile: setSheetFile,
+    bella: macBella,
+    downloadAsset: macAsset,
+  }), []);
   const engine = React.useMemo(() => createLocalFolioEngine({
     storage: createIndexedDBStorage(),
     host,
@@ -128,7 +133,15 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
       if (url && /^openchamber:\/\/connect/i.test(url)) { setConnectLink(url); setView('chats'); }
     };
     let urlListener: { remove: () => Promise<void> } | undefined;
+    let reminderListener: { remove: () => Promise<void> } | undefined;
     if (isCapacitorApp()) {
+      // Tapping a meeting reminder opens meeting notes for that call.
+      void nativeNotifications.addListener('opened', ({ eventID }) => {
+        void engine.ready
+          .then(() => engine.request({ command: 'calendar-connect' }))
+          .then(() => engine.request({ command: 'calendar-prepare', eventID }))
+          .then(() => { setView('notes'); return useFolioStore.getState().refresh(); });
+      }).then((handle) => { reminderListener = handle; });
       void CapacitorApp.getLaunchUrl().then((launch) => pairFrom(launch?.url)).catch(() => undefined);
       void CapacitorApp.addListener('appUrlOpen', ({ url }) => pairFrom(url)).then((handle) => { urlListener = handle; });
     }
@@ -141,7 +154,7 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
       else { void useSyncStore.getState().syncNow(engine); refreshCalendar(); }
     };
     document.addEventListener('visibilitychange', hide);
-    return () => { document.removeEventListener('visibilitychange', hide); clearInterval(every); unsubscribeRuntime(); void urlListener?.remove(); };
+    return () => { document.removeEventListener('visibilitychange', hide); clearInterval(every); unsubscribeRuntime(); void urlListener?.remove(); void reminderListener?.remove(); };
   }, [engine]);
 
   // Opening a page from the menu (tree, search, create) closes the menu and shows it.
@@ -219,7 +232,7 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
     </div>}
     <div className="min-h-0 flex-1">
       {view === 'notes' && <FolioWorkspace mobile={mobile} />}
-      {view === 'chat' && <FolioMobileChat onMenu={menu} />}
+      {view === 'chat' && <FolioMobileChat onMenu={menu} engine={engine} />}
       {view === 'settings' && <FolioMobileSettings engine={engine} onMenu={menu} onExportBackup={() => { void host.share(engine.backupFile()); }} />}
     </div>
     {drawer && <Drawer view={view} onView={show} onClose={() => setDrawer(false)} />}

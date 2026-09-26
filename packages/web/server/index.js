@@ -2035,7 +2035,7 @@ async function main(options = {}) {
   // the body is also encrypted with the Folio pairing key, which only the desktop app can open.
   if (typeof options.folioSyncHandler === 'function') {
     const folioSyncHandler = options.folioSyncHandler;
-    app.post('/api/folio/sync', express.text({ type: () => true, limit: '24mb' }), async (req, res) => {
+    app.post('/api/folio/sync', express.text({ type: () => true, limit: '64mb' }), async (req, res) => {
       res.setHeader('Cache-Control', 'no-store');
       try {
         res.type('text/plain').send(await folioSyncHandler(typeof req.body === 'string' ? req.body : ''));

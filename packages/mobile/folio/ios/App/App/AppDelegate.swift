@@ -2,6 +2,7 @@ import UIKit
 import AVFoundation
 import EventKit
 import Speech
+import UserNotifications
 import Capacitor
 
 @UIApplicationMain
@@ -75,16 +76,18 @@ class FolioViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(FolioSpeechPlugin())
         bridge?.registerPluginInstance(FolioCalendarPlugin())
         bridge?.registerPluginInstance(FolioRecorderPlugin())
+        bridge?.registerPluginInstance(FolioNotificationsPlugin())
     }
 }
 
 /// Read aloud with the system voice. Uses the playback audio session so it works with the ringer switch off.
 @objc(FolioSpeechPlugin)
-public class FolioSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDelegate {
+public class FolioSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
     public let identifier = "FolioSpeechPlugin"
     public let jsName = "FolioSpeech"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "speak", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "play", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pause", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "resume", returnType: CAPPluginReturnPromise),
@@ -92,6 +95,8 @@ public class FolioSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizer
     private let synthesizer = AVSpeechSynthesizer()
     /// Only the latest utterance reports "finished"; cancelling an older one to start a new one stays quiet.
     private var current: AVSpeechUtterance?
+    /// Bella's audio from the Mac, one passage at a time.
+    private var player: AVAudioPlayer?
 
     override public func load() {
         synthesizer.delegate = self
@@ -113,16 +118,44 @@ public class FolioSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizer
         }
     }
 
+    @objc func play(_ call: CAPPluginCall) {
+        guard let data = Data(base64Encoded: call.getString("data") ?? "") else { call.reject("Audio could not be read"); return }
+        DispatchQueue.main.async {
+            let session = AVAudioSession.sharedInstance()
+            try? session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+            try? session.setActive(true)
+            self.current = nil
+            self.synthesizer.stopSpeaking(at: .immediate)
+            self.player?.stop()
+            do {
+                let next = try AVAudioPlayer(data: data)
+                next.delegate = self
+                self.player = next
+                next.play()
+                call.resolve()
+            } catch { call.reject("Audio could not be played") }
+        }
+    }
+
     @objc func stop(_ call: CAPPluginCall) {
-        DispatchQueue.main.async { self.synthesizer.stopSpeaking(at: .immediate); call.resolve() }
+        DispatchQueue.main.async {
+            self.synthesizer.stopSpeaking(at: .immediate)
+            if self.player != nil { self.player?.stop(); self.player = nil; self.finished() }
+            call.resolve()
+        }
     }
 
     @objc func pause(_ call: CAPPluginCall) {
-        DispatchQueue.main.async { self.synthesizer.pauseSpeaking(at: .word); call.resolve() }
+        DispatchQueue.main.async { self.synthesizer.pauseSpeaking(at: .word); self.player?.pause(); call.resolve() }
     }
 
     @objc func resume(_ call: CAPPluginCall) {
-        DispatchQueue.main.async { self.synthesizer.continueSpeaking(); call.resolve() }
+        DispatchQueue.main.async { self.synthesizer.continueSpeaking(); self.player?.play(); call.resolve() }
+    }
+
+    public func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        // Between passages the session stays active so the next one starts without a gap.
+        if player === self.player { self.player = nil; notifyListeners("finished", data: [:]) }
     }
 
     public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) { if utterance === current { finished() } }
@@ -310,5 +343,58 @@ public class FolioRecorderPlugin: CAPPlugin, CAPBridgedPlugin {
         file = nil
         lock.lock(); request = nil; lock.unlock()
         task?.cancel(); task = nil
+    }
+}
+
+/// Meeting reminders as local notifications: scheduled on the phone from its own calendar, no push service.
+@objc(FolioNotificationsPlugin)
+public class FolioNotificationsPlugin: CAPPlugin, CAPBridgedPlugin, UNUserNotificationCenterDelegate {
+    public let identifier = "FolioNotificationsPlugin"
+    public let jsName = "FolioNotifications"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "requestAccess", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "schedule", returnType: CAPPluginReturnPromise),
+    ]
+    private let prefix = "folio-meeting-"
+
+    override public func load() {
+        UNUserNotificationCenter.current().delegate = self
+    }
+
+    @objc func requestAccess(_ call: CAPPluginCall) {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in call.resolve(["granted": granted]) }
+    }
+
+    @objc func schedule(_ call: CAPPluginCall) {
+        let items = call.getArray("items", JSObject.self) ?? []
+        let center = UNUserNotificationCenter.current()
+        center.getPendingNotificationRequests { pending in
+            // Replace every earlier Folio reminder, so moved or cancelled meetings do not ring.
+            center.removePendingNotificationRequests(withIdentifiers: pending.map(\.identifier).filter { $0.hasPrefix(self.prefix) })
+            for item in items {
+                guard let id = item["id"] as? String, let title = item["title"] as? String, let at = item["at"] as? Double else { continue }
+                let seconds = at / 1000 - Date().timeIntervalSince1970
+                guard seconds > 1 else { continue }
+                let content = UNMutableNotificationContent()
+                content.title = title
+                content.body = item["body"] as? String ?? ""
+                content.sound = .default
+                content.userInfo = ["eventID": id]
+                let trigger = UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
+                center.add(UNNotificationRequest(identifier: self.prefix + id, content: content, trigger: trigger))
+            }
+            call.resolve()
+        }
+    }
+
+    public func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound])
+    }
+
+    public func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        if let id = response.notification.request.content.userInfo["eventID"] as? String {
+            notifyListeners("opened", data: ["eventID": id], retainUntilConsumed: true)
+        }
+        completionHandler()
     }
 }
