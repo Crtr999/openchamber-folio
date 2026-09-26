@@ -7,6 +7,9 @@ interface FolioStore {
   status?: FolioStatus;
   drafts: Record<string, Draft>;
   open: boolean;
+  /** Notes home (all pages) instead of a single page. */
+  home: boolean;
+  openHome: () => Promise<void>;
   error?: string;
   saving: boolean;
   bind: (api?: FolioAPI) => void;
@@ -66,7 +69,8 @@ export const useFolioStore = create<FolioStore>((set, get) => {
     } finally { set({ saving: false }); }
   }
   return {
-    drafts: {}, open: false, saving: false,
+    drafts: {}, open: false, home: false, saving: false,
+    openHome: async () => { try { await get().flush(); set({ open: true, home: true }); } catch { /* Keep the unsaved page visible. */ } },
     bind: api => set({ api }),
     refresh: async () => {
       if (refreshing || saving || !get().api || Object.keys(get().drafts).length) return;
@@ -95,11 +99,11 @@ export const useFolioStore = create<FolioStore>((set, get) => {
       try {
         await get().flush();
         const response = await request(input);
-        if (input.command === 'select' || input.command === 'create') set({ open: true });
+        if (input.command === 'select' || input.command === 'create') set({ open: true, home: false });
         set({ error: undefined });
         return response;
       } catch (error) { set({ error: error instanceof Error ? error.message : String(error) }); }
     },
-    close: async () => { try { await get().flush(); set({ open: false }); } catch { /* Keep the unsaved page visible. */ } },
+    close: async () => { try { await get().flush(); set({ open: false, home: false }); } catch { /* Keep the unsaved page visible. */ } },
   };
 });

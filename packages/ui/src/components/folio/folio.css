@@ -1,14 +1,23 @@
-.folio-rich-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
+.folio-rich-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; padding: 2px 0; }
 .folio-rich-text p { margin: 0; }
 .folio-rich-text a { text-decoration: underline; color: var(--primary-text); }
 .folio-rich-text mark { border-radius: 3px; color: #171b19; padding: 1px 0; }
-.folio-rich-text code { background: var(--secondary); border-radius: 4px; padding: 2px 4px; font-family: monospace; }
-.folio-block[data-kind$="Heading1"], .folio-block[data-kind="heading1"] { font-size: 2em; font-weight: 700; padding-top: 1rem; }
-.folio-block[data-kind$="Heading2"], .folio-block[data-kind="heading2"] { font-size: 1.65em; font-weight: 650; padding-top: .75rem; }
-.folio-block[data-kind$="Heading3"], .folio-block[data-kind="heading3"] { font-size: 1.35em; font-weight: 600; padding-top: .5rem; }
-.folio-block[data-kind$="Heading4"], .folio-block[data-kind="heading4"] { font-size: 1.1em; font-weight: 600; padding-top: .5rem; }
-.folio-block[data-kind="quote"] { border-left: 3px solid var(--border); padding-left: 12px; font-style: italic; }
-.folio-block[data-kind="callout"] { background: var(--secondary); border-radius: 8px; padding: 12px; }
-.folio-block[data-kind="code"], .folio-block[data-kind="equation"] { font-family: monospace; background: var(--secondary); padding: 12px; border-radius: 8px; }
+.folio-rich-text code { background: var(--secondary); border-radius: 4px; padding: 2px 4px; font-family: monospace; font-size: .9em; }
+
+/* Notion-style placeholder: only on the focused, empty block. */
+.folio-editable .ProseMirror.ProseMirror-focused > p:only-child:has(> br.ProseMirror-trailingBreak:only-child)::before {
+  content: var(--folio-placeholder, ""); color: var(--muted-foreground); opacity: .55; float: left; height: 0; pointer-events: none;
+}
+
+/* Blocks flow as one document: no row chrome, small rhythm between blocks. */
+.folio-block { margin: 1px 0; }
+.folio-block[data-kind="heading1"], .folio-block[data-kind="toggleHeading1"] { font-size: 1.875em; font-weight: 700; margin-top: .9em; line-height: 1.25; }
+.folio-block[data-kind="heading2"], .folio-block[data-kind="toggleHeading2"] { font-size: 1.5em; font-weight: 650; margin-top: .7em; line-height: 1.3; }
+.folio-block[data-kind="heading3"], .folio-block[data-kind="toggleHeading3"] { font-size: 1.25em; font-weight: 600; margin-top: .5em; }
+.folio-block[data-kind="heading4"], .folio-block[data-kind="toggleHeading4"] { font-size: 1.1em; font-weight: 600; margin-top: .4em; }
+.folio-block[data-kind^="heading"] .folio-rich-text, .folio-block[data-kind^="toggleHeading"] .folio-rich-text { line-height: 1.3; }
+.folio-block[data-kind="quote"] { border-left: 3px solid currentColor; padding-left: 14px; }
+.folio-block[data-kind="callout"] { background: var(--secondary); border-radius: 6px; padding: 12px 14px; margin: 4px 0; }
+.folio-block[data-kind="code"], .folio-block[data-kind="equation"] { font-family: ui-monospace, monospace; font-size: .9em; background: var(--secondary); padding: 12px 14px; border-radius: 6px; margin: 4px 0; }
 .folio-block[data-kind="task"][data-checked="true"] .folio-rich-text { text-decoration: line-through; color: var(--muted-foreground); }
-.folio-workspace input, .folio-workspace select { color-scheme: dark light; }
+.folio-workspace select { color-scheme: dark light; }

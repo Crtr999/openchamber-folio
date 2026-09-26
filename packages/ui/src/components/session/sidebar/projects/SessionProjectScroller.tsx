@@ -11,6 +11,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { FolioSidebar } from '@/components/folio/FolioSidebar';
 import { Button } from '@/components/ui/button';
 import { formatDirectoryName, formatPathForDisplay } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
@@ -478,6 +479,8 @@ function SessionProjectScrollerComponent({ model, view, actions }: Props): React
             <SessionSidebarRows model={model.rowModel} scrollElement={scrollElement} pinnedRowIndexes={pinnedRowIndexes} renderRow={renderRow} onFirstVisibleIndexChange={handleFirstVisibleIndexChange} />
           </SortableContext>
         </DndContext>
+        {/* Notes sit directly under the project folders, in the same scroll, like Notion's sidebar. */}
+        <FolioSidebar />
       </ScrollableOverlay>
     </CrossfadeZoneHeaders>
     <FolderDeleteConfirmDialog value={folderDeleteConfirm} setValue={setFolderDeleteConfirm} onConfirm={() => {
