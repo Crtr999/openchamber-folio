@@ -2,14 +2,17 @@ import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { FolioIcon } from '@/components/folio/FolioIcon';
 import { FolioSidebar } from '@/components/folio/FolioSidebar';
-import { FolioWorkspace } from '@/components/folio/FolioWorkspace';
+import { FolioWorkspace, type FolioMobileHooks } from '@/components/folio/FolioWorkspace';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { createIndexedDBStorage, createLocalFolioEngine } from '@/lib/folio/local-engine';
 import { findHit } from '@/lib/folio/search';
 import { useFolioStore } from '@/lib/folio/store';
 import { rankByQuery } from '@/lib/search/fuzzySearch';
+import { App as CapacitorApp } from '@capacitor/app';
+import { isCapacitorApp } from '@/lib/platform';
 import { useMobileChatStore } from './chatStore';
+import { useSyncStore } from './sync';
 import { createPhoneHost } from './host';
 import { FolioMobileChat } from './FolioMobileChat';
 import { FolioMobileSettings } from './FolioMobileSettings';
@@ -18,6 +21,7 @@ import './folio-mobile.css';
 type View = 'notes' | 'chat' | 'settings';
 
 function Drawer({ onClose, onView, view }: { onClose: () => void; onView: (view: View) => void; view: View }) {
+  const macChats = useSyncStore((s) => s.macChats);
   const { t } = useI18n();
   const notes = useFolioStore((s) => s.status?.notes);
   const { chats, activeID, open } = useMobileChatStore();
@@ -60,6 +64,12 @@ function Drawer({ onClose, onView, view }: { onClose: () => void; onView: (view:
               <Icon name="chat-3" className="size-4 shrink-0 text-muted-foreground" /><span className="truncate">{chat.title || t('folio.newChat')}</span>
             </button>)}
           </>}
+          {macChats.length > 0 && <>
+            <div className="px-2.5 pb-1 pt-4 text-xs font-medium text-muted-foreground">{t('folio.macChats')}</div>
+            {macChats.slice(0, 12).map((chat) => <button key={chat.id} type="button" className={cn(row, 'py-1.5 text-sm')} onClick={() => { useMobileChatStore.getState().open(undefined); void useSyncStore.getState().loadMacChat(chat); onView('chat'); }}>
+              <Icon name="computer" className="size-4 shrink-0 text-muted-foreground" /><span className="truncate">{chat.title}</span>
+            </button>)}
+          </>}
           <div className="folio-mobile-tree"><FolioSidebar /></div>
         </>}
       </div>
@@ -70,27 +80,44 @@ function Drawer({ onClose, onView, view }: { onClose: () => void; onView: (view:
 
 /** The standalone iPhone app: notes stored on the phone, chat straight to AI providers. */
 export function FolioMobileApp() {
+  const { t } = useI18n();
   const [view, setView] = React.useState<View>('notes');
   const [drawer, setDrawer] = React.useState(false);
   const viewRef = React.useRef(setView);
+  const [sheetFile, setSheetFile] = React.useState<File>();
+  const host = React.useMemo(() => createPhoneHost((kind) => {
+    if (kind === 'settings') { viewRef.current('settings'); return true; }
+    if (kind === 'assistant') { viewRef.current('chat'); return true; }
+    return false;
+  }, setSheetFile), []);
   const engine = React.useMemo(() => createLocalFolioEngine({
     storage: createIndexedDBStorage(),
-    host: createPhoneHost((kind) => {
-      if (kind === 'settings') { viewRef.current('settings'); return true; }
-      if (kind === 'assistant') { viewRef.current('chat'); return true; }
-      return false;
-    }),
+    host,
     onChange: () => { void useFolioStore.getState().refresh(); },
-  }), []);
+  }), [host]);
 
   React.useEffect(() => {
     useFolioStore.getState().bind(engine);
     void engine.ready.then(() => { useFolioStore.setState({ open: true }); return useFolioStore.getState().refresh(); });
     void useMobileChatStore.getState().load();
+    const sync = useSyncStore.getState();
+    sync.load();
+    void engine.ready.then(() => useSyncStore.getState().syncNow(engine));
+    // Pairing links arrive from the Camera app scanning the Mac's code.
+    const pairFrom = (url: string | undefined) => { if (url?.startsWith('folio-sync:')) void useSyncStore.getState().pair(url, engine).then((ok) => { if (ok) setView('settings'); }); };
+    let urlListener: { remove: () => Promise<void> } | undefined;
+    if (isCapacitorApp()) {
+      void CapacitorApp.getLaunchUrl().then((launch) => pairFrom(launch?.url)).catch(() => undefined);
+      void CapacitorApp.addListener('appUrlOpen', ({ url }) => pairFrom(url)).then((handle) => { urlListener = handle; });
+    }
+    const every = setInterval(() => { if (document.visibilityState === 'visible') void useSyncStore.getState().syncNow(engine); }, 120_000);
     // Save any open edit when the app goes to the background.
-    const hide = () => { if (document.visibilityState === 'hidden') void useFolioStore.getState().flush().catch(() => undefined); };
+    const hide = () => {
+      if (document.visibilityState === 'hidden') void useFolioStore.getState().flush().catch(() => undefined);
+      else void useSyncStore.getState().syncNow(engine);
+    };
     document.addEventListener('visibilitychange', hide);
-    return () => document.removeEventListener('visibilitychange', hide);
+    return () => { document.removeEventListener('visibilitychange', hide); clearInterval(every); void urlListener?.remove(); };
   }, [engine]);
 
   // Opening a page from the menu (tree, search, create) closes the menu and shows it.
@@ -103,23 +130,44 @@ export function FolioMobileApp() {
     lastSelection.current = key;
   }, [selectedID, home]);
 
+  // Sync a few seconds after edits or new chat replies settle.
+  const notes = useFolioStore((s) => s.status?.notes);
+  const chats = useMobileChatStore((s) => s.chats);
+  const firstRun = React.useRef(true);
+  React.useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; }
+    const timer = setTimeout(() => void useSyncStore.getState().syncNow(engine), 8000);
+    return () => clearTimeout(timer);
+  }, [notes, chats, engine]);
+
   const show = (next: View) => { setView(next); setDrawer(false); };
   const menu = () => setDrawer(true);
-  const mobile = React.useMemo(() => ({
+  const mobile = React.useMemo((): FolioMobileHooks => ({
+    onAttach: (noteID) => { void host.pickFiles('*/*', true).then((files) => engine.attachFiles(noteID, files)); },
+    onImport: () => { void host.pickFiles('.json,.md,.markdown,.txt,application/json,text/markdown,text/plain', true).then((files) => engine.importFiles(files)); },
+    onExport: (note, kind) => { const file = engine.exportFile(note, kind); if (file) void host.share(file); },
+    onExportLibrary: () => { void host.share(engine.backupFile()); },
     onMenu: () => setDrawer(true),
     onAddToChat: (_markdown: string, noteID: string) => {
       useMobileChatStore.getState().open(undefined);
       useMobileChatStore.setState({ pendingNoteID: noteID });
       setView('chat');
     },
-  }), []);
+  }), [engine, host]);
 
   return <div className="folio-mobile flex h-full flex-col bg-background pt-[env(safe-area-inset-top)]">
     <div className="min-h-0 flex-1">
       {view === 'notes' && <FolioWorkspace mobile={mobile} />}
       {view === 'chat' && <FolioMobileChat onMenu={menu} />}
-      {view === 'settings' && <FolioMobileSettings engine={engine} onMenu={menu} />}
+      {view === 'settings' && <FolioMobileSettings engine={engine} onMenu={menu} onExportBackup={() => { void host.share(engine.backupFile()); }} />}
     </div>
     {drawer && <Drawer view={view} onView={show} onClose={() => setDrawer(false)} />}
+    {sheetFile && <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3 shadow-2xl" role="dialog" aria-label={sheetFile.name}>
+      <div className="mb-3 flex items-center gap-2 text-sm"><Icon name="attachment-2" className="size-4 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{sheetFile.name}</span></div>
+      <div className="flex gap-2">
+        <button type="button" className="flex-1 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" onClick={() => { void host.share(sheetFile); setSheetFile(undefined); }}>{t('folio.openOrShare')}</button>
+        <button type="button" className="rounded-lg bg-secondary px-3 py-2 text-sm" onClick={() => setSheetFile(undefined)}>{t('folio.close')}</button>
+      </div>
+    </div>}
   </div>;
 }

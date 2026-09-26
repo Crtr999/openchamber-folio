@@ -861,3 +861,19 @@ export const createDesktopFolioAPI = (): RuntimeAPIs['folio'] => {
   if (!canUseElectronDesktopIPC() || getElectronPlatform() !== 'darwin') return undefined;
   return { async request(input) { const payload = requestSchema.parse(input); return responseSchema.parse(await invokeDesktop('desktop_folio', payload)); } };
 };
+
+const folioSyncStatusSchema = z.object({
+  enabled: z.boolean(),
+  listening: z.boolean().optional(),
+  port: z.number().optional(),
+  hosts: z.array(z.string()).optional(),
+  lastSync: z.number().optional(),
+  pairingURL: z.string().optional(),
+});
+export type FolioSyncStatus = z.infer<typeof folioSyncStatusSchema>;
+
+/** iPhone sync controls, owned by the Electron main process. Undefined outside the Mac desktop app. */
+export const folioSyncCommand = async (action: 'status' | 'enable' | 'disable'): Promise<FolioSyncStatus | undefined> => {
+  if (!canUseElectronDesktopIPC() || getElectronPlatform() !== 'darwin') return undefined;
+  return folioSyncStatusSchema.parse(await invokeDesktop('desktop_folio_sync', { action }));
+};

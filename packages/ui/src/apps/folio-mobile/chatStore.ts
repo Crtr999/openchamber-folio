@@ -37,6 +37,8 @@ interface ChatState {
   /** Handed over from search ("Ask") or a note's "Add to chat". */
   pendingPrompt?: string;
   pendingNoteID?: string;
+  /** A chat from the Mac being read on the phone. */
+  macChat?: { id: string; title: string; model: string; messages?: ChatMessage[]; error?: string };
   load: () => Promise<void>;
   open: (id?: string) => void;
   save: (chat: MobileChat) => Promise<void>;
@@ -57,7 +59,7 @@ export const useMobileChatStore = create<ChatState>((set, get) => ({
     const saved = modelSchema.safeParse(await promised((await objects('meta', 'readonly')).get('model')));
     set({ loaded: true, chats, model: saved.success ? saved.data : get().model });
   },
-  open: (activeID) => set({ activeID }),
+  open: (activeID) => set({ activeID, macChat: undefined }),
   save: async (chat) => {
     set((state) => ({ chats: [chat, ...state.chats.filter((c) => c.id !== chat.id)] }));
     await promised((await objects('chats', 'readwrite')).put(chat));
@@ -86,17 +88,21 @@ interface NativeSecureStorage {
   internalRemoveItem: (options: { prefixedKey: string; sync: boolean }) => Promise<{ success: boolean }>;
 }
 const nativeSecure = registerPlugin<NativeSecureStorage>('SecureStorage');
-const keyName = (provider: ProviderID) => `folio.key.${provider}`;
-const memoryKeys = new Map<ProviderID, string>();
+const memorySecrets = new Map<string, string>();
 
-export async function readKey(provider: ProviderID): Promise<string | undefined> {
-  if (!isCapacitorApp()) return memoryKeys.get(provider);
-  try { return (await nativeSecure.internalGetItem({ prefixedKey: keyName(provider), sync: false })).data ?? undefined; } catch { return undefined; }
+/** Reads a secret from the iOS Keychain (memory only in a desktop browser preview). */
+export async function readSecret(name: string): Promise<string | undefined> {
+  if (!isCapacitorApp()) return memorySecrets.get(name);
+  try { return (await nativeSecure.internalGetItem({ prefixedKey: name, sync: false })).data ?? undefined; } catch { return undefined; }
 }
 
-export async function writeKey(provider: ProviderID, value: string): Promise<void> {
+export async function writeSecret(name: string, value: string): Promise<void> {
   const trimmed = value.trim();
-  if (!isCapacitorApp()) { if (trimmed) memoryKeys.set(provider, trimmed); else memoryKeys.delete(provider); return; }
-  if (trimmed) await nativeSecure.internalSetItem({ prefixedKey: keyName(provider), data: trimmed, sync: false, access: 0 });
-  else await nativeSecure.internalRemoveItem({ prefixedKey: keyName(provider), sync: false });
+  if (!isCapacitorApp()) { if (trimmed) memorySecrets.set(name, trimmed); else memorySecrets.delete(name); return; }
+  if (trimmed) await nativeSecure.internalSetItem({ prefixedKey: name, data: trimmed, sync: false, access: 0 });
+  else await nativeSecure.internalRemoveItem({ prefixedKey: name, sync: false });
 }
+
+const keyName = (provider: ProviderID) => `folio.key.${provider}`;
+export const readKey = (provider: ProviderID) => readSecret(keyName(provider));
+export const writeKey = (provider: ProviderID, value: string) => writeSecret(keyName(provider), value);

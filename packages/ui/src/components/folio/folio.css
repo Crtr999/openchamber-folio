@@ -26,3 +26,7 @@
 .folio-found { animation: folio-found 4s ease-out; }
 @keyframes folio-found { 0%, 55% { background-color: color-mix(in srgb, var(--status-warning) 22%, transparent); } 100% { background-color: transparent; } }
 ::highlight(folio-found) { background-color: color-mix(in srgb, var(--status-warning) 55%, transparent); }
+
+/* Links to other pages, inserted with @. */
+.folio-rich-text a[href^="folio://note/"] { text-decoration: none; color: inherit; font-weight: 500; border-bottom: 1px solid var(--border); cursor: pointer; }
+.folio-rich-text a[href^="folio://note/"]::before { content: '↗'; font-size: 0.8em; margin-right: 2px; color: var(--muted-foreground); }

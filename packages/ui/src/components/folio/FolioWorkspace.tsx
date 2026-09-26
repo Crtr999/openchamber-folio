@@ -11,7 +11,8 @@ import { useInputStore } from '@/sync/input-store';
 import { FolioDatabase } from './FolioDatabase';
 import { FolioIcon } from './FolioIcon';
 import { FolioIconPicker } from './FolioIconPicker';
-import { FolioRichBlock, type FocusAt, type SlashState } from './FolioRichBlock';
+import { FolioSyncDialog } from './FolioSyncDialog';
+import { FolioRichBlock, folioNoteLinkPrefix, type FocusAt, type MentionState, type SlashState } from './FolioRichBlock';
 import './folio.css';
 
 type ColorName = typeof colorNames[number];
@@ -55,7 +56,15 @@ const blockAliases = new Map<BlockKind, string[]>([
 ]);
 
 /** Phone layout hooks: the standalone iPhone app has a menu instead of "Back to chat", and its own chat. */
-export interface FolioMobileHooks { onMenu: () => void; onAddToChat: (markdown: string, noteID: string) => void }
+export interface FolioMobileHooks {
+  onMenu: () => void;
+  onAddToChat: (markdown: string, noteID: string) => void;
+  /** iOS opens file pickers and share sheets only inside the tap, so these run synchronously from the click. */
+  onAttach: (noteID: string) => void;
+  onImport: () => void;
+  onExport: (note: FolioNote, kind: string) => void;
+  onExportLibrary: () => void;
+}
 
 export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   const { t } = useI18n();
@@ -71,11 +80,14 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   const [blockMenuID, setBlockMenuID] = React.useState<string>();
   const [focus, setFocus] = React.useState<{ id: string; at: FocusAt; n: number }>();
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [syncOpen, setSyncOpen] = React.useState(false);
   const [iconOpen, setIconOpen] = React.useState(false);
   const [linkOpen, setLinkOpen] = React.useState(false);
   const [link, setLink] = React.useState('');
   const [slash, setSlash] = React.useState<SlashState | null>(null);
   const [slashIndex, setSlashIndex] = React.useState(0);
+  const [mention, setMention] = React.useState<MentionState | null>(null);
+  const [mentionIndex, setMentionIndex] = React.useState(0);
   const [bubble, setBubble] = React.useState<{ top: number; left: number }>();
   const [, setSelectionTick] = React.useState(0);
 
@@ -120,7 +132,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   };
   const colorLabel = (kind: Paint) => (color: ColorName) => `${t(kind === 'textColor' ? 'folio.textColor' : 'folio.highlight')}: ${t(`folio.color.${color}`)}`;
 
-  React.useEffect(() => { setActive(undefined); setSlash(null); setBlockMenuID(undefined); }, [note?.id]);
+  React.useEffect(() => { setActive(undefined); setSlash(null); setMention(null); setBlockMenuID(undefined); }, [note?.id]);
   React.useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
       if (!event.metaKey && !event.ctrlKey) return;
@@ -199,7 +211,35 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
     updateBlock({ ...block, kind: command.kind, text: '', marks: [] });
     if (command.kind === 'divider') insertAfter(block.id, makeBlock()); else focusBlock(block.id, 'end');
   };
+  // ---- "@" links to other pages.
+  const mentionResults = React.useMemo(() => {
+    if (!mention) return [];
+    const q = mention.query.toLowerCase();
+    return (status?.notes ?? []).filter((n) => !n.trashed && !n.isChat && n.id !== status?.selectedID && (n.title || '').toLowerCase().includes(q)).slice(0, 8);
+  }, [mention, status?.notes, status?.selectedID]);
+  React.useEffect(() => setMentionIndex(0), [mention?.query, mention?.blockID]);
+  const applyMention = (target: FolioNote | undefined) => {
+    const state = mention; setMention(null);
+    const editor = activeEditor.current;
+    if (!target || !state || !editor || editor.isDestroyed) return;
+    const to = editor.state.selection.from;
+    editor.chain().focus().deleteRange({ from: state.from, to }).insertContent([
+      { type: 'text', text: target.title || t('folio.untitled'), marks: [{ type: 'link', attrs: { href: folioNoteLinkPrefix + target.id } }] },
+      { type: 'text', text: ' ' },
+    ]).unsetMark('link').run();
+  };
+  const openLinkedNote = React.useCallback((noteID: string) => {
+    if (useFolioStore.getState().status?.notes.some((n) => n.id === noteID)) void useFolioStore.getState().run({ command: 'select', noteID });
+  }, []);
+
   const onSlashKey = (key: string) => {
+    if (mention) {
+      if (key === 'Escape') { setMention(null); return true; }
+      if (key === 'ArrowDown') { setMentionIndex((i) => Math.min(mentionResults.length - 1, i + 1)); return true; }
+      if (key === 'ArrowUp') { setMentionIndex((i) => Math.max(0, i - 1)); return true; }
+      if (key === 'Enter' || key === 'Tab') { if (!mentionResults.length) return false; applyMention(mentionResults[mentionIndex]); return true; }
+      return false;
+    }
     if (!slash) return false;
     if (key === 'Escape') { setSlash(null); return true; }
     if (key === 'ArrowDown') { setSlashIndex((i) => Math.min(slashResults.length - 1, i + 1)); return true; }
@@ -310,7 +350,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
         {!mobile && <button type="button" className={cn(tool, status.recording && toolLive)} aria-pressed={status.recording} title={status.recording ? t('folio.stopRecording') : t('folio.recordings')} aria-label={status.recording ? t('folio.stopRecording') : t('folio.recordings')} onClick={() => status.recording ? call({ command: 'stop-recording' }) : utility('meeting')}>
           <Icon name="record-circle" className="size-4" />
         </button>}
-        <button type="button" className={tool} title={t('folio.attach')} aria-label={t('folio.attach')} onClick={() => call({ command: 'attach' })}>
+        <button type="button" className={tool} title={t('folio.attach')} aria-label={t('folio.attach')} onClick={() => { if (mobile) mobile.onAttach(note.id); else call({ command: 'attach' }); }}>
           <Icon name="attachment-2" className="size-4" />
         </button>
       </div>}
@@ -334,14 +374,15 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
               {!mobile && <button type="button" className={menuItem} onClick={() => utility('history')}><Icon name="history" className="size-4 text-muted-foreground" />{t('folio.history')}</button>}
               <div className="my-1 border-t border-border" />
               <div className="px-2 pt-1 text-xs text-muted-foreground">{t('folio.import')}</div>
-              {(mobile ? ['notes'] : ['notes', 'documents', 'ocr', ...(note.table ? ['csv'] : [])]).map((kind) => <button key={kind} type="button" className={cn(menuItem, 'pl-4')} onClick={() => call({ command: 'import', kind, flag: kind === 'ocr' })}>{kind === 'notes' ? t('folio.pages') : kind === 'documents' ? t('folio.attach') : kind.toUpperCase()}</button>)}
+              {(mobile ? ['notes'] : ['notes', 'documents', 'ocr', ...(note.table ? ['csv'] : [])]).map((kind) => <button key={kind} type="button" className={cn(menuItem, 'pl-4')} onClick={() => { if (mobile) { setMenuOpen(false); mobile.onImport(); } else call({ command: 'import', kind, flag: kind === 'ocr' }); }}>{kind === 'notes' ? t('folio.pages') : kind === 'documents' ? t('folio.attach') : kind.toUpperCase()}</button>)}
               <div className="px-2 pt-1 text-xs text-muted-foreground">{t('folio.export')}</div>
-              {['md', 'txt', ...(mobile ? [] : ['pdf']), ...(note.table ? ['csv'] : [])].map((kind) => <button key={kind} type="button" className={cn(menuItem, 'pl-4')} onClick={() => call({ command: 'export', kind })}>{kind.toUpperCase()}</button>)}
-              <button type="button" className={cn(menuItem, 'pl-4')} onClick={() => call({ command: 'export-library' })}>{t('folio.allPages')}</button>
+              {['md', 'txt', ...(mobile ? [] : ['pdf']), ...(note.table ? ['csv'] : [])].map((kind) => <button key={kind} type="button" className={cn(menuItem, 'pl-4')} onClick={() => { if (mobile) { setMenuOpen(false); mobile.onExport(note, kind); } else call({ command: 'export', kind }); }}>{kind.toUpperCase()}</button>)}
+              <button type="button" className={cn(menuItem, 'pl-4')} onClick={() => { if (mobile) { setMenuOpen(false); mobile.onExportLibrary(); } else call({ command: 'export-library' }); }}>{t('folio.allPages')}</button>
               {!mobile && <button type="button" className={cn(menuItem, 'pl-4')} onClick={exportForPhone}>{t('folio.exportForPhone')}</button>}
             </>}
             <div className="my-1 border-t border-border" />
             {(mobile ? (['assistant', 'settings'] as const) : (['calendar', 'assistant', 'settings'] as const)).map((kind) => <button key={kind} type="button" className={menuItem} onClick={() => utility(kind)}><Icon name={kind === 'calendar' ? 'calendar' : kind === 'assistant' ? 'sparkling' : 'settings-3'} className="size-4 text-muted-foreground" />{t(`folio.${kind}`)}</button>)}
+            {!mobile && <button type="button" className={menuItem} onClick={() => { setMenuOpen(false); setSyncOpen(true); }}><Icon name="smartphone" className="size-4 text-muted-foreground" />{t('folio.syncTitle')}</button>}
             {note && <><div className="my-1 border-t border-border" /><button type="button" className={cn(menuItem, 'text-destructive')} onClick={() => call({ command: 'trash', flag: note.trashed })}><Icon name="delete-bin" className="size-4" />{t(note.trashed ? 'folio.restore' : 'folio.trash')}</button></>}
           </div>
         </>}
@@ -352,7 +393,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
     {(status.recording || status.transcribing || status.importing || status.listening) && <div role="status" className="mx-4 mb-2 flex items-center gap-3 rounded-lg bg-secondary px-3 py-2 text-sm"><span className="flex-1">{status.recordingProgress || status.importProgress || status.dictation}</span><button type="button" className={quiet} onClick={() => call({ command: status.recording ? 'stop-recording' : status.transcribing ? 'cancel-transcription' : status.importing ? 'cancel-import' : 'stop-listening' })}>{t('folio.stop')}</button></div>}
     {status.calendarPrompt && <div className="mx-4 mb-2 flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-sm"><span className="flex-1">{status.calendarPrompt.title}</span><button type="button" className={quiet} onClick={() => call({ command: 'calendar-prepare', eventID: status.calendarPrompt?.id })}>{t('folio.meeting')}</button><button type="button" className={quiet} onClick={() => call({ command: 'calendar-dismiss' })}>×</button></div>}
 
-    <div className="min-h-0 flex-1 overflow-auto" onScroll={() => { setBubble(undefined); setSlash(null); }}>
+    <div className="min-h-0 flex-1 overflow-auto" onScroll={() => { setBubble(undefined); setSlash(null); setMention(null); }}>
       {!note && <div className={cn('mx-auto w-full max-w-5xl', mobile ? 'px-4 py-6' : 'pl-14 pr-8 py-10')}>
         <h1 className="mb-6 text-3xl font-bold">{t('folio.notes')}</h1>
         <div className="mb-10 grid grid-cols-3 gap-2">
@@ -425,6 +466,8 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
                 onRemoveEmpty={() => removeEmpty(block.id)}
                 onSlash={setSlash}
                 onSlashKey={onSlashKey}
+                onMention={setMention}
+                onOpenNote={openLinkedNote}
                 onSplit={(before, after) => {
                   const current = latestNote(); if (!current) return;
                   const position = current.blocks.findIndex((b) => b.id === block.id); if (position < 0) return;
@@ -458,6 +501,18 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
           </button>; })}
         </div> : null;
       })}
+    </div>}
+
+    {syncOpen && <FolioSyncDialog onClose={() => setSyncOpen(false)} />}
+    {mention && <div role="listbox" aria-label={t('folio.linkPage')} className="fixed z-50 max-h-72 w-72 overflow-y-auto rounded-xl border border-border bg-background p-1.5 shadow-2xl"
+      style={{ left: Math.max(8, Math.min(mention.left, window.innerWidth - 296)), top: mention.bottom + 300 < window.innerHeight ? mention.bottom + 6 : Math.max(8, mention.top - 300) }}
+      onMouseDown={(e) => e.preventDefault()}>
+      <div className="px-2 pb-1 pt-1 text-xs text-muted-foreground">{t('folio.linkPage')}</div>
+      {mentionResults.length === 0 && <div className="px-2 py-1.5 text-sm text-muted-foreground">{t('folio.noMatches')}</div>}
+      {mentionResults.map((target, i) => <button key={target.id} type="button" role="option" aria-selected={i === mentionIndex} className={cn(menuItem, i === mentionIndex && 'bg-interactive-selection')}
+        onMouseMove={() => setMentionIndex(i)} onClick={() => applyMention(target)}>
+        <FolioIcon value={target.icon} /><span className="truncate">{target.title || t('folio.untitled')}</span>
+      </button>)}
     </div>}
 
     {bubble && active && !active.editor.isDestroyed && <div ref={bubbleRef} role="toolbar" aria-label={t('folio.block')} className="fixed z-50 flex flex-col gap-1.5 rounded-xl border border-border bg-background/95 p-2 shadow-xl backdrop-blur" style={{ top: bubble.top, left: bubble.left, width: Math.min(420, window.innerWidth - 16) }} onMouseDown={(e) => e.preventDefault()}>

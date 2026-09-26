@@ -47,7 +47,7 @@ export function FolioIconPicker({ onPick, onRemove, onClose }: { onPick: (value:
 
   return <>
     <div className="fixed inset-0 z-30" onClick={onClose} />
-    <div role="dialog" aria-label={t('folio.icon')} className="absolute left-0 top-16 z-40 flex w-[408px] flex-col rounded-xl border border-border bg-background shadow-2xl"
+    <div role="dialog" aria-label={t('folio.icon')} className="absolute left-0 top-16 z-40 flex w-[min(408px,calc(100vw-2rem))] flex-col rounded-xl border border-border bg-background shadow-2xl"
       onKeyDown={(event) => { if (event.key === 'Escape') onClose(); }}>
       <div className="flex items-center gap-1 border-b border-border px-2 pt-1.5">
         {tabs.map((name) => <button key={name} type="button" onClick={() => setTab(name)}
@@ -65,12 +65,12 @@ export function FolioIconPicker({ onPick, onRemove, onClose }: { onPick: (value:
       <div className="max-h-80 overflow-y-auto p-2">
         {tab === 'emoji' && (emoji.length ? emoji.map(({ group, entries }) => <section key={group} className="mb-2">
           <div className="px-1 pb-1 text-xs font-medium text-muted-foreground">{t(`folio.emojiGroup.${group}`)}</div>
-          <div className="grid grid-cols-12 gap-0.5">{entries.map((entry) => <button key={entry.emoji} type="button" title={entry.keywords} aria-label={entry.keywords}
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(2rem,1fr))] gap-0.5">{entries.map((entry) => <button key={entry.emoji} type="button" title={entry.keywords} aria-label={entry.keywords}
             className="flex size-8 items-center justify-center rounded-md text-[22px] leading-none hover:bg-interactive-hover" onClick={() => onPick(entry.emoji)}>{entry.emoji}</button>)}</div>
         </section>) : <div className="p-2 text-sm text-muted-foreground">{t('folio.noMatches')}</div>)}
         {tab === 'icons' && (icons.length ? icons.map(({ group, names }) => <section key={group} className="mb-2">
           <div className="px-1 pb-1 text-xs font-medium text-muted-foreground">{t(`folio.iconGroup.${group}`)}</div>
-          <div className="grid grid-cols-12 gap-0.5">{names.map((name) => <button key={name} type="button" title={name.replace(/-/g, ' ')} aria-label={name.replace(/-/g, ' ')}
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(2rem,1fr))] gap-0.5">{names.map((name) => <button key={name} type="button" title={name.replace(/-/g, ' ')} aria-label={name.replace(/-/g, ' ')}
             className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-interactive-hover hover:text-foreground" onClick={() => onPick(iconPrefix + name)}><Icon name={name} className="size-5" /></button>)}</div>
         </section>) : <div className="p-2 text-sm text-muted-foreground">{t('folio.noMatches')}</div>)}
         {tab === 'upload' && <div className="flex flex-col items-center gap-2 py-4"

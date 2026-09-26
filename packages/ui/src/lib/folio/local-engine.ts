@@ -32,7 +32,20 @@ export interface FolioHost {
   utility(kind: string): boolean;
 }
 
-export interface LocalEngine extends FolioAPI { ready: Promise<void>; importBackup(text: string): Promise<number>; backup(): string }
+export interface LocalEngine extends FolioAPI {
+  ready: Promise<void>;
+  importBackup(text: string): Promise<number>;
+  backup(): string;
+  /** Pages changed on this phone (by modified time) since a moment, for sync. */
+  changedSince(time: number): FolioNote[];
+  /** Applies pages from the Mac: newer wins, and pages with an open edit here are left alone. */
+  mergeRemote(notes: readonly unknown[], skip: (id: string) => boolean): Promise<number>;
+  /** File actions started straight from a tap: iOS only opens pickers and share sheets inside the tap itself. */
+  attachFiles(noteID: string, files: File[]): Promise<void>;
+  importFiles(files: File[]): Promise<void>;
+  exportFile(note: FolioNote, kind: string): File | undefined;
+  backupFile(): File;
+}
 
 const assetPrefix = 'asset:';
 
@@ -205,6 +218,26 @@ export function createLocalFolioEngine({ storage, host, onChange, now = () => Da
     status.status = `Imported ${count} page${count === 1 ? '' : 's'}`;
   };
   const backup = () => JSON.stringify({ app: 'folio', version: 1, exported: now(), notes }, null, 1);
+  const backupFile = () => new File([backup()], `Folio backup ${new Date(now()).toISOString().slice(0, 10)}.json`, { type: 'application/json' });
+  const exportFile = (note: FolioNote, kind: string): File | undefined => {
+    const grid = note.table;
+    const name = note.title || 'Untitled';
+    if (kind === 'csv') {
+      if (!grid) return undefined;
+      const cell = (v: string) => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+      const csv = [grid.columns.map((c) => cell(c.name)).join(','), ...grid.rows.map((r) => grid.columns.map((c) => cell(r.values[c.id] ?? '')).join(','))].join('\n');
+      return new File([csv], `${name}.csv`, { type: 'text/csv' });
+    }
+    const plain = kind === 'txt';
+    return new File([noteToMarkdown(note, plain)], `${name}.${plain ? 'txt' : 'md'}`, { type: plain ? 'text/plain' : 'text/markdown' });
+  };
+  const attach = async (noteID: string, files: File[]) => {
+    const note = selected(noteID);
+    if (!files.length) return;
+    const blocks = [...note.blocks];
+    for (const file of files) { const id = newID(); await storage.putAsset(id, file); blocks.push({ ...makeBlock(), kind: 'attachment', text: file.name, asset: assetPrefix + id }); }
+    await store({ ...note, blocks, modified: stamp(note.modified) });
+  };
 
   async function handle(input: FolioRequest): Promise<{ text?: string }> {
     await ready;
@@ -246,34 +279,12 @@ export function createLocalFolioEngine({ storage, host, onChange, now = () => Da
         if (note.excludedFromAI && input.flag) throw new Error('This page is excluded from AI');
         return { text: noteToMarkdown(note, input.kind === 'text') };
       }
-      case 'export': {
-        const note = selected(input.noteID);
-        const plain = input.kind === 'txt';
-        const grid = note.table;
-        if (input.kind === 'csv' && grid) {
-          const cell = (v: string) => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
-          const csv = [grid.columns.map((c) => cell(c.name)).join(','), ...grid.rows.map((r) => grid.columns.map((c) => cell(r.values[c.id] ?? '')).join(','))].join('\n');
-          await host.share(new File([csv], `${note.title || 'Untitled'}.csv`, { type: 'text/csv' }));
-        } else {
-          await host.share(new File([noteToMarkdown(note, plain)], `${note.title || 'Untitled'}.${plain ? 'txt' : 'md'}`, { type: plain ? 'text/plain' : 'text/markdown' }));
-        }
-        return {};
-      }
-      case 'export-library':
-        await host.share(new File([backup()], `Folio backup ${new Date(now()).toISOString().slice(0, 10)}.json`, { type: 'application/json' }));
-        return {};
+      case 'export': { const file = exportFile(selected(input.noteID), input.kind ?? 'md'); if (file) await host.share(file); return {}; }
+      case 'export-library': await host.share(backupFile()); return {};
       case 'import':
         await importFiles(await host.pickFiles('.json,.md,.markdown,.txt,application/json,text/markdown,text/plain', true));
         return {};
-      case 'attach': {
-        const note = selected(input.noteID);
-        const files = await host.pickFiles('*/*', true);
-        if (!files.length) return {};
-        const blocks = [...note.blocks];
-        for (const file of files) { const id = newID(); await storage.putAsset(id, file); blocks.push({ ...makeBlock(), kind: 'attachment', text: file.name, asset: assetPrefix + id }); }
-        await store({ ...note, blocks, modified: stamp(note.modified) });
-        return {};
-      }
+      case 'attach': await attach(selected(input.noteID).id, await host.pickFiles('*/*', true)); return {};
       case 'open-attachment': {
         const block = selected(input.noteID).blocks.find((b) => b.id === input.blockID);
         const file = block?.asset?.startsWith(assetPrefix) ? await storage.getAsset(block.asset.slice(assetPrefix.length)) : undefined;
@@ -320,6 +331,24 @@ export function createLocalFolioEngine({ storage, host, onChange, now = () => Da
     ready,
     backup,
     importBackup: async (text) => { const list = parseBackup(text); await addNotes(list); changed(); return list.length; },
+    changedSince: (time) => notes.filter((n) => n.modified > time),
+    attachFiles: async (noteID, files) => { await ready; await attach(noteID, files); changed(); },
+    importFiles: async (files) => { await ready; await importFiles(files); changed(); },
+    exportFile,
+    backupFile,
+    mergeRemote: async (incoming, skip) => {
+      await ready;
+      let count = 0;
+      for (const note of incoming) {
+        const parsed = noteSchema.safeParse(note);
+        if (!parsed.success || skip(parsed.data.id)) continue;
+        const existing = find(parsed.data.id);
+        if (existing && existing.modified >= parsed.data.modified) continue;
+        await store(parsed.data); count += 1;
+      }
+      if (!selectedID && notes.length) await select(notes[0].id);
+      return count;
+    },
     request: async (input): Promise<FolioResponse> => {
       try {
         const { text } = await handle(input);

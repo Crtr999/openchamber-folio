@@ -1,9 +1,21 @@
 import { z } from 'zod';
+import { registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import type { FolioHost } from '@/lib/folio/local-engine';
 import { isCapacitorApp } from '@/lib/platform';
 
+/** AVSpeechSynthesizer in the iOS app (FolioSpeechPlugin in AppDelegate.swift). It plays even with the ringer switch off. */
+interface FolioSpeechPlugin {
+  speak(options: { text: string }): Promise<void>;
+  stop(): Promise<void>;
+  pause(): Promise<void>;
+  resume(): Promise<void>;
+  addListener(event: 'finished', listener: () => void): Promise<PluginListenerHandle>;
+}
+const nativeSpeech = registerPlugin<FolioSpeechPlugin>('FolioSpeech');
+let speechListener: PluginListenerHandle | undefined;
+
 /** Phone implementations of the things the Mac helper does natively. */
-export function createPhoneHost(openScreen: (kind: string) => boolean): FolioHost {
+export function createPhoneHost(openScreen: (kind: string) => boolean, showFile: (file: File) => void): FolioHost {
   let recognition: SpeechRecognition | undefined;
   const speech = window.speechSynthesis;
   const pick = (accept: string, multiple: boolean) => new Promise<File[]>((resolve) => {
@@ -27,14 +39,23 @@ export function createPhoneHost(openScreen: (kind: string) => boolean): FolioHos
   };
   return {
     speak: (text, done) => {
+      if (isCapacitorApp()) {
+        void speechListener?.remove();
+        void nativeSpeech.addListener('finished', () => { void speechListener?.remove(); speechListener = undefined; done(); }).then((handle) => { speechListener = handle; });
+        nativeSpeech.speak({ text }).catch(() => done());
+        return;
+      }
       speech.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 1;
       utterance.onend = done; utterance.onerror = done;
       speech.speak(utterance);
     },
-    pauseSpeaking: (paused) => { if (paused) speech.pause(); else speech.resume(); },
-    stopSpeaking: () => speech.cancel(),
+    pauseSpeaking: (paused) => {
+      if (isCapacitorApp()) { void (paused ? nativeSpeech.pause() : nativeSpeech.resume()); return; }
+      if (paused) speech.pause(); else speech.resume();
+    },
+    stopSpeaking: () => { if (isCapacitorApp()) void nativeSpeech.stop(); else speech.cancel(); },
     listen: (onWords, done) => {
       // Declared as always present (see lib/voice/browserVoiceService.ts), but iOS web views may lack both.
       const Engine: (new () => SpeechRecognition) | undefined = window.SpeechRecognition ?? window.webkitSpeechRecognition;
@@ -54,7 +75,8 @@ export function createPhoneHost(openScreen: (kind: string) => boolean): FolioHos
     stopListening: () => recognition?.stop(),
     share,
     pickFiles: pick,
-    openFile: (file, name) => { void share(new File([file], name, { type: file.type })); },
+    // Loading the file is async, which ends the tap; the app shows a sheet whose button shares it.
+    openFile: (file, name) => showFile(new File([file], name, { type: file.type })),
     utility: openScreen,
   };
 }

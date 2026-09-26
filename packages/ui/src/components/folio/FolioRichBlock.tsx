@@ -8,6 +8,9 @@ import { blockToDocument, documentToText } from '@/lib/folio/rich-text';
 
 export type FocusAt = 'start' | 'end';
 export interface SlashState { blockID: string; query: string; left: number; top: number; bottom: number }
+/** An "@page" being typed; `from` is where the @ sits in the block's document. */
+export interface MentionState extends SlashState { from: number }
+export const folioNoteLinkPrefix = 'folio://note/';
 
 // Typed at the start of a block, then Space: the same shortcuts Notion uses.
 const markdownShortcuts = new Map<string, FolioBlock['kind']>([
@@ -26,6 +29,8 @@ interface FolioRichBlockProps {
   onRemoveEmpty: () => void;
   onSlash: (state: SlashState | null) => void;
   onSlashKey: (key: string) => boolean;
+  onMention?: (state: MentionState | null) => void;
+  onOpenNote?: (noteID: string) => void;
 }
 
 // Callbacks are read through a ref and must look up the latest page themselves, so a block re-renders only when its own content changes.
@@ -36,6 +41,7 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
   const current = React.useRef(props); current.current = props;
   const editorRef = React.useRef<Editor | null>(null);
   const slashOpen = React.useRef(false);
+  const mentionOpen = React.useRef(false);
 
   React.useEffect(() => {
     if (!mount.current) return;
@@ -52,13 +58,26 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
         current.current.onSlash(null);
       }
     };
+    const reportMention = (editor: Editor) => {
+      const { from, empty } = editor.state.selection;
+      const before = empty ? editor.state.doc.textBetween(Math.max(1, from - 40), from, '\n') : '';
+      const match = /(?:^|\s)@([^\s@]{0,30})$/.exec(before);
+      if (match && current.current.onMention) {
+        const at = editor.view.coordsAtPos(from);
+        mentionOpen.current = true;
+        current.current.onMention({ blockID: current.current.block.id, query: match[1], left: at.left, top: at.top, bottom: at.bottom, from: from - match[1].length - 1 });
+      } else if (mentionOpen.current) {
+        mentionOpen.current = false;
+        current.current.onMention?.(null);
+      }
+    };
     const editor = new Editor({
       element: mount.current,
-      extensions: [StarterKit.configure({ heading: false, bulletList: false, orderedList: false, listItem: false, listKeymap: false, blockquote: false, codeBlock: false, horizontalRule: false, link: { openOnClick: false } }), Highlight.configure({ multicolor: true }), TextStyle, Color],
+      extensions: [StarterKit.configure({ heading: false, bulletList: false, orderedList: false, listItem: false, listKeymap: false, blockquote: false, codeBlock: false, horizontalRule: false, link: { openOnClick: false, protocols: ['folio'] } }), Highlight.configure({ multicolor: true }), TextStyle, Color],
       content: blockToDocument(current.current.block),
       editorProps: {
         handleKeyDown: (view, event) => {
-          if (slashOpen.current && ['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(event.key) && current.current.onSlashKey(event.key)) {
+          if ((slashOpen.current || mentionOpen.current) && ['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(event.key) && current.current.onSlashKey(event.key)) {
             event.preventDefault();
             return true;
           }
@@ -88,6 +107,15 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
           }
           return false;
         },
+        // Links to other pages (inserted with @) open that page instead of a browser.
+        handleClick: (_view, _pos, event) => {
+          const link = event.target instanceof Element ? event.target.closest('a') : null;
+          const href = link?.getAttribute('href') ?? '';
+          if (!href.startsWith(folioNoteLinkPrefix) || !current.current.onOpenNote) return false;
+          event.preventDefault();
+          current.current.onOpenNote(href.slice(folioNoteLinkPrefix.length));
+          return true;
+        },
         attributes: { class: 'folio-rich-text outline-none min-h-[1.65em]', role: 'textbox', 'aria-multiline': 'true' },
       },
       onFocus: ({ editor }) => current.current.onFocus(editor),
@@ -95,10 +123,12 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
       onBlur: ({ editor }) => {
         current.current.onBlur(editor);
         if (slashOpen.current) { slashOpen.current = false; setTimeout(() => current.current.onSlash(null), 150); }
+        if (mentionOpen.current) { mentionOpen.current = false; setTimeout(() => current.current.onMention?.(null), 150); }
       },
       onUpdate: ({ editor }) => {
         current.current.onChange({ ...current.current.block, ...documentToText(editor.getJSON()) });
         reportSlash(editor);
+        reportMention(editor);
       },
     });
     editorRef.current = editor;

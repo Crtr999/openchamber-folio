@@ -143,6 +143,28 @@ struct BridgeResponse: Encodable {
                 incoming.modified=Date();incoming.created=model.notes[index].created
                 try model.database?.save(incoming,forceRevision:request.flag == true)
                 model.notes[index]=incoming;model.pending.removeValue(forKey:incoming.id);model.status="All changes saved"
+            case "upsert":
+                // Sync from the iPhone app: store the page as sent, keeping its own modified date so it is not echoed back.
+                guard var incoming=request.note else {throw AppError(message:"Page was not found")}
+                guard incoming.title.count<=1000,incoming.blocks.count<=10000 else {throw AppError(message:"Page is too large")}
+                let existing=model.notes.first(where:{$0.id==incoming.id})
+                let knownAssets=Set(existing?.blocks.compactMap(\.asset) ?? [])
+                for index in incoming.blocks.indices {
+                    let block=incoming.blocks[index]
+                    let count=(block.text as NSString).length
+                    guard (block.marks ?? []).allSatisfy({$0.start>=0 && $0.length>=0 && $0.start<=count && $0.length<=count-$0.start}) else {throw AppError(message:"Invalid text formatting range")}
+                    // Only files already in this Mac library may be referenced; phone attachments stay on the phone.
+                    if block.kind == .attachment, let asset=block.asset, !knownAssets.contains(asset) {incoming.blocks[index].asset=nil}
+                }
+                var seen=Set<UUID>();var parent=incoming.parentID
+                while let value=parent {
+                    guard value != incoming.id,seen.insert(value).inserted,let p=model.notes.first(where:{$0.id==value}) else {incoming.parentID=nil;break}
+                    parent=p.parentID
+                }
+                incoming.created=existing?.created ?? incoming.created
+                try model.database?.save(incoming)
+                if let index=model.notes.firstIndex(where:{$0.id==incoming.id}) {model.notes[index]=incoming} else {model.notes.insert(incoming,at:0)}
+                model.pending.removeValue(forKey:incoming.id)
             case "trash": model.trash(try selected().id,restore:request.flag == true)
             case "duplicate":
                 var copy=try selected();copy.id=UUID();copy.title += " copy";copy.created=Date();copy.modified=Date()

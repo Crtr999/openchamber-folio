@@ -20,12 +20,30 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.carterlaborde.folio.sync</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>folio-sync</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Folio syncs your notes with your Mac over your Wi-Fi.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Folio uses the microphone when you dictate into a note.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

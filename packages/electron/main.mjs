@@ -1,5 +1,6 @@
 import { attachToBackgroundOpenCodeService } from './opencode-service.mjs';
 import { createFolioEngine } from './folio-engine.mjs';
+import { createFolioSync } from './folio-sync.mjs';
 import { canReuseManagedOpenCodePreflight } from './opencode-readiness.mjs';
 import { app, BrowserWindow, dialog, ipcMain, Menu, MessageChannelMain, nativeTheme, net as electronNet, Notification, powerMonitor, powerSaveBlocker, protocol, session, shell, webContents } from 'electron';
 import contextMenu from 'electron-context-menu';
@@ -333,6 +334,8 @@ const quitConfirmationMessage = () => {
 };
 
 const folioEngine = createFolioEngine({ resourcesPath: process.resourcesPath, developmentRoot: path.dirname(fileURLToPath(import.meta.url)), libraryPath: process.env.OPENCHAMBER_FOLIO_LIBRARY_DIR || path.join(app.getPath('appData'), 'Folio-OpenChamber') });
+// iPhone sync stays off until the user pairs a phone from the notebook's ⋯ menu.
+const folioSync = createFolioSync({ engine: folioEngine, configPath: path.join(app.getPath('userData'), 'folio-sync.json'), getLocalOrigin: () => state.localOrigin || state.sidecarUrl || '', log: (message) => log.info(message) });
 
 const shutdownBackgroundServices = () => {
   if (!state.backgroundShutdownPromise) {
@@ -340,6 +343,7 @@ const shutdownBackgroundServices = () => {
     shellEnvironmentAbort.abort();
     state.backgroundShutdownPromise = Promise.all([
       startShellEnvironmentProbe().catch(() => {}),
+      Promise.resolve(folioSync.stop()),
       folioEngine.stop(),
       killSidecar(),
       shutdownSshSessions(),
@@ -3488,6 +3492,12 @@ const closeAllDevTunnels = () => {
 const handleInvoke = async (browserWindow, command, args = {}) => {
   switch (command) {
     case 'desktop_folio': return folioEngine.request(args);
+    case 'desktop_folio_sync': {
+      const action = args?.action;
+      if (action === 'enable') return folioSync.enable();
+      if (action === 'disable') return folioSync.disable();
+      return folioSync.status();
+    }
     case 'desktop_pick_theme_file': {
       const { pickThemeFile } = await import('./theme-file-picker.mjs');
       return pickThemeFile({ showDialog: (options) => dialog.showOpenDialog(browserWindow || undefined, options) });
@@ -4720,7 +4730,7 @@ const COMMANDS_SAFE_FOR_REMOTE = new Set([
 ]);
 
 ipcMain.handle('openchamber:invoke', async (event, command, args) => {
-  if (command === 'desktop_folio' && event.senderFrame !== event.sender.mainFrame) throw new Error('Folio is available only to the local main application.');
+  if ((command === 'desktop_folio' || command === 'desktop_folio_sync') && event.senderFrame !== event.sender.mainFrame) throw new Error('Folio is available only to the local main application.');
   if (!isLocalSender(event.sender) && !COMMANDS_SAFE_FOR_REMOTE.has(command)) {
     log.warn(`[ipc] rejected ${command} from non-local origin: ${event.sender?.getURL?.() || '(unknown)'}`);
     throw new Error('IPC not available for this origin');
@@ -5099,6 +5109,7 @@ app.on('activate', async () => {
 });
 
 app.whenReady().then(async () => {
+  try { folioSync.start(); } catch (error) { log.warn(`[folio-sync] could not start: ${error instanceof Error ? error.message : error}`); }
   if (wasEarlyWindowClosed()) return;
   const loginItemSettings = readLoginItemSettings();
   const isBackgroundStart = shouldStartInBackground(loginItemSettings);

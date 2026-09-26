@@ -6,6 +6,7 @@ import type { LocalEngine } from '@/lib/folio/local-engine';
 import { useFolioStore } from '@/lib/folio/store';
 import { readKey, useMobileChatStore, writeKey } from './chatStore';
 import { nativeGet } from './host';
+import { useSyncStore } from './sync';
 
 const section = 'mb-6 rounded-xl border border-border/70 p-4';
 
@@ -25,8 +26,33 @@ function KeyField({ provider, name, hint }: { provider: ProviderID; name: string
   </form>;
 }
 
+function SyncSection({ engine }: { engine: LocalEngine }) {
+  const { t } = useI18n();
+  const { pairing, lastSync, syncing, error, pair, unpair, syncNow } = useSyncStore();
+  const [link, setLink] = React.useState('');
+  const [bad, setBad] = React.useState(false);
+  return <section className={section}>
+    <h2 className="mb-1 font-semibold">{t('folio.syncTitle')}</h2>
+    {pairing ? <>
+      <p className="text-sm">{t('folio.syncPaired', { name: pairing.name })}</p>
+      <p className="mb-3 text-xs text-muted-foreground">{error ? t('folio.syncUnreachable') : lastSync ? t('folio.syncPhoneLast', { time: new Date(lastSync).toLocaleString() }) : t('folio.syncWaiting')}</p>
+      <div className="flex gap-2">
+        <button type="button" className="flex-1 rounded-lg bg-secondary px-3 py-2 text-sm disabled:opacity-50" disabled={syncing} onClick={() => void syncNow(engine)}>{syncing ? '…' : t('folio.syncNow')}</button>
+        <button type="button" className="rounded-lg px-3 py-2 text-sm text-[var(--status-error)]" onClick={() => void unpair()}>{t('folio.syncUnpair')}</button>
+      </div>
+    </> : <>
+      <p className="mb-3 text-xs text-muted-foreground">{t('folio.syncPhoneIntro')}</p>
+      <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void pair(link, engine).then((ok) => { setBad(!ok); if (ok) setLink(''); }); }}>
+        <input className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-[16px]" placeholder={t('folio.syncPaste')} aria-label={t('folio.syncPaste')} autoCapitalize="off" autoCorrect="off" value={link} onChange={(e) => { setLink(e.target.value); setBad(false); }} />
+        <button type="submit" className="rounded-lg bg-secondary px-3 text-sm">{t('folio.syncPair')}</button>
+      </form>
+      {bad && <p role="alert" className="mt-2 text-xs text-[var(--status-error)]">{t('folio.syncBadLink')}</p>}
+    </>}
+  </section>;
+}
+
 /** Keys, models and backups for the standalone iPhone app. */
-export function FolioMobileSettings({ engine, onMenu }: { engine: LocalEngine; onMenu: () => void }) {
+export function FolioMobileSettings({ engine, onMenu, onExportBackup }: { engine: LocalEngine; onMenu: () => void; onExportBackup: () => void }) {
   const { t } = useI18n();
   const addModels = useMobileChatStore((s) => s.addModels);
   const [provider, setProvider] = React.useState<ProviderID>('openrouter');
@@ -55,6 +81,7 @@ export function FolioMobileSettings({ engine, onMenu }: { engine: LocalEngine; o
     </header>
     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 pb-[max(env(safe-area-inset-bottom),1rem)]">
       {message && <div role="status" className="mb-4 rounded-lg bg-secondary px-3 py-2 text-sm">{message}</div>}
+      <SyncSection engine={engine} />
       <section className={section}>
         <h2 className="mb-1 font-semibold">{t('folio.aiKeys')}</h2>
         <p className="mb-3 text-xs text-muted-foreground">{t('folio.aiKeysHint')}</p>
@@ -81,7 +108,7 @@ export function FolioMobileSettings({ engine, onMenu }: { engine: LocalEngine; o
         <p className="mb-3 text-xs text-muted-foreground">{t('folio.backupHint')}</p>
         <div className="flex gap-2">
           <button type="button" className="flex-1 rounded-lg bg-secondary px-3 py-2 text-sm" onClick={() => fileRef.current?.click()}>{t('folio.importBackup')}</button>
-          <button type="button" className="flex-1 rounded-lg bg-secondary px-3 py-2 text-sm" onClick={() => void useFolioStore.getState().run({ command: 'export-library' })}>{t('folio.exportBackup')}</button>
+          <button type="button" className="flex-1 rounded-lg bg-secondary px-3 py-2 text-sm" onClick={onExportBackup}>{t('folio.exportBackup')}</button>
         </div>
         <input ref={fileRef} type="file" accept=".json,application/json" className="hidden" onChange={(e) => { void importBackup(e.target.files?.[0]); e.target.value = ''; }} />
       </section>
