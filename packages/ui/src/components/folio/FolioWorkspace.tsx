@@ -54,7 +54,10 @@ const blockAliases = new Map<BlockKind, string[]>([
   ['text', ['text', 'paragraph', 'p']], ['heading1', ['h1', 'heading1', 'title']], ['heading2', ['h2', 'heading2']], ['heading3', ['h3', 'heading3']], ['heading4', ['h4', 'heading4']], ['toggleHeading1', ['toggleh1', 'th1']], ['toggleHeading2', ['toggleh2', 'th2']], ['toggleHeading3', ['toggleh3', 'th3']], ['bullet', ['bullet', 'list', 'ul', '-']], ['numbered', ['numbered', 'ol', 'number', '1.']], ['task', ['todo', 'task', 'check', 'checkbox', '[]']], ['toggle', ['toggle', 'collapse', '>']], ['quote', ['quote', 'blockquote', '"']], ['callout', ['callout', 'note', 'tip']], ['code', ['code', 'snippet']], ['equation', ['equation', 'math', 'latex']], ['divider', ['divider', 'hr', 'line', '---']], ['page', ['page', 'link', 'subpage']],
 ]);
 
-export function FolioWorkspace() {
+/** Phone layout hooks: the standalone iPhone app has a menu instead of "Back to chat", and its own chat. */
+export interface FolioMobileHooks { onMenu: () => void; onAddToChat: (markdown: string, noteID: string) => void }
+
+export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   const { t } = useI18n();
   const status = useFolioStore((s) => s.status);
   const drafts = useFolioStore((s) => s.drafts);
@@ -92,9 +95,10 @@ export function FolioWorkspace() {
     if (empty || !editor.isFocused || pointerDown.current) { setBubble(undefined); return; }
     const start = editor.view.coordsAtPos(from), end = editor.view.coordsAtPos(to);
     const menuHeight = bubbleRef.current?.offsetHeight || 124;
+    const menuWidth = Math.min(420, window.innerWidth - 16);
     const below = end.bottom + 12;
     const top = below + menuHeight < window.innerHeight - 8 ? below : Math.max(8, start.top - menuHeight - 12);
-    setBubble({ top, left: Math.max(8, Math.min(window.innerWidth - 440, Math.min(start.left, end.left))) });
+    setBubble({ top, left: Math.max(8, Math.min(window.innerWidth - menuWidth - 8, Math.min(start.left, end.left))) });
   }, []);
   const trackSelection = React.useCallback((editor: Editor, blockID: string) => {
     activeEditor.current = editor;
@@ -240,9 +244,20 @@ export function FolioWorkspace() {
     return () => { cancelAnimationFrame(frame); if (clear) { clearTimeout(clear); CSS.highlights.delete('folio-found'); } };
   }, [found, note?.id]);
 
+  // A backup file the iPhone app can import (Settings → Import backup). Attachments stay on the Mac.
+  const exportForPhone = () => {
+    setMenuOpen(false);
+    const notes = useFolioStore.getState().status?.notes.filter((n) => !n.isChat) ?? [];
+    const url = URL.createObjectURL(new Blob([JSON.stringify({ app: 'folio', version: 1, exported: Date.now(), notes })], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url; link.download = `Folio backup ${new Date().toISOString().slice(0, 10)}.json`; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  };
+
   const compose = async () => {
     setMenuOpen(false);
     const response = await run({ command: 'markdown', noteID: note?.id, flag: true });
+    if (response?.text && mobile && note) { mobile.onAddToChat(response.text, note.id); return; }
     if (response?.text) { useInputStore.getState().setPendingInputText(response.text, 'append'); await close(); }
   };
 
@@ -276,10 +291,12 @@ export function FolioWorkspace() {
   return <div className="folio-workspace flex h-full flex-col bg-background text-foreground">
     {/* One slim bar replaces the old stacked toolbars; everything else lives in the ⋯ menu. */}
     <header className="flex h-11 shrink-0 items-center gap-1 px-3">
-      <button type="button" className={quiet} onClick={() => void close()} title={t('folio.back')}><Icon name="arrow-left-s" className="inline size-4" /> {t('folio.back')}</button>
+      {mobile
+        ? <button type="button" className={tool} onClick={mobile.onMenu} aria-label={t('folio.menu')} title={t('folio.menu')}><Icon name="menu-2" className="size-5" /></button>
+        : <button type="button" className={quiet} onClick={() => void close()} title={t('folio.back')}><Icon name="arrow-left-s" className="inline size-4" /> {t('folio.back')}</button>}
       <nav className="flex min-w-0 shrink items-center gap-1 truncate pl-2 text-sm text-muted-foreground" aria-label={t('folio.pages')}>
         {home ? <span className="text-foreground">{t('folio.notes')}</span> : <>
-          {crumbs.map((crumb) => <React.Fragment key={crumb.id}><button type="button" className="truncate hover:text-foreground" onClick={() => call({ command: 'select', noteID: crumb.id })}>{crumb.title || t('folio.untitled')}</button><span>/</span></React.Fragment>)}
+          {!mobile && crumbs.map((crumb) => <React.Fragment key={crumb.id}><button type="button" className="truncate hover:text-foreground" onClick={() => call({ command: 'select', noteID: crumb.id })}>{crumb.title || t('folio.untitled')}</button><span>/</span></React.Fragment>)}
           {note && <span className="truncate text-foreground">{note.title || t('folio.untitled')}</span>}
         </>}
       </nav>
@@ -290,16 +307,18 @@ export function FolioWorkspace() {
         <button type="button" className={cn(tool, status.listening && toolLive)} aria-pressed={status.listening} title={status.listening ? t('folio.stopDictating') : t('folio.dictate')} aria-label={status.listening ? t('folio.stopDictating') : t('folio.dictate')} onClick={() => call({ command: status.listening ? 'stop-listening' : 'listen' })}>
           <Icon name="mic" className="size-4" />
         </button>
-        <button type="button" className={cn(tool, status.recording && toolLive)} aria-pressed={status.recording} title={status.recording ? t('folio.stopRecording') : t('folio.recordings')} aria-label={status.recording ? t('folio.stopRecording') : t('folio.recordings')} onClick={() => status.recording ? call({ command: 'stop-recording' }) : utility('meeting')}>
+        {!mobile && <button type="button" className={cn(tool, status.recording && toolLive)} aria-pressed={status.recording} title={status.recording ? t('folio.stopRecording') : t('folio.recordings')} aria-label={status.recording ? t('folio.stopRecording') : t('folio.recordings')} onClick={() => status.recording ? call({ command: 'stop-recording' }) : utility('meeting')}>
           <Icon name="record-circle" className="size-4" />
-        </button>
+        </button>}
         <button type="button" className={tool} title={t('folio.attach')} aria-label={t('folio.attach')} onClick={() => call({ command: 'attach' })}>
           <Icon name="attachment-2" className="size-4" />
         </button>
       </div>}
       <div className="flex-1" />
-      <span className="px-2 text-xs text-muted-foreground" aria-live="polite">{saving || Object.keys(drafts).length ? t('folio.saving') : t('folio.saved')}</span>
-      {note && <button type="button" className={quiet} disabled={note.excludedFromAI} onClick={() => void compose()}>{t('folio.addToChat')}</button>}
+      <span className={cn('px-2 text-xs text-muted-foreground', mobile && 'sr-only')} aria-live="polite">{saving || Object.keys(drafts).length ? t('folio.saving') : t('folio.saved')}</span>
+      {note && (mobile
+        ? <button type="button" className={tool} disabled={note.excludedFromAI} aria-label={t('folio.addToChat')} title={t('folio.addToChat')} onClick={() => void compose()}><Icon name="chat-new" className="size-4" /></button>
+        : <button type="button" className={quiet} disabled={note.excludedFromAI} onClick={() => void compose()}>{t('folio.addToChat')}</button>)}
       <div className="relative">
         <button type="button" className={quiet} aria-label={t('folio.more')} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}><Icon name="more-fill" className="size-4" /></button>
         {menuOpen && <>
@@ -312,16 +331,17 @@ export function FolioWorkspace() {
               <button type="button" className={menuItem} onClick={() => { edit({ ...note, excludedFromAI: !note.excludedFromAI }); setMenuOpen(false); }}><Icon name="lock" className="size-4 text-muted-foreground" />{t('folio.private')}{note.excludedFromAI ? ' ✓' : ''}</button>
               <label className={cn(menuItem, 'cursor-default')}><Icon name="folder" className="size-4 text-muted-foreground" /><select className="min-w-0 flex-1 bg-transparent text-sm" aria-label={t('folio.parent')} value={note.parentID || ''} onChange={(e) => edit({ ...note, parentID: e.target.value || undefined })}><option value="">{t('folio.parent')}: {t('folio.root')}</option>{status.notes.filter((n) => !isDescendant(n.id) && !n.trashed).map((n) => <option key={n.id} value={n.id}>{n.title || t('folio.untitled')}</option>)}</select></label>
               <button type="button" className={menuItem} onClick={() => call({ command: 'duplicate' })}><Icon name="file-copy" className="size-4 text-muted-foreground" />{t('folio.duplicate')}</button>
-              <button type="button" className={menuItem} onClick={() => utility('history')}><Icon name="history" className="size-4 text-muted-foreground" />{t('folio.history')}</button>
+              {!mobile && <button type="button" className={menuItem} onClick={() => utility('history')}><Icon name="history" className="size-4 text-muted-foreground" />{t('folio.history')}</button>}
               <div className="my-1 border-t border-border" />
               <div className="px-2 pt-1 text-xs text-muted-foreground">{t('folio.import')}</div>
-              {['notes', 'documents', 'ocr', ...(note.table ? ['csv'] : [])].map((kind) => <button key={kind} type="button" className={cn(menuItem, 'pl-4')} onClick={() => call({ command: 'import', kind, flag: kind === 'ocr' })}>{kind === 'notes' ? t('folio.pages') : kind === 'documents' ? t('folio.attach') : kind.toUpperCase()}</button>)}
+              {(mobile ? ['notes'] : ['notes', 'documents', 'ocr', ...(note.table ? ['csv'] : [])]).map((kind) => <button key={kind} type="button" className={cn(menuItem, 'pl-4')} onClick={() => call({ command: 'import', kind, flag: kind === 'ocr' })}>{kind === 'notes' ? t('folio.pages') : kind === 'documents' ? t('folio.attach') : kind.toUpperCase()}</button>)}
               <div className="px-2 pt-1 text-xs text-muted-foreground">{t('folio.export')}</div>
-              {['md', 'txt', 'pdf', ...(note.table ? ['csv'] : [])].map((kind) => <button key={kind} type="button" className={cn(menuItem, 'pl-4')} onClick={() => call({ command: 'export', kind })}>{kind.toUpperCase()}</button>)}
+              {['md', 'txt', ...(mobile ? [] : ['pdf']), ...(note.table ? ['csv'] : [])].map((kind) => <button key={kind} type="button" className={cn(menuItem, 'pl-4')} onClick={() => call({ command: 'export', kind })}>{kind.toUpperCase()}</button>)}
               <button type="button" className={cn(menuItem, 'pl-4')} onClick={() => call({ command: 'export-library' })}>{t('folio.allPages')}</button>
+              {!mobile && <button type="button" className={cn(menuItem, 'pl-4')} onClick={exportForPhone}>{t('folio.exportForPhone')}</button>}
             </>}
             <div className="my-1 border-t border-border" />
-            {(['calendar', 'assistant', 'settings'] as const).map((kind) => <button key={kind} type="button" className={menuItem} onClick={() => utility(kind)}><Icon name={kind === 'calendar' ? 'calendar' : kind === 'assistant' ? 'sparkling' : 'settings-3'} className="size-4 text-muted-foreground" />{t(`folio.${kind}`)}</button>)}
+            {(mobile ? (['assistant', 'settings'] as const) : (['calendar', 'assistant', 'settings'] as const)).map((kind) => <button key={kind} type="button" className={menuItem} onClick={() => utility(kind)}><Icon name={kind === 'calendar' ? 'calendar' : kind === 'assistant' ? 'sparkling' : 'settings-3'} className="size-4 text-muted-foreground" />{t(`folio.${kind}`)}</button>)}
             {note && <><div className="my-1 border-t border-border" /><button type="button" className={cn(menuItem, 'text-destructive')} onClick={() => call({ command: 'trash', flag: note.trashed })}><Icon name="delete-bin" className="size-4" />{t(note.trashed ? 'folio.restore' : 'folio.trash')}</button></>}
           </div>
         </>}
@@ -333,7 +353,7 @@ export function FolioWorkspace() {
     {status.calendarPrompt && <div className="mx-4 mb-2 flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-sm"><span className="flex-1">{status.calendarPrompt.title}</span><button type="button" className={quiet} onClick={() => call({ command: 'calendar-prepare', eventID: status.calendarPrompt?.id })}>{t('folio.meeting')}</button><button type="button" className={quiet} onClick={() => call({ command: 'calendar-dismiss' })}>×</button></div>}
 
     <div className="min-h-0 flex-1 overflow-auto" onScroll={() => { setBubble(undefined); setSlash(null); }}>
-      {!note && <div className="mx-auto w-full max-w-5xl pl-14 pr-8 py-10">
+      {!note && <div className={cn('mx-auto w-full max-w-5xl', mobile ? 'px-4 py-6' : 'pl-14 pr-8 py-10')}>
         <h1 className="mb-6 text-3xl font-bold">{t('folio.notes')}</h1>
         <div className="mb-10 grid grid-cols-3 gap-2">
           {createKinds.map(([kind, icon, label]) => <button key={kind} type="button" className="flex items-center gap-2 rounded-lg border border-border px-3 py-3 text-left text-sm hover:bg-interactive-hover" onClick={() => void createFromMenu(kind)}><Icon name={icon} className="size-4 text-muted-foreground" />{t(label)}</button>)}
@@ -344,7 +364,7 @@ export function FolioWorkspace() {
         </button>)}
       </div>}
 
-      {note && <article ref={articleRef} className="mx-auto w-full max-w-5xl pb-40 pl-14 pr-8 pt-10" style={{ fontSize: status.fontSize }}>
+      {note && <article ref={articleRef} className={cn('mx-auto w-full max-w-5xl pb-40', mobile ? 'pl-8 pr-4 pt-4' : 'pl-14 pr-8 pt-10')} style={{ fontSize: status.fontSize }}>
         <div className="group/title relative mb-1">
           {note.icon
             ? <button type="button" className="mb-2 rounded-md p-1 text-5xl leading-none hover:bg-interactive-hover" aria-label={t('folio.icon')} onClick={() => setIconOpen(!iconOpen)}><FolioIcon value={note.icon} large /></button>
@@ -368,13 +388,13 @@ export function FolioWorkspace() {
           return <div key={block.id} data-block-id={block.id} className="folio-block group/block relative flex items-start gap-1.5 rounded-sm" data-kind={block.kind} data-checked={block.checked}
             style={{ backgroundColor: block.highlight === 'none' ? undefined : `color-mix(in srgb, ${folioColors[block.highlight]} ${status.highlightStrength * 100}%, transparent)` }}>
             {/* Handles only appear on hover, in the left margin, like Notion. */}
-            <div className={cn('absolute -left-12 top-0.5 flex opacity-0 transition-opacity group-hover/block:opacity-100', blockMenuID === block.id && 'opacity-100')}>
-              <button type="button" className="rounded p-0.5 text-muted-foreground hover:bg-interactive-hover" aria-label={t('folio.newBlock')} title={t('folio.newBlock')} onClick={() => insertAfter(block.id, makeBlock())}><Icon name="add" className="size-4" /></button>
+            <div className={cn('absolute top-0.5 flex opacity-0 transition-opacity group-hover/block:opacity-100', mobile ? '-left-7 group-focus-within/block:opacity-70' : '-left-12', blockMenuID === block.id && 'opacity-100')}>
+              {!mobile && <button type="button" className="rounded p-0.5 text-muted-foreground hover:bg-interactive-hover" aria-label={t('folio.newBlock')} title={t('folio.newBlock')} onClick={() => insertAfter(block.id, makeBlock())}><Icon name="add" className="size-4" /></button>}
               <button type="button" className="rounded p-0.5 text-muted-foreground hover:bg-interactive-hover" aria-label={t('folio.block')} title={t('folio.block')} onClick={() => setBlockMenuID(blockMenuID === block.id ? undefined : block.id)}><Icon name="draggable" className="size-4" /></button>
             </div>
             {blockMenuID === block.id && <>
               <div className="fixed inset-0 z-30" onClick={() => setBlockMenuID(undefined)} />
-              <div className="absolute -left-12 top-7 z-40 max-h-96 w-60 overflow-y-auto rounded-xl border border-border bg-background p-1.5 shadow-2xl">
+              <div className={cn('absolute top-7 z-40 max-h-96 w-60 overflow-y-auto rounded-xl border border-border bg-background p-1.5 shadow-2xl', mobile ? 'left-0' : '-left-12')}>
                 <div className="px-2 pb-1 text-xs text-muted-foreground">{t('folio.block')}</div>
                 {blockKinds.filter((kind) => kind !== 'attachment').map((kind) => <button key={kind} type="button" className={cn(menuItem, block.kind === kind && 'bg-interactive-selection')} onClick={() => { setKind(block.id, kind); setBlockMenuID(undefined); }}>{t(`folio.block.${kind}`)}</button>)}
                 <div className="px-2 pb-1 pt-2 text-xs text-muted-foreground">{t('folio.highlight')}</div>
@@ -440,7 +460,7 @@ export function FolioWorkspace() {
       })}
     </div>}
 
-    {bubble && active && !active.editor.isDestroyed && <div ref={bubbleRef} role="toolbar" aria-label={t('folio.block')} className="fixed z-50 flex flex-col gap-1.5 rounded-xl border border-border bg-background/95 p-2 shadow-xl backdrop-blur" style={{ top: bubble.top, left: bubble.left, width: 420 }} onMouseDown={(e) => e.preventDefault()}>
+    {bubble && active && !active.editor.isDestroyed && <div ref={bubbleRef} role="toolbar" aria-label={t('folio.block')} className="fixed z-50 flex flex-col gap-1.5 rounded-xl border border-border bg-background/95 p-2 shadow-xl backdrop-blur" style={{ top: bubble.top, left: bubble.left, width: Math.min(420, window.innerWidth - 16) }} onMouseDown={(e) => e.preventDefault()}>
       <div className="flex items-center gap-0.5">
         {([['bold', 'B', 'font-bold'], ['italic', 'I', 'italic'], ['underline', 'U', 'underline'], ['strike', 'S', 'line-through'], ['code', '</>', 'font-mono']] as const).map(([format, glyph, style]) => <button key={format} type="button" className={cn('h-7 rounded-md px-2 text-sm hover:bg-interactive-hover', style, active.editor.isActive(format) && 'bg-interactive-selection')} title={t(`folio.${format}`)} aria-label={t(`folio.${format}`)} onClick={() => active.editor.chain().focus().toggleMark(format).run()}>{glyph}</button>)}
         <button type="button" className="h-7 rounded-md px-2 text-sm hover:bg-interactive-hover" onClick={() => setLinkOpen(!linkOpen)}>{t('folio.link')}</button>

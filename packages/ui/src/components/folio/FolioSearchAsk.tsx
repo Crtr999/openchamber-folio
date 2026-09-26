@@ -9,35 +9,12 @@ import { useInputStore } from '@/sync/input-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useUIStore } from '@/stores/useUIStore';
 
-import type { FolioNote } from '@/lib/folio/schema';
+import { findHit, type Hit } from '@/lib/folio/search';
 
-interface Hit { blockID: string; before: string; match: string; after: string }
 type Result =
   | { kind: 'page'; id: string; title: string; icon: string; hit?: Hit }
   | { kind: 'ask' }
   | { kind: 'chats' };
-
-/** The block that explains why a page matched, trimmed to a short line around the match. */
-function findHit(note: FolioNote, query: string): Hit | undefined {
-  const needle = query.toLowerCase();
-  const words = needle.split(/\s+/).filter((word) => word.length > 1);
-  let best: { blockID: string; text: string; at: number; length: number; score: number } | undefined;
-  for (const block of note.blocks) {
-    const lower = block.text.toLowerCase();
-    const at = lower.indexOf(needle);
-    if (at >= 0) { best = { blockID: block.id, text: block.text, at, length: needle.length, score: Infinity }; break; }
-    const score = words.filter((word) => lower.includes(word)).length;
-    if (score && (!best || score > best.score)) {
-      const first = words.find((word) => lower.includes(word)) ?? '';
-      best = { blockID: block.id, text: block.text, at: lower.indexOf(first), length: first.length, score };
-    }
-  }
-  if (!best) return undefined;
-  let start = Math.max(0, best.at - 36);
-  if (start > 0) { const space = best.text.indexOf(' ', start); if (space >= 0 && space < best.at) start = space + 1; }
-  const end = Math.min(best.text.length, best.at + best.length + 80);
-  return { blockID: best.blockID, before: (start > 0 ? '…' : '') + best.text.slice(start, best.at), match: best.text.slice(best.at, best.at + best.length), after: best.text.slice(best.at + best.length, end) + (end < best.text.length ? '…' : '') };
-}
 
 /**
  * Notion-style "Search or ask": finds notes as you type, and Enter on "Ask" starts a new chat
