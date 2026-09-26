@@ -17,6 +17,8 @@ import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight
 import { mentionServerQuery, rankFileMentionResults } from './fileMentionResults';
 import { matchesRankQuery, rankByQuery } from '@/lib/search/fuzzySearch';
 import { AutocompleteRowTooltip } from './composer/ui/AutocompleteRowTooltip';
+import { useFolioStore } from '@/lib/folio/store';
+import type { FolioNote } from '@/lib/folio/schema';
 
 type FileInfo = ProjectFileSearchHit;
 type AgentInfo = {
@@ -34,6 +36,8 @@ interface FileMentionAutocompleteProps {
   searchQuery: string;
   onFileSelect: (file: FileInfo) => void;
   onAgentSelect?: (agentName: string) => void;
+  /** Local Folio pages (macOS desktop only). Selecting one attaches its full text. */
+  onFolioNoteSelect?: (note: FolioNote) => void;
   onClose: () => void;
   style?: React.CSSProperties;
 }
@@ -42,6 +46,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   searchQuery,
   onFileSelect,
   onAgentSelect,
+  onFolioNoteSelect,
   onClose,
   style,
 }, ref) => {
@@ -125,6 +130,18 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     () => normalizedSearchQuery.length > 0 ? agents : agents.slice(0, 2),
     [agents, normalizedSearchQuery.length],
   );
+  const folioNotes = useFolioStore((state) => state.status?.notes);
+  const visibleNotes = React.useMemo(() => {
+    const none: FolioNote[] = [];
+    if (!onFolioNoteSelect || !folioNotes) return none;
+    const candidates = folioNotes.filter((note) => !note.trashed && !note.excludedFromAI && !note.isChat);
+    if (normalizedSearchQuery.length === 0) {
+      return [...candidates].sort((a, b) => b.modified - a.modified).slice(0, 3);
+    }
+    return rankByQuery(candidates, normalizedSearchQuery, (note) => [note.title, note.title.replace(/\s+/g, ''), ...note.tags]).slice(0, 5);
+  }, [folioNotes, normalizedSearchQuery, onFolioNoteSelect]);
+  const noteOffset = visibleAgents.length;
+  const fileOffset = noteOffset + visibleNotes.length;
   const visibleRecentFiles = recentFiles;
   const visibleResults = React.useMemo(
     () => rankFileMentionResults(files, directories, normalizedSearchQuery, 20),
@@ -366,7 +383,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
         return;
       }
 
-      const total = visibleAgents.length + visibleRecentFiles.length + visibleResults.length;
+      const total = fileOffset + visibleRecentFiles.length + visibleResults.length;
       if (total === 0) {
         return;
       }
@@ -390,7 +407,12 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
           }
           return;
         }
-        const recentIndex = safeIndex - visibleAgents.length;
+        if (safeIndex < fileOffset) {
+          const note = visibleNotes[safeIndex - noteOffset];
+          if (note) onFolioNoteSelect?.(note);
+          return;
+        }
+        const recentIndex = safeIndex - fileOffset;
         const selectedFile = recentIndex < visibleRecentFiles.length
           ? visibleRecentFiles[recentIndex]
           : visibleResults[recentIndex - visibleRecentFiles.length];
@@ -399,7 +421,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
         }
       }
     }
-  }), [visibleResults, visibleRecentFiles, visibleAgents, onClose, handleFileSelect, handleAgentPick]);
+  }), [visibleResults, visibleRecentFiles, visibleAgents, visibleNotes, noteOffset, fileOffset, onClose, handleFileSelect, handleAgentPick, onFolioNoteSelect]);
 
   const getFileIcon = (file: FileInfo) => {
     const ext = file.extension?.toLowerCase();
@@ -464,11 +486,35 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
                 {t('chat.fileMentionAutocomplete.searchMoreAgents')}
               </div>
             )}
-            {visibleAgents.length > 0 && (visibleRecentFiles.length > 0 || visibleResults.length > 0) && (
+            {visibleAgents.length > 0 && (visibleNotes.length > 0 || visibleRecentFiles.length > 0 || visibleResults.length > 0) && (
+              <div className="my-1 border-t border-border/60" />
+            )}
+            {visibleNotes.length > 0 && (
+              <div className="px-3 pt-1 typography-meta text-muted-foreground">{t('folio.pages')}</div>
+            )}
+            {visibleNotes.map((note, index) => {
+              const rowIndex = noteOffset + index;
+              return (
+                <div
+                  key={`folio-${note.id}`}
+                  ref={(el) => { itemRefs.current[rowIndex] = el; }}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-1.5 cursor-pointer typography-ui-label rounded-lg',
+                    selectedIndex === rowIndex && 'bg-interactive-selection',
+                  )}
+                  onClick={() => onFolioNoteSelect?.(note)}
+                  onMouseMove={() => setSelectedIndex(rowIndex)}
+                >
+                  <Icon name="file-text" className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate">{note.title || t('folio.newPage')}</span>
+                </div>
+              );
+            })}
+            {visibleNotes.length > 0 && (visibleRecentFiles.length > 0 || visibleResults.length > 0) && (
               <div className="my-1 border-t border-border/60" />
             )}
             {visibleRecentFiles.map((file, index) => {
-              const rowIndex = visibleAgents.length + index;
+              const rowIndex = fileOffset + index;
               const relativePath = file.relativePath || file.name;
               const displayPath = truncatePathMiddle(relativePath, { maxLength: 60 });
               const isSelected = selectedIndex === rowIndex;
@@ -520,7 +566,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
               <div className="my-1 border-t border-border/60" />
             )}
             {visibleResults.map((file, index) => {
-              const rowIndex = visibleAgents.length + visibleRecentFiles.length + index;
+              const rowIndex = fileOffset + visibleRecentFiles.length + index;
               const relativePath = file.relativePath || file.name;
               const displayPath = truncatePathMiddle(relativePath, { maxLength: 60 });
               const isSelected = selectedIndex === rowIndex;
@@ -575,7 +621,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
                 </React.Fragment>
               );
             })}
-            {visibleResults.length === 0 && visibleRecentFiles.length === 0 && visibleAgents.length === 0 && (
+            {visibleResults.length === 0 && visibleRecentFiles.length === 0 && visibleAgents.length === 0 && visibleNotes.length === 0 && (
               <div className="px-3 py-2 typography-ui-label text-muted-foreground">
                 {t('chat.fileMentionAutocomplete.empty')}
               </div>

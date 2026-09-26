@@ -1,3 +1,5 @@
+import { useFolioStore } from '@/lib/folio/store';
+import type { FolioNote } from '@/lib/folio/schema';
 import React from 'react';
 import { ComposerDictation } from '@/components/dictation/ComposerDictation';
 // sessionStore removed — currentSessionId comes from useSessionUIStore
@@ -2902,6 +2904,41 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         composerRef.current?.focus();
     };
 
+    const folioAvailable = useFolioStore((state) => Boolean(state.api && state.status));
+    // "@page" attaches the page's full text as a file, the same path as a large paste,
+    // and leaves a visible [folio-page.md] citation where the @query was typed.
+    const handleFolioNoteSelect = (note: FolioNote) => {
+        const editor = composerRef.current;
+        const currentMessage = editor?.getValue() ?? messageRef.current;
+        const cursorPosition = editor?.getSelection().start ?? currentMessage.length;
+        const lastAtSymbol = currentMessage.substring(0, cursorPosition).lastIndexOf('@');
+        const slug = (note.title || 'page').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'page';
+        const taken = new Set(useInputStore.getState().attachedFiles.map((file) => file.filename.toLowerCase()));
+        let filename = `folio-${slug}.md`;
+        for (let n = 2; taken.has(filename.toLowerCase()); n += 1) filename = `folio-${slug}-${n}.md`;
+        const citation = `${buildAttachmentCitationText([filename])} `;
+        const start = lastAtSymbol === -1 ? cursorPosition : lastAtSymbol;
+        const newMessage = currentMessage.substring(0, start) + citation + currentMessage.substring(cursorPosition);
+        setMessage(newMessage);
+        const nextCursor = start + citation.length;
+        requestAnimationFrame(() => {
+            composerRef.current?.setSelection(nextCursor);
+            updateAutocompleteState(newMessage, nextCursor);
+        });
+        closeAutocomplete();
+        composerRef.current?.focus();
+        void (async () => {
+            try {
+                const api = useFolioStore.getState().api;
+                const response = api ? await api.request({ command: 'markdown', noteID: note.id, flag: true }) : undefined;
+                if (!response?.ok || !response.text) throw new Error(response?.error || 'Folio could not read this page.');
+                await addAttachedFile(createPastedContextFile(response.text, filename));
+            } catch (error) {
+                toast.error(error instanceof Error ? error.message : 'Folio could not read this page.');
+            }
+        })();
+    };
+
     const handleAgentSelect = (agentName: string) => {
         const textarea = composerRef.current;
         const cursorPosition = textarea?.getSelection().start ?? message.length;
@@ -3802,6 +3839,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         onSnippetSelect={handleSnippetSelect}
                         onFileSelect={handleFileSelect}
                         onAgentSelect={handleAgentSelect}
+                        onFolioNoteSelect={folioAvailable ? handleFolioNoteSelect : undefined}
                         onClose={closeAutocomplete}
                     />
                 <div

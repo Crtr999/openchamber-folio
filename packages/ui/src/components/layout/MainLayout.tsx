@@ -50,8 +50,18 @@ export const MainLayout: React.FC = () => {
     React.useEffect(() => {
         useFolioStore.getState().bind(folio);
         if (!folio) return;
-        void useFolioStore.getState().refresh();
-        const timer = setInterval(() => void useFolioStore.getState().refresh(), 1500);
+        // Start the notebook engine after OpenCode has had a head start, then poll gently.
+        // Recording/dictation/import progress needs faster updates, and nothing polls while hidden.
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const tick = () => {
+            const store = useFolioStore.getState();
+            const busy = Boolean(store.status && (store.status.recording || store.status.transcribing || store.status.importing || store.status.listening || store.status.speaking || store.status.aiBusy));
+            if (typeof document === 'undefined' || document.visibilityState === 'visible') void store.refresh();
+            timer = setTimeout(tick, busy ? 1000 : store.open ? 4000 : 15000);
+        };
+        timer = setTimeout(tick, 2500);
+        const onVisible = () => { if (document.visibilityState === 'visible') void useFolioStore.getState().refresh(); };
+        document.addEventListener('visibilitychange', onVisible);
         const guardUnsavedChanges = (event: BeforeUnloadEvent) => {
             const store = useFolioStore.getState();
             if (store.saving || Object.keys(store.drafts).length) {
@@ -60,7 +70,7 @@ export const MainLayout: React.FC = () => {
             }
         };
         window.addEventListener('beforeunload', guardUnsavedChanges);
-        return () => { clearInterval(timer); window.removeEventListener('beforeunload', guardUnsavedChanges); };
+        return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('beforeunload', guardUnsavedChanges); };
     }, [folio]);
     useSessionListSync({ isVSCode: false });
     useTerminalSessionKeepalive();

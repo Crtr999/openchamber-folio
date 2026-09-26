@@ -1,3 +1,4 @@
+import type { FolioNote } from '@/lib/folio/schema';
 /**
  * The composer's autocomplete popups.
  *
@@ -70,6 +71,7 @@ export interface ComposerAutocompletePopupsProps {
     onSnippetSelect: (snippet: unknown, trigger: string) => void;
     onFileSelect: (file: { name: string; path: string; relativePath?: string }) => void;
     onAgentSelect: (agentName: string) => void;
+    onFolioNoteSelect?: (note: FolioNote) => void;
     onClose: () => void;
 }
 
@@ -117,6 +119,7 @@ export function ComposerAutocompletePopups(props: ComposerAutocompletePopupsProp
                     searchQuery={query}
                     onFileSelect={props.onFileSelect}
                     onAgentSelect={props.onAgentSelect}
+                    onFolioNoteSelect={props.onFolioNoteSelect}
                     onClose={onClose}
                     style={style}
                 />

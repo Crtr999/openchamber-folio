@@ -3,7 +3,11 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
-import { requestSchema, responseSchema } from '../ui/src/lib/folio/schema.ts';
+import { z } from 'zod';
+import { requestSchema } from '../ui/src/lib/folio/schema.ts';
+
+// Routing envelope only; the renderer validates the full notebook state.
+const envelopeSchema = z.object({ id: z.string(), ok: z.boolean() }).passthrough();
 
 // One child owns the Mac notebook. No shell, listening socket, or remote API.
 export function createFolioEngine({ resourcesPath, developmentRoot, libraryPath, platform = process.platform }) {
@@ -19,10 +23,13 @@ export function createFolioEngine({ resourcesPath, developmentRoot, libraryPath,
     const processChild=spawn(executable, ['--library',libraryPath], {stdio:['pipe','pipe','pipe'],windowsHide:true,env:{HOME:process.env.HOME,PATH:process.env.PATH,TMPDIR:process.env.TMPDIR,LANG:process.env.LANG}});
     child=processChild;
     const lines=createInterface({input:processChild.stdout});
+    // The renderer fully validates responses; the main process only routes them, so large notebooks never stall OpenChamber's server.
     lines.on('line',line=>{
-      try { const result=responseSchema.parse(JSON.parse(line));const request=pending.get(result.id);if(!request)return;clearTimeout(request.timer);pending.delete(result.id);request.resolve(result); }
+      try { const result=envelopeSchema.parse(JSON.parse(line));const request=pending.get(result.id);if(!request)return;clearTimeout(request.timer);pending.delete(result.id);request.resolve(result); }
       catch { failAll(new Error('Folio returned an invalid response. Your saved library has not been reset.')); }
     });
+    // A stopped engine surfaces as a failed request, never an uncaught EPIPE in the main process.
+    processChild.stdin.on('error',()=>{});
     // Native frameworks write diagnostics here. Drain them, never log note data.
     processChild.stderr.on('data',()=>{});
     processChild.on('error',()=>{child=null;failAll(new Error('Folio could not start.'));});

@@ -20,13 +20,31 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 let saving: Promise<void> | undefined;
 let refreshing = false;
 
+// Cheap fingerprint so an unchanged poll does not replace `status` and re-render every page and block.
+function statusSignature(status: FolioStatus): string {
+  const { notes, messages, meeting, ...rest } = status;
+  return JSON.stringify([
+    rest,
+    notes.map(note => note.id + ':' + note.modified),
+    messages.length,
+    meeting ? [meeting.id, meeting.ended, meeting.segments.length, meeting.transcript.length, meeting.completedSegmentIDs.length] : null,
+  ]);
+}
+let lastSignature = '';
+
 export const useFolioStore = create<FolioStore>((set, get) => {
   async function request(input: FolioRequest) {
     const api = get().api;
     if (!api) throw new Error('Folio is available in the local macOS desktop app.');
     const response = await api.request(input);
     if (!response.ok) throw new Error(response.error || 'Folio could not complete this operation.');
-    if (response.state) set({ status: response.state });
+    if (response.state) {
+      const signature = statusSignature(response.state);
+      if (signature !== lastSignature || !get().status) {
+        lastSignature = signature;
+        set({ status: response.state });
+      }
+    }
     return response;
   }
   async function saveDrafts() {
@@ -51,7 +69,7 @@ export const useFolioStore = create<FolioStore>((set, get) => {
     drafts: {}, open: false, saving: false,
     bind: api => set({ api }),
     refresh: async () => {
-      if (refreshing || saving || !get().api) return;
+      if (refreshing || saving || !get().api || Object.keys(get().drafts).length) return;
       refreshing = true;
       try { await request({ command: 'state' }); }
       catch (error) { set({ error: error instanceof Error ? error.message : String(error) }); }

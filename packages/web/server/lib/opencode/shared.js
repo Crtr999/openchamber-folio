@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { execFileSync } from 'child_process';
 import yaml from 'yaml';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import { readSectionEntry, readMcpEntry } from './config-v2.js';
@@ -219,9 +220,28 @@ function parseConfigObject(content, filePath) {
   return parsed;
 }
 
+// An iCloud Drive placeholder ("Optimize Mac Storage") has a size but no local blocks.
+// A synchronous read then waits on iCloud and freezes the whole server, so fail fast instead.
+// Throwing (not returning {}) keeps a later config write from overwriting the real file.
+const SF_DATALESS = 0x40000000;
+function isUndownloadedICloudFile(filePath) {
+  if (process.platform !== 'darwin' || !filePath.includes('/Library/Mobile Documents/')) return false;
+  try {
+    // Node's Stats omits st_flags; BSD stat reads only metadata, so it cannot block on iCloud.
+    const flags = parseInt(execFileSync('/usr/bin/stat', ['-f', '%Xf', filePath], { encoding: 'utf8', timeout: 2000 }).trim(), 16);
+    return Number.isFinite(flags) && (flags & SF_DATALESS) !== 0;
+  } catch {
+    return false;
+  }
+}
+
 function readConfigFile(filePath) {
   if (!filePath || !fs.existsSync(filePath)) {
     return {};
+  }
+  if (isUndownloadedICloudFile(filePath)) {
+    console.warn(`Skipping config that is not downloaded from iCloud: ${filePath}`);
+    throw new Error('OpenCode configuration is still in iCloud. In Finder, choose Download Now or Keep Downloaded for this folder.');
   }
   try {
     const content = fs.readFileSync(filePath, 'utf8');

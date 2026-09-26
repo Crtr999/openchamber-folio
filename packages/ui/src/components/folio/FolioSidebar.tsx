@@ -7,7 +7,7 @@ import type { FolioNote } from '@/lib/folio/schema';
 import { useUIStore } from '@/stores/useUIStore';
 
 export function FolioSidebar() {
-  const {t}=useI18n();const {api,status,run,error,refresh}=useFolioStore();
+  const {t}=useI18n();const api=useFolioStore(s=>s.api);const status=useFolioStore(s=>s.status);const error=useFolioStore(s=>s.error);const {run,refresh}=useFolioStore.getState();
   const [query,setQuery]=React.useState('');const [filter,setFilter]=React.useState('all');
   const [collapsed,setCollapsed]=React.useState<Set<string>>(new Set());
   if(!api)return null;
