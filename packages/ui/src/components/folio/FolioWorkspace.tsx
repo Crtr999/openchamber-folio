@@ -35,16 +35,34 @@ export function FolioWorkspace() {
  const [link,setLink]=React.useState('');const [linkOpen,setLinkOpen]=React.useState(false);
  const [bubble,setBubble]=React.useState<{top:number;left:number}>();
  const [, setSelectionTick]=React.useState(0);
- const trackSelection=React.useCallback((editor:Editor,blockID:string)=>{
-  setActive(previous=>previous?.editor===editor?previous:{id:blockID,editor});
-  setSelectionTick(n=>n+1);
+ // The format menu waits until the selection is finished (mouse released) and sits below the
+ // selected line, so it never covers the text being selected.
+ const pointerDown=React.useRef(false);
+ const bubbleRef=React.useRef<HTMLDivElement>(null);
+ const activeEditor=React.useRef<Editor | undefined>(undefined);
+ const placeBubble=React.useCallback((editor:Editor)=>{
+  if(editor.isDestroyed)return;
   const {from,to,empty}=editor.state.selection;
-  if(empty||!editor.isFocused){setBubble(undefined);return;}
+  if(empty||!editor.isFocused||pointerDown.current){setBubble(undefined);return;}
   const start=editor.view.coordsAtPos(from),end=editor.view.coordsAtPos(to);
-  const left=Math.max(8,Math.min(window.innerWidth-440,(start.left+end.left)/2-210));
-  const top=start.top>70?start.top-58:end.bottom+8;
+  const menuHeight=bubbleRef.current?.offsetHeight||124;
+  const below=end.bottom+12;
+  const top=below+menuHeight<window.innerHeight-8?below:Math.max(8,start.top-menuHeight-12);
+  const left=Math.max(8,Math.min(window.innerWidth-440,Math.min(start.left,end.left)));
   setBubble({top,left});
  },[]);
+ const trackSelection=React.useCallback((editor:Editor,blockID:string)=>{
+  activeEditor.current=editor;
+  setActive(previous=>previous?.editor===editor?previous:{id:blockID,editor});
+  setSelectionTick(n=>n+1);
+  placeBubble(editor);
+ },[placeBubble]);
+ React.useEffect(()=>{
+  const down=(event:MouseEvent)=>{if(event.target instanceof Node&&bubbleRef.current?.contains(event.target))return;pointerDown.current=true;setBubble(undefined);};
+  const up=()=>{if(!pointerDown.current)return;pointerDown.current=false;requestAnimationFrame(()=>{if(activeEditor.current)placeBubble(activeEditor.current);});};
+  document.addEventListener('mousedown',down,true);document.addEventListener('mouseup',up,true);
+  return()=>{document.removeEventListener('mousedown',down,true);document.removeEventListener('mouseup',up,true);};
+ },[placeBubble]);
  const paint=(kind:Paint,color:ColorName)=>{const editor=active?.editor;if(!editor||editor.isDestroyed)return;const chain=editor.chain().focus();
   if(kind==='textColor'){if(color==='none')chain.unsetColor().run();else chain.setColor(folioColors[color]).run();}
   else{if(color==='none')chain.unsetHighlight().run();else chain.setHighlight({color:folioColors[color]}).run();}};
@@ -153,7 +171,7 @@ export function FolioWorkspace() {
     <Button className="mt-3" size="sm" variant="ghost" onClick={()=>addBlock()}>+ {t('folio.newBlock')}</Button>
     <div className="mt-12 pt-4 border-t border-border flex gap-2"><Button size="sm" variant="ghost" onClick={()=>call({command:'duplicate'})}>{t('folio.duplicate')}</Button><Button size="sm" variant="ghost" onClick={()=>call({command:'trash',flag:note.trashed})}>{t(note.trashed?'folio.restore':'folio.trash')}</Button></div>
    </article></div>
-   {bubble&&active&&!active.editor.isDestroyed&&<div role="toolbar" aria-label={t('folio.block')} className="fixed z-50 flex flex-col gap-1.5 rounded-xl border border-border bg-background/95 p-2 shadow-xl backdrop-blur" style={{top:bubble.top,left:bubble.left,width:420}} onMouseDown={e=>e.preventDefault()}>
+   {bubble&&active&&!active.editor.isDestroyed&&<div ref={bubbleRef} role="toolbar" aria-label={t('folio.block')} className="fixed z-50 flex flex-col gap-1.5 rounded-xl border border-border bg-background/95 p-2 shadow-xl backdrop-blur" style={{top:bubble.top,left:bubble.left,width:420}} onMouseDown={e=>e.preventDefault()}>
     <div className="flex items-center gap-0.5">
      {([['bold','B','font-bold'],['italic','I','italic'],['underline','U','underline'],['strike','S','line-through'],['code','</>','font-mono']] as const).map(([format,glyph,style])=><Button key={format} size="sm" variant={active.editor.isActive(format)?'secondary':'ghost'} className={'h-7 px-2 '+style} title={t(`folio.${format}`)} aria-label={t(`folio.${format}`)} onClick={()=>active.editor.chain().focus().toggleMark(format).run()}>{glyph}</Button>)}
      <Button size="sm" variant="ghost" className="h-7 px-2" onClick={()=>setLinkOpen(true)}>{t('folio.link')}</Button>

@@ -1,3 +1,4 @@
+import { attachToBackgroundOpenCodeService } from './opencode-service.mjs';
 import { createFolioEngine } from './folio-engine.mjs';
 import { canReuseManagedOpenCodePreflight } from './opencode-readiness.mjs';
 import { app, BrowserWindow, dialog, ipcMain, Menu, MessageChannelMain, nativeTheme, net as electronNet, Notification, powerMonitor, powerSaveBlocker, protocol, session, shell, webContents } from 'electron';
@@ -1303,6 +1304,8 @@ const spawnLocalServer = async () => {
   process.env.OPENCHAMBER_SKIP_API_COMPRESSION = process.env.OPENCHAMBER_SKIP_API_COMPRESSION || 'true';
   process.env.NO_PROXY = process.env.NO_PROXY || 'localhost,127.0.0.1';
   process.env.no_proxy = process.env.no_proxy || 'localhost,127.0.0.1';
+
+  attachToBackgroundOpenCodeService({ env: process.env, homedir: os.homedir(), log: (message) => console.log(message) });
 
   const { startWebUiServer } = await import('@openchamber/web/server/index.js');
 
