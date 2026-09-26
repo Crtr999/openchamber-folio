@@ -1,8 +1,9 @@
 import { attachToBackgroundOpenCodeService } from './opencode-service.mjs';
 import { createFolioEngine } from './folio-engine.mjs';
 import { createFolioSync } from './folio-sync.mjs';
+import { createOpenRouterCredits } from './openrouter-credits.mjs';
 import { canReuseManagedOpenCodePreflight } from './opencode-readiness.mjs';
-import { app, BrowserWindow, dialog, ipcMain, Menu, MessageChannelMain, nativeTheme, net as electronNet, Notification, powerMonitor, powerSaveBlocker, protocol, session, shell, webContents } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, MessageChannelMain, nativeImage, nativeTheme, net as electronNet, Notification, powerMonitor, powerSaveBlocker, protocol, safeStorage, session, shell, Tray, webContents } from 'electron';
 import contextMenu from 'electron-context-menu';
 import log from 'electron-log/main.js';
 import dgram from 'node:dgram';
@@ -336,6 +337,22 @@ const quitConfirmationMessage = () => {
 const folioEngine = createFolioEngine({ resourcesPath: process.resourcesPath, developmentRoot: path.dirname(fileURLToPath(import.meta.url)), libraryPath: process.env.OPENCHAMBER_FOLIO_LIBRARY_DIR || path.join(app.getPath('appData'), 'Folio-OpenChamber') });
 // iPhone sync stays off until the user pairs a phone from the notebook's ⋯ menu.
 const folioSync = createFolioSync({ engine: folioEngine, configPath: path.join(app.getPath('userData'), 'folio-sync.json'), getLocalOrigin: () => state.localOrigin || state.sidecarUrl || '', log: (message) => log.info(message) });
+// OpenRouter balance in the menu bar, off until the user adds a key in Folio. Its own title-only status item.
+const openRouterCredits = createOpenRouterCredits({
+  filePath: path.join(app.getPath('userData'), 'openrouter-credits.json'),
+  safeStorage,
+  openExternal: (url) => { void shell.openExternal(url); },
+  log: (message) => log.info(message),
+  createTray: () => {
+    const item = new Tray(nativeImage.createEmpty());
+    return {
+      setTitle: (title) => item.setTitle(title, { fontType: 'monospacedDigit' }),
+      setToolTip: (text) => item.setToolTip(text),
+      setMenu: (template) => item.setContextMenu(Menu.buildFromTemplate(template)),
+      destroy: () => item.destroy(),
+    };
+  },
+});
 
 const shutdownBackgroundServices = () => {
   if (!state.backgroundShutdownPromise) {
@@ -344,6 +361,7 @@ const shutdownBackgroundServices = () => {
     state.backgroundShutdownPromise = Promise.all([
       startShellEnvironmentProbe().catch(() => {}),
       Promise.resolve(folioSync.stop()),
+      Promise.resolve(openRouterCredits.stop()),
       folioEngine.stop(),
       killSidecar(),
       shutdownSshSessions(),
@@ -3500,6 +3518,14 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       if (action === 'disable') return folioSync.disable();
       return folioSync.status();
     }
+    case 'desktop_openrouter_credits': {
+      const action = args?.action;
+      if (action === 'set-key') return openRouterCredits.setKey(typeof args?.key === 'string' ? args.key : '');
+      if (action === 'clear') return openRouterCredits.clear();
+      if (action === 'refresh') return openRouterCredits.refresh();
+      if (action === 'menu-bar') return openRouterCredits.setMenuBar(args?.show === true);
+      return openRouterCredits.status();
+    }
     case 'desktop_pick_theme_file': {
       const { pickThemeFile } = await import('./theme-file-picker.mjs');
       return pickThemeFile({ showDialog: (options) => dialog.showOpenDialog(browserWindow || undefined, options) });
@@ -4732,7 +4758,7 @@ const COMMANDS_SAFE_FOR_REMOTE = new Set([
 ]);
 
 ipcMain.handle('openchamber:invoke', async (event, command, args) => {
-  if ((command === 'desktop_folio' || command === 'desktop_folio_sync') && event.senderFrame !== event.sender.mainFrame) throw new Error('Folio is available only to the local main application.');
+  if ((command === 'desktop_folio' || command === 'desktop_folio_sync' || command === 'desktop_openrouter_credits') && event.senderFrame !== event.sender.mainFrame) throw new Error('Folio is available only to the local main application.');
   if (!isLocalSender(event.sender) && !COMMANDS_SAFE_FOR_REMOTE.has(command)) {
     log.warn(`[ipc] rejected ${command} from non-local origin: ${event.sender?.getURL?.() || '(unknown)'}`);
     throw new Error('IPC not available for this origin');
@@ -5112,6 +5138,7 @@ app.on('activate', async () => {
 
 app.whenReady().then(async () => {
   try { folioSync.start(); } catch (error) { log.warn(`[folio-sync] could not start: ${error instanceof Error ? error.message : error}`); }
+  if (process.platform === 'darwin') openRouterCredits.start();
   if (wasEarlyWindowClosed()) return;
   const loginItemSettings = readLoginItemSettings();
   const isBackgroundStart = shouldStartInBackground(loginItemSettings);

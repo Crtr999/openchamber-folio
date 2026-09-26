@@ -877,3 +877,18 @@ export const folioSyncCommand = async (action: 'status' | 'enable' | 'disable'):
   if (!canUseElectronDesktopIPC() || getElectronPlatform() !== 'darwin') return undefined;
   return folioSyncStatusSchema.parse(await invokeDesktop('desktop_folio_sync', { action }));
 };
+
+const openRouterCreditsSchema = z.object({
+  configured: z.boolean(),
+  menuBar: z.boolean(),
+  balance: z.object({ kind: z.enum(['account', 'limit', 'spent']), amount: z.number(), checked: z.number() }).optional(),
+  error: z.string().optional(),
+});
+export type OpenRouterCreditsStatus = z.infer<typeof openRouterCreditsSchema>;
+type OpenRouterCreditsAction = { action: 'status' | 'refresh' | 'clear' } | { action: 'set-key'; key: string } | { action: 'menu-bar'; show: boolean };
+
+/** OpenRouter balance badge, owned by the Electron main process (key kept with safeStorage). Undefined outside the Mac desktop app. */
+export const openRouterCreditsCommand = async (input: OpenRouterCreditsAction): Promise<OpenRouterCreditsStatus | undefined> => {
+  if (!canUseElectronDesktopIPC() || getElectronPlatform() !== 'darwin') return undefined;
+  return openRouterCreditsSchema.parse(await invokeDesktop('desktop_openrouter_credits', input));
+};

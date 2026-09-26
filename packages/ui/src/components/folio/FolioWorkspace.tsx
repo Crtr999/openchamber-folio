@@ -14,6 +14,8 @@ import { FolioIconPicker } from './FolioIconPicker';
 import { FolioSyncDialog } from './FolioSyncDialog';
 import { FolioRichBlock, folioNoteLinkPrefix, type FocusAt, type MentionState, type SlashState } from './FolioRichBlock';
 import './folio.css';
+import { FolioReader } from './FolioReader';
+import { FolioCreditsBadge } from './FolioCreditsBadge';
 
 type ColorName = typeof colorNames[number];
 type Paint = 'textColor' | 'highlight';
@@ -85,6 +87,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   const [blockMenuID, setBlockMenuID] = React.useState<string>();
   const [focus, setFocus] = React.useState<{ id: string; at: FocusAt; n: number }>();
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [reading, setReading] = React.useState(false);
   const [syncOpen, setSyncOpen] = React.useState(false);
   const [recordConfirm, setRecordConfirm] = React.useState(false);
   const [iconOpen, setIconOpen] = React.useState(false);
@@ -335,10 +338,11 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   let numbered = 0;
 
   return <div className="folio-workspace flex h-full flex-col bg-background text-foreground">
+    {reading && note && <FolioReader note={note} onClose={() => setReading(false)} onListen={(text) => call({ command: 'read', text })} />}
     {/* One slim bar replaces the old stacked toolbars; everything else lives in the ⋯ menu. */}
     <header className="flex h-11 shrink-0 items-center gap-1 px-3">
       {mobile
-        ? <button type="button" className={tool} onClick={mobile.onMenu} aria-label={t('folio.menu')} title={t('folio.menu')}><Icon name="menu-2" className="size-5" /></button>
+        ? <button type="button" className={tool} onClick={mobile.onMenu} aria-label={t('folio.goBack')} title={t('folio.goBack')}><Icon name="arrow-left-s" className="size-6" /></button>
         : <button type="button" className={quiet} onClick={() => void close()} title={t('folio.back')}><Icon name="arrow-left-s" className="inline size-4" /> {t('folio.back')}</button>}
       <nav className="flex min-w-0 shrink items-center gap-1 truncate pl-2 text-sm text-muted-foreground" aria-label={t('folio.pages')}>
         {home ? <span className="text-foreground">{t('folio.notes')}</span> : <>
@@ -347,25 +351,27 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
         </>}
       </nav>
       {note && <div className="ml-2 flex shrink-0 items-center gap-0.5" role="toolbar" aria-label={t('folio.more')} onMouseDown={(e) => e.preventDefault()}>
+        <button type="button" className={tool} title={t('folio.readerOpen')} aria-label={t('folio.readerOpen')} onClick={() => { void useFolioStore.getState().flush().catch(() => undefined); setReading(true); }}>
+          <Icon name="book-open" className="size-4" />
+        </button>
         <button type="button" className={cn(tool, status.speaking && toolLive)} aria-pressed={status.speaking} title={status.speaking ? t('folio.stopReading') : t('folio.read')} aria-label={status.speaking ? t('folio.stopReading') : t('folio.read')} onClick={readAloud}>
           {status.speaking ? <Icon name="stop" className="size-4" /> : <Icon name="volume-up" className="size-4" />}
         </button>
-        <button type="button" className={cn(tool, status.listening && toolLive)} aria-pressed={status.listening} title={status.listening ? t('folio.stopDictating') : t('folio.dictate')} aria-label={status.listening ? t('folio.stopDictating') : t('folio.dictate')} onClick={() => call({ command: status.listening ? 'stop-listening' : 'listen' })}>
+        {!mobile && <button type="button" className={cn(tool, status.listening && toolLive)} aria-pressed={status.listening} title={status.listening ? t('folio.stopDictating') : t('folio.dictate')} aria-label={status.listening ? t('folio.stopDictating') : t('folio.dictate')} onClick={() => call({ command: status.listening ? 'stop-listening' : 'listen' })}>
           <Icon name="mic" className="size-4" />
-        </button>
+        </button>}
         <button type="button" className={cn(tool, status.recording && toolLive)} aria-pressed={status.recording} title={status.recording ? t('folio.stopRecording') : t('folio.recordings')} aria-label={status.recording ? t('folio.stopRecording') : t('folio.recordings')}
           onClick={() => { if (status.recording) call({ command: 'stop-recording' }); else if (mobile) setRecordConfirm(true); else utility('meeting'); }}>
           <Icon name="record-circle" className="size-4" />
         </button>
-        <button type="button" className={tool} title={t('folio.attach')} aria-label={t('folio.attach')} onClick={() => { if (mobile) mobile.onAttach(note.id); else call({ command: 'attach' }); }}>
+        {!mobile && <button type="button" className={tool} title={t('folio.attach')} aria-label={t('folio.attach')} onClick={() => call({ command: 'attach' })}>
           <Icon name="attachment-2" className="size-4" />
-        </button>
+        </button>}
       </div>}
       <div className="flex-1" />
+      {!mobile && <FolioCreditsBadge />}
       <span className={cn('px-2 text-xs text-muted-foreground', mobile && 'sr-only')} aria-live="polite">{saving || Object.keys(drafts).length ? t('folio.saving') : t('folio.saved')}</span>
-      {note && (mobile
-        ? <button type="button" className={tool} disabled={note.excludedFromAI} aria-label={t('folio.addToChat')} title={t('folio.addToChat')} onClick={() => void compose()}><Icon name="chat-new" className="size-4" /></button>
-        : <button type="button" className={quiet} disabled={note.excludedFromAI} onClick={() => void compose()}>{t('folio.addToChat')}</button>)}
+      {note && !mobile && <button type="button" className={quiet} disabled={note.excludedFromAI} onClick={() => void compose()}>{t('folio.addToChat')}</button>}
       <div className="relative">
         <button type="button" className={quiet} aria-label={t('folio.more')} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}><Icon name="more-fill" className="size-4" /></button>
         {menuOpen && <>
@@ -374,9 +380,15 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
             {createKinds.map(([kind, icon, label]) => <button key={kind} type="button" className={menuItem} onClick={() => void createFromMenu(kind)}><Icon name={icon} className="size-4 text-muted-foreground" />{t(label)}</button>)}
             {note && <>
               <div className="my-1 border-t border-border" />
+              {mobile && <>
+                <button type="button" className={menuItem} disabled={note.excludedFromAI} onClick={() => { setMenuOpen(false); void compose(); }}><Icon name="chat-new" className="size-4 text-muted-foreground" />{t('folio.addToChat')}</button>
+                <button type="button" className={menuItem} onClick={() => { setMenuOpen(false); mobile.onAttach(note.id); }}><Icon name="attachment-2" className="size-4 text-muted-foreground" />{t('folio.attach')}</button>
+                <button type="button" className={menuItem} onClick={() => { setMenuOpen(false); call({ command: status.listening ? 'stop-listening' : 'listen' }); }}><Icon name="mic" className="size-4 text-muted-foreground" />{status.listening ? t('folio.stopDictating') : t('folio.dictate')}</button>
+              </>}
               <button type="button" className={menuItem} onClick={() => { edit({ ...note, favorite: !note.favorite }); setMenuOpen(false); }}><Icon name="star" className="size-4 text-muted-foreground" />{t('folio.favorite')}{note.favorite ? ' ✓' : ''}</button>
               <button type="button" className={menuItem} onClick={() => { edit({ ...note, excludedFromAI: !note.excludedFromAI }); setMenuOpen(false); }}><Icon name="lock" className="size-4 text-muted-foreground" />{t('folio.private')}{note.excludedFromAI ? ' ✓' : ''}</button>
               <label className={cn(menuItem, 'cursor-default')}><Icon name="folder" className="size-4 text-muted-foreground" /><select className="min-w-0 flex-1 bg-transparent text-sm" aria-label={t('folio.parent')} value={note.parentID || ''} onChange={(e) => edit({ ...note, parentID: e.target.value || undefined })}><option value="">{t('folio.parent')}: {t('folio.root')}</option>{status.notes.filter((n) => !isDescendant(n.id) && !n.trashed).map((n) => <option key={n.id} value={n.id}>{n.title || t('folio.untitled')}</option>)}</select></label>
+              <button type="button" className={menuItem} onClick={() => { setMenuOpen(false); setReading(true); }}><Icon name="book-open" className="size-4 text-muted-foreground" />{t('folio.readerOpen')}</button>
               <button type="button" className={menuItem} onClick={() => call({ command: 'duplicate' })}><Icon name="file-copy" className="size-4 text-muted-foreground" />{t('folio.duplicate')}</button>
               {!mobile && <button type="button" className={menuItem} onClick={() => utility('history')}><Icon name="history" className="size-4 text-muted-foreground" />{t('folio.history')}</button>}
               <div className="my-1 border-t border-border" />
@@ -391,7 +403,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
             {mobile && note && <button type="button" className={menuItem} disabled={note.excludedFromAI} onClick={() => { setMenuOpen(false); mobile.onSummarize(note); }}><Icon name="sparkling" className="size-4 text-muted-foreground" />{t('folio.summarize')}</button>}
             {(['calendar', 'assistant', 'settings'] as const).map((kind) => <button key={kind} type="button" className={menuItem} onClick={() => {
               // The iPhone reads its own calendar; the Mac opens the native calendar window.
-              if (mobile && kind === 'calendar') { setMenuOpen(false); void run({ command: 'calendar-connect' }).then(() => useFolioStore.getState().openHome()); return; }
+              if (mobile && kind === 'calendar') { setMenuOpen(false); void run({ command: 'calendar-connect' }).then(() => utility('calendar')); return; }
               utility(kind);
             }}><Icon name={kind === 'calendar' ? 'calendar' : kind === 'assistant' ? 'sparkling' : 'settings-3'} className="size-4 text-muted-foreground" />{t(`folio.${kind}`)}</button>)}
             {!mobile && <button type="button" className={menuItem} onClick={() => { setMenuOpen(false); setSyncOpen(true); }}><Icon name="smartphone" className="size-4 text-muted-foreground" />{t('folio.syncTitle')}</button>}
@@ -447,8 +459,10 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
             onPick={(icon) => { const current = latestNote(); if (current) edit({ ...current, icon }); setIconOpen(false); }}
             onRemove={() => { const current = latestNote(); if (current) edit({ ...current, icon: '' }); setIconOpen(false); }} />}
         </div>
-        <input aria-label={t('folio.title')} placeholder={t('folio.untitled')} className="mb-1 w-full bg-transparent text-[2.5em] font-bold leading-tight outline-none placeholder:text-muted-foreground/50" value={note.title}
-          onChange={(e) => edit({ ...note, title: e.target.value })}
+        {/* Wraps like Notion instead of cutting off long titles. */}
+        <textarea rows={1} ref={(element) => { if (element) { element.style.height = 'auto'; element.style.height = `${element.scrollHeight}px`; } }}
+          aria-label={t('folio.title')} placeholder={t('folio.untitled')} className={cn('mb-1 block w-full resize-none overflow-hidden bg-transparent font-bold leading-tight outline-none placeholder:text-muted-foreground/50', mobile ? 'text-[2em]' : 'text-[2.5em]')} value={note.title}
+          onChange={(e) => { edit({ ...note, title: e.target.value.replace(/\n/g, ' ') }); e.target.style.height = 'auto'; e.target.style.height = `${e.target.scrollHeight}px`; }}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const first = note.blocks[0]; if (first) focusBlock(first.id, 'start'); else insertAfter(undefined, makeBlock()); } }} />
         <input aria-label={t('folio.tags')} placeholder={`# ${t('folio.tags')}`} className="mb-6 w-full bg-transparent text-sm text-muted-foreground outline-none placeholder:text-muted-foreground/40" value={note.tags.join(', ')} onChange={(e) => edit({ ...note, tags: e.target.value.split(',').map((s) => s.trim()) })} />
 

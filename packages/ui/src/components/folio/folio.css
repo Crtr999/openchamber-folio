@@ -30,3 +30,34 @@
 /* Links to other pages, inserted with @. */
 .folio-rich-text a[href^="folio://note/"] { text-decoration: none; color: inherit; font-weight: 500; border-bottom: 1px solid var(--border); cursor: pointer; }
 .folio-rich-text a[href^="folio://note/"]::before { content: '↗'; font-size: 0.8em; margin-right: 2px; color: var(--muted-foreground); }
+
+/* Reading mode. "auto" follows the app theme; night, sepia and paper are fixed book-page colors,
+   the same choices a reading app offers, so they are defined here once rather than as UI tokens. */
+.folio-reader {
+  --reader-bg: var(--background); --reader-text: var(--foreground); --reader-muted: var(--muted-foreground);
+  --reader-control: color-mix(in srgb, var(--foreground) 9%, transparent); --reader-sheet: var(--background);
+  --reader-line: var(--border); --reader-accent: var(--primary);
+}
+.folio-reader[data-page="night"] { --reader-bg: #000; --reader-text: #e9e7e3; --reader-muted: #8d8b87; --reader-control: #1f1f1f; --reader-sheet: #1c1c1e; --reader-line: #333; --reader-accent: #ff9f0a; }
+.folio-reader[data-page="sepia"] { --reader-bg: #f8f1e3; --reader-text: #4f3a22; --reader-muted: #9a8466; --reader-control: #ebe0c9; --reader-sheet: #f1e7d2; --reader-line: #dccdb0; --reader-accent: #b0621d; }
+.folio-reader[data-page="paper"] { --reader-bg: #fff; --reader-text: #1c1c1e; --reader-muted: #8e8e93; --reader-control: #f0f0f2; --reader-sheet: #f7f7f8; --reader-line: #e2e2e5; --reader-accent: #0a84ff; }
+.folio-reader-swatch[data-swatch="auto"] { background: var(--background); color: var(--foreground); }
+.folio-reader-swatch[data-swatch="night"] { background: #000; color: #e9e7e3; }
+.folio-reader-swatch[data-swatch="sepia"] { background: #f8f1e3; color: #4f3a22; }
+.folio-reader-swatch[data-swatch="paper"] { background: #fff; color: #1c1c1e; }
+.folio-reader-flow { transition: transform 260ms cubic-bezier(.2,.7,.2,1); will-change: transform; -webkit-user-select: text; }
+.folio-reader-flow p { margin: 0 0 0.85em; text-align: justify; hyphens: auto; -webkit-hyphens: auto; orphans: 2; widows: 2; }
+.folio-reader-flow h1, .folio-reader-flow h2 { font-weight: 600; line-height: 1.25; margin: 0.4em 0 1em; text-align: center; break-after: avoid; }
+.folio-reader-flow h1 { font-size: 1.45em; }
+.folio-reader-flow h2 { font-size: 1.22em; }
+.folio-reader-flow h3, .folio-reader-flow h4 { font-size: 1.05em; font-weight: 600; margin: 1.2em 0 0.5em; break-after: avoid; }
+.folio-reader-flow .folio-reader-chapter { break-before: column; -webkit-column-break-before: always; padding-top: 2.5em; }
+.folio-reader-flow .folio-reader-title { font-size: 1.6em; padding-top: 3em; margin-bottom: 1.6em; }
+.folio-reader-flow .folio-reader-item { display: flex; gap: 0.55em; text-align: left; }
+.folio-reader-flow .folio-reader-item > span:first-child { flex-shrink: 0; color: var(--reader-muted); }
+.folio-reader-flow blockquote { margin: 0 0 0.9em; padding-left: 1em; border-left: 2px solid var(--reader-line); font-style: italic; }
+.folio-reader-flow pre { white-space: pre-wrap; font-size: 0.8em; margin: 0 0 0.9em; break-inside: avoid; }
+.folio-reader-flow .folio-reader-divider { text-align: center; color: var(--reader-muted); margin: 1.2em 0; }
+.folio-reader-flow .folio-reader-file { font-size: 0.8em; color: var(--reader-muted); text-align: left; }
+.folio-reader-flow a { color: inherit; text-decoration-color: var(--reader-muted); }
+.folio-reader-flow mark { background: color-mix(in srgb, var(--reader-accent) 25%, transparent); color: inherit; }

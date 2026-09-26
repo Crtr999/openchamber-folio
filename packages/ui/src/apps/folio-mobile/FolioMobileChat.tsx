@@ -12,6 +12,8 @@ import { chatProviders, defaultModels, runAgent, supportsWeb, type ChatModel, ty
 import { newChat, newMessageID, readKey, useMobileChatStore, type MobileChat, type StoredMessage, type ToolNote } from './chatStore';
 import { nativePost } from './host';
 import { createAgentTools, libraryContext } from './agentTools';
+import { useBalanceStore } from './balance';
+import { formatDollars } from '@/lib/folio/credits';
 
 const purifyOptions = { ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|folio:\/\/note\/)/i };
 
@@ -57,6 +59,8 @@ export function FolioMobileChat({ onMenu, engine }: { onMenu: () => void; engine
   const noteIDs = chat ? [...new Set([...(chat.pageID ? [chat.pageID] : []), ...chat.noteIDs, ...attached])] : attached;
   const liveNotes = (notes ?? []).filter((n) => !n.trashed);
   const webAllowed = supportsWeb(current);
+  const balance = useBalanceStore((s) => s.balance);
+  const balanceTitle = balance ? t(balance.kind === 'account' ? 'folio.creditsAccount' : balance.kind === 'limit' ? 'folio.creditsLimit' : 'folio.creditsSpentHint') : undefined;
 
   React.useEffect(() => { setAttached([]); setError(''); setScope(chat?.scope ?? 'notes'); setWeb(chat?.web ?? false); }, [activeID]); // eslint-disable-line react-hooks/exhaustive-deps -- only when switching chats
   const pendingPrompt = useMobileChatStore((s) => s.pendingPrompt);
@@ -107,6 +111,7 @@ export function FolioMobileChat({ onMenu, engine }: { onMenu: () => void; engine
       const latest = useMobileChatStore.getState().chats.find((c) => c.id === withUser.id) ?? withUser;
       if (reply.trim() || used.length) await save({ ...latest, messages: [...latest.messages, { id: newMessageID(), role: 'assistant', content: reply.trim(), sourceIDs, tools: used.length ? used : undefined }], modified: Date.now() });
       useMobileChatStore.setState({ busyID: undefined });
+      if (withUser.model.provider !== 'zen') void useBalanceStore.getState().refresh();
       setStreaming(undefined); setActivity([]); abort.current = undefined;
     }
   };
@@ -125,12 +130,13 @@ export function FolioMobileChat({ onMenu, engine }: { onMenu: () => void; engine
 
   return <div className="flex h-full flex-col bg-background text-foreground">
     <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border/60 px-2">
-      <button type="button" className="flex size-9 items-center justify-center rounded-md text-muted-foreground" aria-label={t('folio.menu')} onClick={onMenu}><Icon name="menu-2" className="size-5" /></button>
+      <button type="button" className="flex size-9 items-center justify-center rounded-md text-muted-foreground" aria-label={t('folio.goBack')} onClick={onMenu}><Icon name="arrow-left-s" className="size-6" /></button>
       <select className="min-w-0 flex-1 truncate rounded-md bg-transparent px-1 py-1 text-sm font-medium" aria-label={t('folio.model')} value={modelKey(current)} onChange={(e) => changeModel(e.target.value)}>
         {chatProviders.map((provider) => <optgroup key={provider.id} label={provider.name}>
           {models.filter((m) => m.provider === provider.id).map((m) => <option key={modelKey(m)} value={modelKey(m)}>{m.name}</option>)}
         </optgroup>)}
       </select>
+      {balance && <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-xs tabular-nums text-muted-foreground" title={balanceTitle}>{balance.kind === 'spent' ? t('folio.creditsSpent', { amount: formatDollars(balance.amount) }) : formatDollars(balance.amount)}</span>}
       <button type="button" className="flex size-9 items-center justify-center rounded-md text-muted-foreground" aria-label={t('folio.newChat')} onClick={() => open(undefined)}><Icon name="chat-new" className="size-5" /></button>
     </header>
 

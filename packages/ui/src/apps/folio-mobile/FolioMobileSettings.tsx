@@ -7,6 +7,8 @@ import { useFolioStore } from '@/lib/folio/store';
 import { readKey, useMobileChatStore, writeKey } from './chatStore';
 import { nativeGet } from './host';
 import { useSyncStore } from './sync';
+import { useBalanceStore } from './balance';
+import { formatDollars } from '@/lib/folio/credits';
 
 const section = 'mb-6 rounded-xl border border-border/70 p-4';
 
@@ -24,6 +26,23 @@ function KeyField({ provider, name, hint }: { provider: ProviderID; name: string
     </div>
     <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
   </form>;
+}
+
+function BalanceSection() {
+  const { t } = useI18n();
+  const { balance, error, refresh, setBalanceKey } = useBalanceStore();
+  const [value, setValue] = React.useState('');
+  return <section className={section}>
+    <h2 className="mb-1 font-semibold">{t('folio.creditsTitle')}</h2>
+    <p className="mb-3 text-sm">{balance ? `${balance.kind === 'spent' ? t('folio.creditsSpent', { amount: formatDollars(balance.amount) }) : formatDollars(balance.amount)} · ${t(balance.kind === 'account' ? 'folio.creditsAccount' : balance.kind === 'limit' ? 'folio.creditsLimit' : 'folio.creditsSpentHint')}` : t('folio.creditsNone')}</p>
+    {error && <p className="mb-2 text-xs text-muted-foreground">{error}</p>}
+    <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void setBalanceKey(value).then(() => setValue('')); }}>
+      <input type="password" autoComplete="off" autoCapitalize="off" spellCheck={false} className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-[16px]" placeholder={t('folio.creditsKeyPlaceholder')} aria-label={t('folio.creditsKeyPlaceholder')} value={value} onChange={(e) => setValue(e.target.value)} />
+      <button type="submit" className="rounded-lg bg-secondary px-3 text-sm">{t('folio.save')}</button>
+      <button type="button" className="rounded-lg bg-secondary px-3 text-sm" aria-label={t('folio.creditsRefresh')} onClick={() => void refresh()}><Icon name="refresh" className="size-4" /></button>
+    </form>
+    <p className="mt-1 text-xs text-muted-foreground">{t('folio.creditsKeyHint')}</p>
+  </section>;
 }
 
 function SyncSection({ engine }: { engine: LocalEngine }) {
@@ -76,7 +95,7 @@ export function FolioMobileSettings({ engine, onMenu, onExportBackup }: { engine
 
   return <div className="flex h-full flex-col bg-background text-foreground">
     <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border/60 px-2">
-      <button type="button" className="flex size-9 items-center justify-center rounded-md text-muted-foreground" aria-label={t('folio.menu')} onClick={onMenu}><Icon name="menu-2" className="size-5" /></button>
+      <button type="button" className="flex size-9 items-center justify-center rounded-md text-muted-foreground" aria-label={t('folio.goBack')} onClick={onMenu}><Icon name="arrow-left-s" className="size-6" /></button>
       <h1 className="text-sm font-semibold">{t('folio.settings')}</h1>
     </header>
     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 pb-[max(env(safe-area-inset-bottom),1rem)]">
@@ -87,6 +106,7 @@ export function FolioMobileSettings({ engine, onMenu, onExportBackup }: { engine
         <p className="mb-3 text-xs text-muted-foreground">{t('folio.aiKeysHint')}</p>
         {chatProviders.map((p) => <KeyField key={p.id} provider={p.id} name={p.name} hint={p.keyHint} />)}
       </section>
+      <BalanceSection />
       <section className={section}>
         <h2 className="mb-1 font-semibold">{t('folio.moreModels')}</h2>
         <p className="mb-3 text-xs text-muted-foreground">{t('folio.moreModelsHint')}</p>
