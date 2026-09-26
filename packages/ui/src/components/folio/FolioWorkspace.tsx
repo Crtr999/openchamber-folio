@@ -64,7 +64,12 @@ export interface FolioMobileHooks {
   onImport: () => void;
   onExport: (note: FolioNote, kind: string) => void;
   onExportLibrary: () => void;
+  /** Summarizes the page with the phone's chat model and appends the summary. */
+  onSummarize: (note: FolioNote) => void;
 }
+
+/** The Mac engine writes seconds since 2001; the iPhone engine writes milliseconds since 1970. */
+const folioDate = (value: number) => new Date(value > 1e11 ? value : (value + 978_307_200) * 1000);
 
 export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   const { t } = useI18n();
@@ -81,6 +86,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   const [focus, setFocus] = React.useState<{ id: string; at: FocusAt; n: number }>();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [syncOpen, setSyncOpen] = React.useState(false);
+  const [recordConfirm, setRecordConfirm] = React.useState(false);
   const [iconOpen, setIconOpen] = React.useState(false);
   const [linkOpen, setLinkOpen] = React.useState(false);
   const [link, setLink] = React.useState('');
@@ -347,9 +353,10 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
         <button type="button" className={cn(tool, status.listening && toolLive)} aria-pressed={status.listening} title={status.listening ? t('folio.stopDictating') : t('folio.dictate')} aria-label={status.listening ? t('folio.stopDictating') : t('folio.dictate')} onClick={() => call({ command: status.listening ? 'stop-listening' : 'listen' })}>
           <Icon name="mic" className="size-4" />
         </button>
-        {!mobile && <button type="button" className={cn(tool, status.recording && toolLive)} aria-pressed={status.recording} title={status.recording ? t('folio.stopRecording') : t('folio.recordings')} aria-label={status.recording ? t('folio.stopRecording') : t('folio.recordings')} onClick={() => status.recording ? call({ command: 'stop-recording' }) : utility('meeting')}>
+        <button type="button" className={cn(tool, status.recording && toolLive)} aria-pressed={status.recording} title={status.recording ? t('folio.stopRecording') : t('folio.recordings')} aria-label={status.recording ? t('folio.stopRecording') : t('folio.recordings')}
+          onClick={() => { if (status.recording) call({ command: 'stop-recording' }); else if (mobile) setRecordConfirm(true); else utility('meeting'); }}>
           <Icon name="record-circle" className="size-4" />
-        </button>}
+        </button>
         <button type="button" className={tool} title={t('folio.attach')} aria-label={t('folio.attach')} onClick={() => { if (mobile) mobile.onAttach(note.id); else call({ command: 'attach' }); }}>
           <Icon name="attachment-2" className="size-4" />
         </button>
@@ -381,7 +388,12 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
               {!mobile && <button type="button" className={cn(menuItem, 'pl-4')} onClick={exportForPhone}>{t('folio.exportForPhone')}</button>}
             </>}
             <div className="my-1 border-t border-border" />
-            {(mobile ? (['assistant', 'settings'] as const) : (['calendar', 'assistant', 'settings'] as const)).map((kind) => <button key={kind} type="button" className={menuItem} onClick={() => utility(kind)}><Icon name={kind === 'calendar' ? 'calendar' : kind === 'assistant' ? 'sparkling' : 'settings-3'} className="size-4 text-muted-foreground" />{t(`folio.${kind}`)}</button>)}
+            {mobile && note && <button type="button" className={menuItem} disabled={note.excludedFromAI} onClick={() => { setMenuOpen(false); mobile.onSummarize(note); }}><Icon name="sparkling" className="size-4 text-muted-foreground" />{t('folio.summarize')}</button>}
+            {(['calendar', 'assistant', 'settings'] as const).map((kind) => <button key={kind} type="button" className={menuItem} onClick={() => {
+              // The iPhone reads its own calendar; the Mac opens the native calendar window.
+              if (mobile && kind === 'calendar') { setMenuOpen(false); void run({ command: 'calendar-connect' }).then(() => useFolioStore.getState().openHome()); return; }
+              utility(kind);
+            }}><Icon name={kind === 'calendar' ? 'calendar' : kind === 'assistant' ? 'sparkling' : 'settings-3'} className="size-4 text-muted-foreground" />{t(`folio.${kind}`)}</button>)}
             {!mobile && <button type="button" className={menuItem} onClick={() => { setMenuOpen(false); setSyncOpen(true); }}><Icon name="smartphone" className="size-4 text-muted-foreground" />{t('folio.syncTitle')}</button>}
             {note && <><div className="my-1 border-t border-border" /><button type="button" className={cn(menuItem, 'text-destructive')} onClick={() => call({ command: 'trash', flag: note.trashed })}><Icon name="delete-bin" className="size-4" />{t(note.trashed ? 'folio.restore' : 'folio.trash')}</button></>}
           </div>
@@ -391,6 +403,14 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
 
     {(error || status.error) && <div role="alert" className="mx-4 mb-2 flex items-center gap-3 rounded-lg bg-[color-mix(in_srgb,var(--status-error)_12%,transparent)] px-3 py-2 text-sm"><span className="flex-1">{error || status.error}</span><button type="button" className={quiet} onClick={() => void useFolioStore.getState().flush().catch(() => undefined)}>{t('folio.retry')}</button></div>}
     {(status.recording || status.transcribing || status.importing || status.listening) && <div role="status" className="mx-4 mb-2 flex items-center gap-3 rounded-lg bg-secondary px-3 py-2 text-sm"><span className="flex-1">{status.recordingProgress || status.importProgress || status.dictation}</span><button type="button" className={quiet} onClick={() => call({ command: status.recording ? 'stop-recording' : status.transcribing ? 'cancel-transcription' : status.importing ? 'cancel-import' : 'stop-listening' })}>{t('folio.stop')}</button></div>}
+    {recordConfirm && <div role="dialog" aria-label={t('folio.recordMeeting')} className="mx-4 mb-2 rounded-lg border border-border bg-background p-3 text-sm shadow-lg">
+      <p className="mb-1 font-medium">{t('folio.recordMeeting')}</p>
+      <p className="mb-3 text-xs text-muted-foreground">{t('folio.recordConsent')}</p>
+      <div className="flex gap-2">
+        <button type="button" className="flex-1 rounded-md bg-primary px-3 py-2 text-primary-foreground" onClick={() => { setRecordConfirm(false); call({ command: 'record', flag: true }); }}>{t('folio.startRecording')}</button>
+        <button type="button" className="rounded-md bg-secondary px-3 py-2" onClick={() => setRecordConfirm(false)}>{t('folio.cancel')}</button>
+      </div>
+    </div>}
     {status.calendarPrompt && <div className="mx-4 mb-2 flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-sm"><span className="flex-1">{status.calendarPrompt.title}</span><button type="button" className={quiet} onClick={() => call({ command: 'calendar-prepare', eventID: status.calendarPrompt?.id })}>{t('folio.meeting')}</button><button type="button" className={quiet} onClick={() => call({ command: 'calendar-dismiss' })}>×</button></div>}
 
     <div className="min-h-0 flex-1 overflow-auto" onScroll={() => { setBubble(undefined); setSlash(null); setMention(null); }}>
@@ -399,9 +419,18 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
         <div className="mb-10 grid grid-cols-3 gap-2">
           {createKinds.map(([kind, icon, label]) => <button key={kind} type="button" className="flex items-center gap-2 rounded-lg border border-border px-3 py-3 text-left text-sm hover:bg-interactive-hover" onClick={() => void createFromMenu(kind)}><Icon name={icon} className="size-4 text-muted-foreground" />{t(label)}</button>)}
         </div>
+        {status.events.length > 0 && <>
+          <div className="mb-2 text-xs font-medium text-muted-foreground">{t('folio.upcoming')}</div>
+          <div className="mb-8">{status.events.slice(0, 8).map((event) => <button key={event.id} type="button" className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left text-sm hover:bg-interactive-hover" onClick={() => call({ command: 'calendar-prepare', eventID: event.id })}>
+            <span className="w-24 shrink-0 text-xs text-muted-foreground">{folioDate(event.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</span>
+            <span className="min-w-0 flex-1 truncate">{event.title}</span>
+            <Icon name="file-add" className="size-4 shrink-0 text-muted-foreground" />
+          </button>)}</div>
+        </>}
+        {mobile && !status.calendarConnected && <button type="button" className="mb-8 flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm" onClick={() => call({ command: 'calendar-connect' })}><Icon name="calendar" className="size-4 text-muted-foreground" />{t('folio.connectCalendar')}</button>}
         <div className="mb-2 text-xs font-medium text-muted-foreground">{t('folio.recent')}</div>
         {[...status.notes].filter((n) => !n.trashed).sort((a, b) => b.modified - a.modified).map((n) => <button key={n.id} type="button" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-interactive-hover" onClick={() => call({ command: 'select', noteID: n.id })}>
-          <FolioIcon value={n.icon} /><span className="min-w-0 flex-1 truncate">{n.title || t('folio.untitled')}</span><span className="text-xs text-muted-foreground">{new Date(n.modified > 1e11 ? n.modified : n.modified * 1000).toLocaleDateString()}</span>
+          <FolioIcon value={n.icon} /><span className="min-w-0 flex-1 truncate">{n.title || t('folio.untitled')}</span><span className="text-xs text-muted-foreground">{folioDate(n.modified).toLocaleDateString()}</span>
         </button>)}
       </div>}
 

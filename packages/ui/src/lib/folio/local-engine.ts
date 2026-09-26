@@ -30,6 +30,12 @@ export interface FolioHost {
   openFile(file: Blob, name: string): void;
   /** Opens a phone screen such as settings or the assistant; false when there is none. */
   utility(kind: string): boolean;
+  /** Records the microphone and transcribes on the device; `onText` gets each finished passage. */
+  startRecording(onText: (passage: { text: string; at: number; final: boolean }) => void): Promise<void>;
+  /** Stops recording and returns the saved audio, if any. */
+  stopRecording(): Promise<File | undefined>;
+  calendarAccess(): Promise<boolean>;
+  calendarEvents(days: number): Promise<FolioStatus['events']>;
 }
 
 export interface LocalEngine extends FolioAPI {
@@ -190,6 +196,10 @@ export function createLocalFolioEngine({ storage, host, onChange, now = () => Da
   })();
 
   const find = (id?: string) => notes.find((n) => n.id === (id ?? selectedID));
+  let recordingNoteID: string | undefined;
+  let lastRecordingNoteID: string | undefined;
+  let dismissedPrompt: string | undefined;
+  const clock = (ms: number) => { const total = Math.max(0, Math.round(ms / 1000)); const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), sec = total % 60; return `${h ? `${h}:` : ''}${h ? String(m).padStart(2, '0') : m}:${String(sec).padStart(2, '0')}`; };
   const selected = (id?: string) => { const note = find(id); if (!note) throw new Error('Choose a Folio page first'); return note; };
   const store = async (note: FolioNote) => {
     const index = notes.findIndex((n) => n.id === note.id);
@@ -322,8 +332,70 @@ export function createLocalFolioEngine({ storage, host, onChange, now = () => Da
         if (input.noteID && find(input.noteID)) await select(input.noteID);
         if (!host.utility(input.kind ?? 'settings')) throw new Error('This tool is only on your Mac for now.');
         return {};
+      case 'record': {
+        if (input.flag !== true) throw new Error('Confirm participants know before starting a recording');
+        if (status.recording) return {};
+        const note = selected(input.noteID);
+        const started = now();
+        recordingNoteID = note.id;
+        await store({ ...note, isMeeting: true, blocks: [...note.blocks.filter((b) => b.text || b.kind !== 'text' || note.blocks.length > 1), { ...makeBlock(), kind: 'heading2', text: `Transcript · ${new Date(started).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}` }], modified: stamp(note.modified) });
+        status.recording = true; status.recordingStarting = true; status.recordingProgress = 'Starting…';
+        try {
+          await host.startRecording(async ({ text, at, final }) => {
+            const clean = text.trim();
+            status.recordingStarting = false;
+            status.recordingProgress = `● ${clock(now() - started)}${clean ? ` — ${clean.slice(-70)}` : ''}`;
+            const target = recordingNoteID ?? lastRecordingNoteID;
+            const current = target ? find(target) : undefined;
+            if (final && clean && current) await store({ ...current, blocks: [...current.blocks, { ...makeBlock(), text: `[${clock(at)}] ${clean}` }], modified: stamp(current.modified) });
+            changed();
+          });
+          status.recordingStarting = false; status.recordingProgress = `● ${clock(0)}`;
+        } catch (error) {
+          status.recording = false; status.recordingStarting = false; status.recordingProgress = ''; recordingNoteID = undefined;
+          throw error;
+        }
+        return {};
+      }
+      case 'stop-recording': {
+        const target = recordingNoteID;
+        lastRecordingNoteID = target; recordingNoteID = undefined;
+        status.recording = false; status.recordingStarting = false; status.recordingProgress = '';
+        const audio = await host.stopRecording();
+        const note = target ? find(target) : undefined;
+        if (audio && note) {
+          const id = newID();
+          await storage.putAsset(id, audio);
+          await store({ ...note, blocks: [...note.blocks, { ...makeBlock(), kind: 'attachment', text: audio.name, asset: assetPrefix + id }], modified: stamp(note.modified) });
+        }
+        return {};
+      }
+      case 'calendar-connect': case 'calendar-refresh': {
+        if (input.command === 'calendar-connect' || status.calendarConnected) {
+          status.calendarConnected = await host.calendarAccess();
+          if (!status.calendarConnected) throw new Error('Calendar access is off. Turn it on in Settings → Privacy & Security → Calendars → Folio.');
+          status.events = await host.calendarEvents(7);
+          // Offer meeting notes for anything starting within 15 minutes or already underway.
+          const soon = status.events.find((e) => e.start - now() < 15 * 60_000 && e.end > now());
+          status.calendarPrompt = soon && soon.id !== dismissedPrompt ? soon : undefined;
+        }
+        return {};
+      }
+      case 'calendar-dismiss': dismissedPrompt = status.calendarPrompt?.id; status.calendarPrompt = undefined; return {};
+      case 'calendar-prepare': {
+        const event = status.events.find((e) => e.id === input.eventID);
+        if (!event) throw new Error('Calendar event was not found');
+        if (status.calendarPrompt?.id === event.id) { dismissedPrompt = event.id; status.calendarPrompt = undefined; }
+        const when = `${new Date(event.start).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} – ${new Date(event.end).toLocaleTimeString([], { timeStyle: 'short' })} · ${event.calendar}`;
+        const block = (text: string, kind: FolioBlock['kind'] = 'text'): FolioBlock => ({ ...makeBlock(), kind, text });
+        await create({
+          title: event.title, icon: '📅', isMeeting: true,
+          blocks: [block(when, 'callout'), ...(event.joinURL ? [block(event.joinURL)] : []), block('Agenda', 'heading2'), block('', 'bullet'), block('Notes', 'heading2'), block(''), block('Action items', 'heading2'), block('', 'task')],
+        });
+        return {};
+      }
       default:
-        throw new Error('Recordings, calendar and history are only on your Mac for now.');
+        throw new Error('Version history is only on your Mac for now.');
     }
   }
 

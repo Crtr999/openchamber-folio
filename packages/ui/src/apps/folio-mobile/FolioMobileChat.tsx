@@ -22,7 +22,7 @@ const modelKey = (m: ChatModel) => `${m.provider}:${m.id}`;
 export function FolioMobileChat({ onMenu }: { onMenu: () => void }) {
   const { t } = useI18n();
   const notes = useFolioStore((s) => s.status?.notes);
-  const { chats, activeID, model, extraModels, save, setModel, open, macChat } = useMobileChatStore();
+  const { chats, activeID, model, extraModels, save, setModel, open } = useMobileChatStore();
   const chat = chats.find((c) => c.id === activeID);
   const [draft, setDraft] = React.useState('');
   const [attached, setAttached] = React.useState<string[]>([]);
@@ -91,14 +91,7 @@ export function FolioMobileChat({ onMenu }: { onMenu: () => void }) {
       <button type="button" className="flex size-9 items-center justify-center rounded-md text-muted-foreground" aria-label={t('folio.newChat')} onClick={() => open(undefined)}><Icon name="chat-new" className="size-5" /></button>
     </header>
 
-    {macChat ? <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-      <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground"><Icon name="computer" className="size-4" /><span className="truncate">{macChat.title}</span></div>
-      {!macChat.messages && !macChat.error && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Icon name="loader-4" className="size-4 animate-spin" />{t('folio.loadingChat')}</div>}
-      {macChat.error && <div role="alert" className="rounded-lg bg-[color-mix(in_srgb,var(--status-error)_12%,transparent)] px-3 py-2 text-sm">{macChat.error}</div>}
-      {macChat.messages?.map((message, i) => <div key={i} className={cn('mb-4', message.role === 'user' && 'flex justify-end')}>
-        {message.role === 'user' ? <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-secondary px-3.5 py-2 text-[15px]">{message.content}</div> : <Markdown text={message.content} />}
-      </div>)}
-    </div> : <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+    <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
       {!chat?.messages.length && streaming === undefined && <div className="mt-16 text-center text-sm text-muted-foreground">
         <Icon name="sparkling" className="mx-auto mb-3 size-7 text-primary" />
         <p>{t('folio.chatEmpty')}</p>
@@ -110,14 +103,9 @@ export function FolioMobileChat({ onMenu }: { onMenu: () => void }) {
       </div>)}
       {streaming !== undefined && <div className="mb-4">{streaming ? <Markdown text={streaming} /> : <Icon name="loader-4" className="size-4 animate-spin text-muted-foreground" />}</div>}
       {error && <div role="alert" className="mb-4 rounded-lg bg-[color-mix(in_srgb,var(--status-error)_12%,transparent)] px-3 py-2 text-sm">{error}</div>}
-    </div>}
+    </div>
 
-    {macChat ? <div className="shrink-0 border-t border-border/60 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2">
-      <button type="button" className="w-full rounded-2xl bg-primary px-3 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-40" disabled={!macChat.messages?.length}
-        onClick={() => { const seeded: MobileChat = { ...newChat(current), title: macChat.title, messages: macChat.messages ?? [] }; void save(seeded).then(() => open(seeded.id)); }}>
-        {t('folio.continueOnPhone')}
-      </button>
-    </div> : <div className="shrink-0 border-t border-border/60 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2">
+    <div className="shrink-0 border-t border-border/60 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2">
       {noteIDs.length > 0 && <div className="mb-2 flex flex-wrap gap-1.5">{noteIDs.map((id) => { const note = liveNotes.find((n) => n.id === id); return note ? <span key={id} className="flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs">
         <FolioIcon value={note.icon} />{note.title || t('folio.untitled')}
         {attached.includes(id) && <button type="button" aria-label={t('folio.remove')} onClick={() => setAttached(attached.filter((a) => a !== id))}>×</button>}
@@ -136,6 +124,6 @@ export function FolioMobileChat({ onMenu }: { onMenu: () => void }) {
           ? <button type="button" className="flex size-10 shrink-0 items-center justify-center rounded-full bg-foreground text-background" aria-label={t('folio.stop')} onClick={() => abort.current?.abort()}><Icon name="stop" className="size-4" /></button>
           : <button type="button" className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40" aria-label={t('folio.send')} disabled={!draft.trim()} onClick={() => void send()}><Icon name="arrow-up" className="size-5" /></button>}
       </div>
-    </div>}
+    </div>
   </div>;
 }

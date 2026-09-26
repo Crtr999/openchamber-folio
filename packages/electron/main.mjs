@@ -1324,6 +1324,8 @@ const spawnLocalServer = async () => {
       ? path.join(app.getAppPath().endsWith('.asar') ? `${app.getAppPath()}.unpacked` : app.getAppPath(), 'node_modules/@openchamber/web/server/built-in-extensions')
       : undefined,
     onDesktopNotification: (payload) => maybeShowNativeNotification(payload),
+    // Folio iPhone sync through any paired-device route (Wi-Fi or the private relay).
+    folioSyncHandler: (body) => folioSync.handleEncrypted(body),
     getIsWindowFocused: isAnyWindowFocused,
     getDesktopRuntimeConfig: () => ({
       apiBaseUrl: state.apiBaseUrl || '',

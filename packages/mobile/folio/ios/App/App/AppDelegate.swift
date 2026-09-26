@@ -1,5 +1,7 @@
 import UIKit
 import AVFoundation
+import EventKit
+import Speech
 import Capacitor
 
 @UIApplicationMain
@@ -71,6 +73,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 class FolioViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(FolioSpeechPlugin())
+        bridge?.registerPluginInstance(FolioCalendarPlugin())
+        bridge?.registerPluginInstance(FolioRecorderPlugin())
     }
 }
 
@@ -127,5 +131,184 @@ public class FolioSpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizer
     private func finished() {
         try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
         notifyListeners("finished", data: [:])
+    }
+}
+
+/// The iPhone's calendars, for upcoming meetings and meeting notes.
+@objc(FolioCalendarPlugin)
+public class FolioCalendarPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "FolioCalendarPlugin"
+    public let jsName = "FolioCalendar"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "requestAccess", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "events", returnType: CAPPluginReturnPromise),
+    ]
+    private let store = EKEventStore()
+
+    @objc func requestAccess(_ call: CAPPluginCall) {
+        if #available(iOS 17.0, *) {
+            store.requestFullAccessToEvents { granted, _ in call.resolve(["granted": granted]) }
+        } else {
+            store.requestAccess(to: .event) { granted, _ in call.resolve(["granted": granted]) }
+        }
+    }
+
+    @objc func events(_ call: CAPPluginCall) {
+        let days = call.getInt("days") ?? 7
+        let start = Date().addingTimeInterval(-3600)
+        let end = Calendar.current.date(byAdding: .day, value: days, to: Calendar.current.startOfDay(for: Date())) ?? Date().addingTimeInterval(Double(days) * 86400)
+        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
+        let events = store.events(matching: predicate).filter { !$0.isAllDay && $0.endDate > Date() }.sorted { $0.startDate < $1.startDate }.prefix(40)
+        let list: [[String: Any]] = events.map { event in
+            var item: [String: Any] = [
+                "id": event.calendarItemIdentifier,
+                "title": event.title ?? "Untitled event",
+                "start": event.startDate.timeIntervalSince1970 * 1000,
+                "end": event.endDate.timeIntervalSince1970 * 1000,
+                "calendar": event.calendar?.title ?? "",
+            ]
+            if let link = FolioCalendarPlugin.joinLink(event) { item["joinURL"] = link }
+            return item
+        }
+        call.resolve(["events": list])
+    }
+
+    /// Zoom, Teams, Meet or Webex links from the event's URL, location or notes.
+    static func joinLink(_ event: EKEvent) -> String? {
+        let text = [event.url?.absoluteString, event.location, event.notes].compactMap { $0 }.joined(separator: " ")
+        let pattern = "https://[^\\s<>\"]*(zoom\\.us|teams\\.microsoft\\.com|teams\\.live\\.com|meet\\.google\\.com|webex\\.com)[^\\s<>\"]*"
+        guard let range = text.range(of: pattern, options: .regularExpression) else { return nil }
+        return String(text[range])
+    }
+}
+
+/// Records a meeting and transcribes it on the device. Recognition tasks end after pauses or about
+/// a minute, so each finished passage is reported and a new task picks up the next one.
+@objc(FolioRecorderPlugin)
+public class FolioRecorderPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "FolioRecorderPlugin"
+    public let jsName = "FolioRecorder"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "start", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
+    ]
+    private let engine = AVAudioEngine()
+    private var recognizer: SFSpeechRecognizer?
+    private var request: SFSpeechAudioBufferRecognitionRequest?
+    private var task: SFSpeechRecognitionTask?
+    private var file: AVAudioFile?
+    private var fileURL: URL?
+    private var started = Date()
+    private var running = false
+    private var passageText = ""
+    private var passageStart: TimeInterval = 0
+    private let lock = NSLock()
+
+    @objc func start(_ call: CAPPluginCall) {
+        SFSpeechRecognizer.requestAuthorization { speechStatus in
+            AVAudioSession.sharedInstance().requestRecordPermission { granted in
+                DispatchQueue.main.async {
+                    guard granted else { call.reject("Microphone access is off. Turn it on in Settings → Privacy & Security → Microphone → Folio."); return }
+                    do {
+                        try self.begin(transcribe: speechStatus == .authorized)
+                        call.resolve(["startedAt": self.started.timeIntervalSince1970 * 1000])
+                    } catch {
+                        self.teardown()
+                        call.reject("Could not start recording: \(error.localizedDescription)")
+                    }
+                }
+            }
+        }
+    }
+
+    private func begin(transcribe: Bool) throws {
+        if running { return }
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers])
+        try session.setActive(true)
+        let input = engine.inputNode
+        let format = input.outputFormat(forBus: 0)
+        let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Recordings", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+        let url = folder.appendingPathComponent("Meeting \(stamp).m4a")
+        file = try AVAudioFile(forWriting: url, settings: [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: format.sampleRate,
+            AVNumberOfChannelsKey: format.channelCount,
+            AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue,
+        ])
+        fileURL = url
+        started = Date()
+        recognizer = transcribe ? (SFSpeechRecognizer(locale: Locale.current) ?? SFSpeechRecognizer()) : nil
+        running = true
+        startPassage()
+        input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
+            guard let self else { return }
+            try? self.file?.write(from: buffer)
+            self.lock.lock(); let current = self.request; self.lock.unlock()
+            current?.append(buffer)
+        }
+        engine.prepare()
+        try engine.start()
+    }
+
+    private func startPassage() {
+        guard running, let recognizer, recognizer.isAvailable else { return }
+        let next = SFSpeechAudioBufferRecognitionRequest()
+        next.shouldReportPartialResults = true
+        if recognizer.supportsOnDeviceRecognition { next.requiresOnDeviceRecognition = true }
+        if #available(iOS 16.0, *) { next.addsPunctuation = true }
+        lock.lock(); request = next; lock.unlock()
+        passageText = ""
+        passageStart = Date().timeIntervalSince(started)
+        let at = passageStart * 1000
+        task = recognizer.recognitionTask(with: next) { [weak self] result, error in
+            guard let self else { return }
+            if let result {
+                self.passageText = result.bestTranscription.formattedString
+                self.notifyListeners("transcript", data: ["text": self.passageText, "at": at, "final": result.isFinal])
+                if result.isFinal { self.nextPassage(reported: true) }
+            } else if error != nil {
+                self.nextPassage(reported: false)
+            }
+        }
+    }
+
+    private func nextPassage(reported: Bool) {
+        if !reported && !passageText.isEmpty {
+            notifyListeners("transcript", data: ["text": passageText, "at": passageStart * 1000, "final": true])
+        }
+        passageText = ""
+        lock.lock(); request?.endAudio(); request = nil; lock.unlock()
+        task = nil
+        if running { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.startPassage() } }
+    }
+
+    @objc func stop(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            guard self.running else { call.resolve([:]); return }
+            self.running = false
+            self.engine.inputNode.removeTap(onBus: 0)
+            self.engine.stop()
+            self.lock.lock(); self.request?.endAudio(); self.lock.unlock()
+            self.task?.finish()
+            self.file = nil
+            try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+            var result: [String: Any] = [:]
+            if let url = self.fileURL, let portable = self.bridge?.portablePath(fromLocalURL: url) {
+                result["url"] = portable.absoluteString
+                result["name"] = url.lastPathComponent
+            }
+            call.resolve(result)
+        }
+    }
+
+    private func teardown() {
+        running = false
+        if engine.isRunning { engine.inputNode.removeTap(onBus: 0); engine.stop() }
+        file = nil
+        lock.lock(); request = nil; lock.unlock()
+        task?.cancel(); task = nil
     }
 }

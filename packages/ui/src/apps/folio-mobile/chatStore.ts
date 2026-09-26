@@ -37,8 +37,6 @@ interface ChatState {
   /** Handed over from search ("Ask") or a note's "Add to chat". */
   pendingPrompt?: string;
   pendingNoteID?: string;
-  /** A chat from the Mac being read on the phone. */
-  macChat?: { id: string; title: string; model: string; messages?: ChatMessage[]; error?: string };
   load: () => Promise<void>;
   open: (id?: string) => void;
   save: (chat: MobileChat) => Promise<void>;
@@ -59,7 +57,7 @@ export const useMobileChatStore = create<ChatState>((set, get) => ({
     const saved = modelSchema.safeParse(await promised((await objects('meta', 'readonly')).get('model')));
     set({ loaded: true, chats, model: saved.success ? saved.data : get().model });
   },
-  open: (activeID) => set({ activeID, macChat: undefined }),
+  open: (activeID) => set({ activeID }),
   save: async (chat) => {
     set((state) => ({ chats: [chat, ...state.chats.filter((c) => c.id !== chat.id)] }));
     await promised((await objects('chats', 'readwrite')).put(chat));

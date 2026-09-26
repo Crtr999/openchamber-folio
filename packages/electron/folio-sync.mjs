@@ -180,6 +180,12 @@ export function createFolioSync({ engine, configPath, getLocalOrigin, log = () =
     return handleSync(request);
   }
 
+  /** Decrypts one sync request and returns the encrypted reply. Throws for wrong keys or bad requests. */
+  async function handleEncrypted(body) {
+    if (!config) throw new Error('iPhone sync is off.');
+    return encrypt(keyBytes(), await handle(body));
+  }
+
   function listen() {
     if (server || !config) return;
     const current = http.createServer((req, res) => {
@@ -191,9 +197,9 @@ export function createFolioSync({ engine, configPath, getLocalOrigin, log = () =
       req.on('end', async () => {
         if (aborted) return;
         try {
-          const reply = await handle(Buffer.concat(chunks).toString('utf8'));
+          const reply = await handleEncrypted(Buffer.concat(chunks).toString('utf8'));
           res.writeHead(200, { ...headers, 'Content-Type': 'text/plain' });
-          res.end(encrypt(keyBytes(), reply));
+          res.end(reply);
         } catch (error) {
           // Wrong key, tampered or stale requests all look the same from outside.
           res.writeHead(400, headers);
@@ -216,6 +222,7 @@ export function createFolioSync({ engine, configPath, getLocalOrigin, log = () =
 
   return {
     start: () => listen(),
+    handleEncrypted,
     status,
     enable() {
       if (!config) {

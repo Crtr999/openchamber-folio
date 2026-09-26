@@ -2031,6 +2031,19 @@ async function main(options = {}) {
     desktopUpdater,
   });
   uiAuthController = bootstrapResult.uiAuthController;
+  // Folio iPhone sync (desktop app only). Paired phones reach it over Wi-Fi or the private relay;
+  // the body is also encrypted with the Folio pairing key, which only the desktop app can open.
+  if (typeof options.folioSyncHandler === 'function') {
+    const folioSyncHandler = options.folioSyncHandler;
+    app.post('/api/folio/sync', express.text({ type: () => true, limit: '24mb' }), async (req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      try {
+        res.type('text/plain').send(await folioSyncHandler(typeof req.body === 'string' ? req.body : ''));
+      } catch {
+        res.status(400).send('Could not sync');
+      }
+    });
+  }
   realtimeProxyRuntime = attachRealtimeProxy({
     app,
     server,

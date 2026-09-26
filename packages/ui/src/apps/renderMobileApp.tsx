@@ -44,7 +44,11 @@ const initializeSharedPreferences = () => {
   });
 };
 
-export function renderMobileApp(apis: RuntimeAPIs) {
+/**
+ * Global setup the mobile chat UI needs before it renders. Shared by the OpenChamber app and
+ * the Folio iPhone app, which embeds the same chat UI next to its notes.
+ */
+export function prepareMobileRuntime(apis: RuntimeAPIs): RuntimeAPIs {
   // Stamp the surface before anything else reads it: perf tuning, sync paging,
   // and device info all key off isMobileSurfaceRuntime(), and without the stamp
   // a wide native device (iPad landscape) would fall out of the mobile branch.
@@ -62,10 +66,6 @@ export function renderMobileApp(apis: RuntimeAPIs) {
   // after mount and shifted the layout (connect / scan / saved-connection labels).
   getDeviceInfo();
 
-  const rootElement = document.getElementById('root');
-  if (!rootElement) {
-    throw new Error('Root element not found');
-  }
 
   // The native Capacitor app delivers notifications via APNs only (background, server-side
   // focus-gated). Disable the in-app notification dispatch on native with a no-op
@@ -74,9 +74,19 @@ export function renderMobileApp(apis: RuntimeAPIs) {
   // runtime uses also doesn't display inside a WKWebView.)
   const capacitor = (window as typeof window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
   const isNativeShell = capacitor?.isNativePlatform?.() === true || window.location.protocol === 'capacitor:';
-  const resolvedApis = isNativeShell
+  return isNativeShell
     ? { ...apis, notifications: { notifyAgentCompletion: async () => false, canNotify: () => false } }
     : apis;
+}
+
+export function renderMobileApp(apis: RuntimeAPIs) {
+  const resolvedApis = prepareMobileRuntime(apis);
+  const capacitor = (window as typeof window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+  const isNativeShell = capacitor?.isNativePlatform?.() === true || window.location.protocol === 'capacitor:';
+  const rootElement = document.getElementById('root');
+  if (!rootElement) {
+    throw new Error('Root element not found');
+  }
 
   // Auth gating differs by shell: the native Capacitor app authenticates via
   // its own instance-connect flow (MobileConnectionWelcome asks for the

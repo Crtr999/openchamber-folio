@@ -12,6 +12,22 @@ interface FolioSpeechPlugin {
   addListener(event: 'finished', listener: () => void): Promise<PluginListenerHandle>;
 }
 const nativeSpeech = registerPlugin<FolioSpeechPlugin>('FolioSpeech');
+
+/** AVAudioEngine recording with on-device SFSpeechRecognizer transcription (FolioRecorderPlugin). */
+interface FolioRecorderPlugin {
+  start(): Promise<{ startedAt: number }>;
+  stop(): Promise<{ url?: string; name?: string }>;
+  addListener(event: 'transcript', listener: (passage: { text: string; at: number; final: boolean }) => void): Promise<PluginListenerHandle>;
+}
+const nativeRecorder = registerPlugin<FolioRecorderPlugin>('FolioRecorder');
+let transcriptListener: PluginListenerHandle | undefined;
+
+/** EventKit access to the iPhone's calendars (FolioCalendarPlugin). */
+interface FolioCalendarPlugin {
+  requestAccess(): Promise<{ granted: boolean }>;
+  events(options: { days: number }): Promise<{ events: { id: string; title: string; start: number; end: number; calendar: string; joinURL?: string }[] }>;
+}
+const nativeCalendar = registerPlugin<FolioCalendarPlugin>('FolioCalendar');
 let speechListener: PluginListenerHandle | undefined;
 
 /** Phone implementations of the things the Mac helper does natively. */
@@ -78,6 +94,24 @@ export function createPhoneHost(openScreen: (kind: string) => boolean, showFile:
     // Loading the file is async, which ends the tap; the app shows a sheet whose button shares it.
     openFile: (file, name) => showFile(new File([file], name, { type: file.type })),
     utility: openScreen,
+    startRecording: async (onText) => {
+      if (!isCapacitorApp()) throw new Error('Recording works in the iPhone app.');
+      await transcriptListener?.remove();
+      transcriptListener = await nativeRecorder.addListener('transcript', onText);
+      try { await nativeRecorder.start(); } catch (error) { await transcriptListener.remove(); transcriptListener = undefined; throw error; }
+    },
+    stopRecording: async () => {
+      if (!isCapacitorApp()) return undefined;
+      const result = await nativeRecorder.stop();
+      // Late final passages still arrive for a moment after stopping.
+      const listener = transcriptListener; transcriptListener = undefined;
+      setTimeout(() => { void listener?.remove(); }, 4000);
+      if (!result.url) return undefined;
+      const response = await fetch(result.url);
+      return new File([await response.blob()], result.name ?? 'Recording.m4a', { type: 'audio/mp4' });
+    },
+    calendarAccess: async () => (isCapacitorApp() ? (await nativeCalendar.requestAccess()).granted : false),
+    calendarEvents: async (days) => (isCapacitorApp() ? (await nativeCalendar.events({ days })).events : []),
   };
 }
 

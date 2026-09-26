@@ -47,6 +47,7 @@ import { createSessionOwnershipIndex } from '@/components/session/sidebar/sessio
 import { resolveSidebarSessionLocations } from '@/components/session/sidebar/recent/sessionLocation';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useI18n } from '@/lib/i18n';
+import { useFolioShell } from './folioShell';
 import { matchesRankQuery, rankByQuery } from '@/lib/search/fuzzySearch';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { cn } from '@/lib/utils';
@@ -626,6 +627,7 @@ const SortableProjectRow: React.FC<{
 
 export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, onOpenChange, variant = 'drawer', footer }) => {
   const { t } = useI18n();
+  const folioShell = useFolioShell();
   const { git } = useRuntimeAPIs();
   const ensureGitStatus = useGitStore((state) => state.ensureStatus);
   const liveSessions = useAllLiveSessions();
@@ -1894,6 +1896,21 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
               <div className="min-w-0 flex-1" />
             )}
             <div className="flex shrink-0 items-center gap-1">
+              {folioShell ? (
+                <Button
+                  type="button"
+                  variant="default"
+                  size="lg"
+                  className="w-10 px-0"
+                  // The sheet renders in a portal, so close it before handing over to the notes screen.
+                  onClick={() => { onOpenChange(false); folioShell.onOpenNotes(); }}
+                  aria-label={t('folio.notes')}
+                  title={t('folio.notes')}
+                  style={{ touchAction: 'manipulation' }}
+                >
+                  <Icon name="file-text" className="size-5" />
+                </Button>
+              ) : null}
               {footer.onOpenUpdate ? (
                 <Button
                   type="button"

@@ -30,6 +30,14 @@
 				<string>folio-sync</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.carterlaborde.folio.openchamber</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>openchamber</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
@@ -42,6 +50,10 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Folio shows your upcoming meetings and turns them into meeting notes.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Folio shows your upcoming meetings and turns them into meeting notes.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Folio syncs your notes with your Mac over your Wi-Fi.</string>
 	<key>NSMicrophoneUsageDescription</key>
@@ -67,6 +79,10 @@
 			</array>
 		</dict>
 	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIRequiredDeviceCapabilities</key>

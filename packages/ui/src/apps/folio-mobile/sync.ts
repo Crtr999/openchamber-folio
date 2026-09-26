@@ -4,7 +4,10 @@ import type { LocalEngine } from '@/lib/folio/local-engine';
 import type { FolioNote } from '@/lib/folio/schema';
 import { useFolioStore } from '@/lib/folio/store';
 import { isCapacitorApp } from '@/lib/platform';
-import { readSecret, useMobileChatStore, writeSecret, type ChatMessage, type MobileChat } from './chatStore';
+import { runtimeFetch } from '@/lib/runtime-fetch';
+import { getRuntimeApiBaseUrl, getRuntimeKey, MOBILE_DISCONNECTED_RUNTIME_KEY } from '@/lib/runtime-switch';
+import { isRelayModeActive } from '@/lib/relay/runtime-tunnel';
+import { readSecret, useMobileChatStore, writeSecret, type MobileChat } from './chatStore';
 
 /**
  * iPhone side of Mac sync. The Mac listens on the local network after you pair from its
@@ -17,7 +20,6 @@ type Pairing = z.infer<typeof pairingSchema>;
 const macChatSchema = z.object({ id: z.string(), title: z.string(), updated: z.number(), model: z.string() });
 export type MacChat = z.infer<typeof macChatSchema>;
 const syncReplySchema = z.object({ cursor: z.number(), notes: z.array(z.unknown()), macChats: z.array(macChatSchema) });
-const chatReplySchema = z.object({ messages: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() })) });
 const envelopeSchema = z.object({ v: z.literal(1), iv: z.string(), data: z.string() });
 const stateSchema = z.object({ cursor: z.number(), localSince: z.number(), lastSync: z.number(), goodHost: z.string().optional(), macChats: z.array(macChatSchema) });
 
@@ -36,8 +38,7 @@ const toB64 = (bytes: Uint8Array) => btoa(Array.from(bytes, (b) => String.fromCh
 async function cryptoKey(key: string) { return crypto.subtle.importKey('raw', fromB64(key), 'AES-GCM', false, ['encrypt', 'decrypt']); }
 
 type SyncRequest =
-  | { op: 'sync'; t: number; since: number; notes: FolioNote[]; chats: MobileChat[] }
-  | { op: 'chat'; t: number; sessionID: string };
+  | { op: 'sync'; t: number; since: number; notes: FolioNote[]; chats: MobileChat[] };
 
 async function seal(key: string, value: SyncRequest): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -93,7 +94,6 @@ interface SyncState {
   pair: (link: string, engine: LocalEngine) => Promise<boolean>;
   unpair: () => Promise<void>;
   syncNow: (engine: LocalEngine) => Promise<void>;
-  loadMacChat: (chat: MacChat) => Promise<void>;
 }
 
 let running: Promise<void> | undefined;
@@ -103,16 +103,24 @@ async function request<T>(pairing: Pairing, value: SyncRequest, schema: z.ZodTyp
   if (!key) throw new Error('Pair with your Mac first.');
   const state = readLocal(STATE, stateSchema);
   const body = await seal(key, value);
+  let lastError = new Error('Could not reach your Mac.');
+  // When the chats are connected to the Mac (Wi-Fi or the private relay, from anywhere), sync rides that connection.
+  if (getRuntimeKey() !== MOBILE_DISCONNECTED_RUNTIME_KEY && (getRuntimeApiBaseUrl() || isRelayModeActive())) {
+    try {
+      const response = await runtimeFetch('/api/folio/sync', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body });
+      if (response.ok) return await open(key, await response.text(), schema);
+      lastError = new Error(`Mac answered ${response.status}`);
+    } catch (error) { lastError = error instanceof Error ? error : new Error(String(error)); }
+  }
   const hosts = [...new Set([...(state?.goodHost ? [state.goodHost] : []), ...pairing.hosts])];
-  let lastError: unknown;
   for (const host of hosts) {
     try {
       const reply = await open(key, await postTo(host, pairing.port, body), schema);
       if (state && state.goodHost !== host) writeLocal(STATE, { ...state, goodHost: host });
       return reply;
-    } catch (error) { lastError = error; }
+    } catch (error) { lastError = error instanceof Error ? error : new Error(String(error)); }
   }
-  throw lastError instanceof Error ? lastError : new Error('Could not reach your Mac.');
+  throw lastError;
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
@@ -163,17 +171,5 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       }
     })();
     return running;
-  },
-  loadMacChat: async (chat) => {
-    useMobileChatStore.setState({ macChat: { id: chat.id, title: chat.title, model: chat.model } });
-    const pairing = get().pairing;
-    try {
-      if (!pairing) throw new Error('Pair with your Mac first.');
-      const reply = await request(pairing, { op: 'chat', t: Date.now(), sessionID: chat.id }, chatReplySchema);
-      const messages: ChatMessage[] = reply.messages;
-      useMobileChatStore.setState((s) => (s.macChat?.id === chat.id ? { macChat: { ...s.macChat, messages } } : {}));
-    } catch (error) {
-      useMobileChatStore.setState((s) => (s.macChat?.id === chat.id ? { macChat: { ...s.macChat, error: error instanceof Error ? error.message : String(error) } } : {}));
-    }
   },
 }));

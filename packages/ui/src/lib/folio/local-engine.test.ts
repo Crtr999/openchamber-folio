@@ -6,6 +6,8 @@ const host: FolioHost = {
   speak: (_text, done) => done(), pauseSpeaking: () => undefined, stopSpeaking: () => undefined,
   listen: () => false, stopListening: () => undefined, share: async () => undefined, pickFiles: async () => [],
   openFile: () => undefined, utility: (kind) => kind === 'settings',
+  startRecording: async (onText) => { onText({ text: 'Hello team', at: 65_000, final: true }); }, stopRecording: async () => new File(['x'], 'Meeting.m4a'),
+  calendarAccess: async () => true, calendarEvents: async () => [{ id: 'e1', title: 'Standup', start: 1_800_000_600_000, end: 1_800_002_400_000, calendar: 'Work' }],
 };
 
 async function engine() {
@@ -56,4 +58,21 @@ test('markdown import keeps headings, tasks and lists', () => {
   assert.equal(note.title, 'Plan');
   assert.deepEqual(note.blocks.map((b) => b.kind), ['heading2', 'task', 'bullet', 'text']);
   assert.equal(note.blocks[1].checked, true);
+});
+
+test('records a meeting into the page and makes meeting notes from calendar events', async () => {
+  const local = await engine();
+  const first = (await local.request({ command: 'state' })).state?.notes[0];
+  await local.request({ command: 'record', flag: true, noteID: first?.id });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const stopped = await local.request({ command: 'stop-recording' });
+  const page = stopped.state?.notes.find((n) => n.id === first?.id);
+  assert.ok(page?.blocks.some((b) => b.text === '[1:05] Hello team'));
+  assert.equal(page?.blocks.at(-1)?.kind, 'attachment');
+  const calendar = await local.request({ command: 'calendar-connect' });
+  assert.equal(calendar.state?.events[0].title, 'Standup');
+  const prepared = await local.request({ command: 'calendar-prepare', eventID: 'e1' });
+  const meeting = prepared.state?.notes.find((n) => n.id === prepared.state?.selectedID);
+  assert.equal(meeting?.title, 'Standup');
+  assert.equal(meeting?.isMeeting, true);
 });

@@ -11,6 +11,7 @@ import { useDebugPanelLongPress } from './mobileConnectionDebug';
 import { MobileConnectionDebugPanel } from './MobileConnectionDebugPanel';
 import { isQrScanSupported, parseConnectionPayload, scanConnectionQr } from './mobileQrScan';
 import { mobileConnectionInputClass, mobileInputKeyboardProps } from './mobileConnectionUi';
+import { useFolioShell } from './folioShell';
 import { MobileQrConnectionLoading, MobileQrScannerOverlay } from './MobileQrScannerOverlay';
 
 export type MobileConnectionNotice = {
@@ -118,6 +119,15 @@ export const MobileConnectionWelcome: React.FC<{
   }, [conn, isBusy, t]);
 
   React.useEffect(() => () => scanAbortRef.current?.abort(), []);
+
+  // Inside the Folio iPhone app, a pairing link scanned with the Camera app arrives here.
+  const folioShell = useFolioShell();
+  const pendingLink = folioShell?.pendingConnectLink;
+  React.useEffect(() => {
+    if (!pendingLink) return;
+    folioShell?.consumeConnectLink();
+    handleUrlChange(pendingLink);
+  }, [pendingLink, folioShell, handleUrlChange]);
 
   const handlePasswordSubmit = React.useCallback((event: React.FormEvent) => {
     event.preventDefault();
@@ -324,6 +334,15 @@ export const MobileConnectionWelcome: React.FC<{
             </div>
           </div>
         )}
+        {folioShell ? (
+          <div className="flex w-full max-w-sm flex-col gap-2 px-6 pb-8">
+            <p className="text-center typography-micro text-muted-foreground">{t('folio.chatsNeedMac')}</p>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" size="lg" className="h-11 flex-1" onClick={folioShell.onOpenNotes}>{t('folio.notes')}</Button>
+              <Button type="button" variant="outline" size="lg" className="h-11 flex-1" onClick={folioShell.onOfflineChat}>{t('folio.offlineChat')}</Button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </main>
     </>
