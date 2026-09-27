@@ -21,10 +21,11 @@ export function FolioHabits({ compact }: { compact?: boolean }) {
   if (!page) {
     return <button type="button" className={cn('flex w-full items-center gap-3 rounded-xl border border-dashed border-border px-3 text-left text-muted-foreground', compact ? 'py-3 text-[15px]' : 'py-2.5 text-sm')}
       onClick={() => {
-        // A normal Folio page, so it syncs; it is created without opening it.
+        // A normal Folio table page, so it syncs and can be opened like any database.
         void useFolioStore.getState().run({ command: 'create', kind: 'table', text: 'Habits' }).then((response) => {
           const created = response?.state?.notes.find((n) => n.id === response.state?.selectedID);
-          if (created) useFolioStore.getState().edit({ ...newHabitsPage(created.id, now, starterHabits), created: created.created, parentID: created.parentID });
+          // Keep the saved version's dates so the edit saves against it.
+          if (created) useFolioStore.getState().edit({ ...newHabitsPage(created.id, now, starterHabits), created: created.created, modified: created.modified, parentID: created.parentID });
         });
       }}>
       <Icon name="checkbox-circle" className="size-5 shrink-0" />{t('folio.habitsStart')}

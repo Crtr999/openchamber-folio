@@ -15,8 +15,9 @@ import { FolioSyncDialog } from './FolioSyncDialog';
 import { FolioRichBlock, folioNoteLinkPrefix, type FocusAt, type MentionState, type SlashState } from './FolioRichBlock';
 import './folio.css';
 import { FolioReader } from './FolioReader';
-import { FolioCreditsBadge } from './FolioCreditsBadge';
 import { FolioHabits } from './FolioHabits';
+import { sortSiblings } from '@/lib/folio/order';
+import { noteToMarkdown } from '@/lib/folio/local-engine';
 import { useHandoffStore } from '@/lib/folio/handoff';
 import { folioSyncCommand, reportFolioFocus } from '@/lib/desktop';
 
@@ -99,6 +100,65 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   const home = useFolioStore((s) => s.home);
   const found = useFolioStore((s) => s.found);
   const articleRef = React.useRef<HTMLElement>(null);
+  // Dragging across blocks selects whole blocks, like Notion: then Delete removes them and ⌘C copies them.
+  const [blockRange, setBlockRange] = React.useState<{ anchor: number; focus: number }>();
+  const rangeStart = React.useRef<{ index: number; x: number; y: number } | undefined>(undefined);
+  const blockIndexAt = (x: number, y: number): number | undefined => {
+    const current = note; if (!current) return undefined;
+    const hit = document.elementFromPoint(x, y)?.closest('[data-block-id]')?.getAttribute('data-block-id');
+    const direct = hit ? current.blocks.findIndex((b) => b.id === hit) : -1;
+    if (direct >= 0) return direct;
+    // In the margin or between blocks: the nearest block by height.
+    let best: number | undefined, distance = Infinity;
+    articleRef.current?.querySelectorAll('[data-block-id]').forEach((element) => {
+      const rect = element.getBoundingClientRect();
+      const d = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+      const index = current.blocks.findIndex((b) => b.id === element.getAttribute('data-block-id'));
+      if (index >= 0 && d < distance) { distance = d; best = index; }
+    });
+    return best;
+  };
+  const onRangePointerDown = (event: React.PointerEvent) => {
+    if (event.pointerType !== 'mouse' || event.button !== 0 || mobile) return;
+    if (event.target instanceof Element && event.target.closest('button, input, select, textarea, a')) return;
+    const index = blockIndexAt(event.clientX, event.clientY);
+    rangeStart.current = index === undefined ? undefined : { index, x: event.clientX, y: event.clientY };
+    if (blockRange) setBlockRange(undefined);
+  };
+  const onRangePointerMove = (event: React.PointerEvent) => {
+    const start = rangeStart.current;
+    if (!start || !(event.buttons & 1)) return;
+    const index = blockIndexAt(event.clientX, event.clientY);
+    if (index === undefined || (index === start.index && !blockRange)) return;
+    if (!blockRange) {
+      window.getSelection()?.removeAllRanges();
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    }
+    if (blockRange?.focus !== index || blockRange.anchor !== start.index) setBlockRange({ anchor: start.index, focus: index });
+  };
+  const onRangePointerUp = () => { rangeStart.current = undefined; };
+  React.useEffect(() => {
+    if (!blockRange) return;
+    const onKey = (event: KeyboardEvent) => {
+      const current = latestNote(); if (!current) return;
+      const from = Math.min(blockRange.anchor, blockRange.focus), to = Math.max(blockRange.anchor, blockRange.focus);
+      const picked = current.blocks.slice(from, to + 1);
+      if (event.key === 'Escape') { setBlockRange(undefined); return; }
+      if ((event.metaKey || event.ctrlKey) && (event.key === 'c' || event.key === 'x')) {
+        event.preventDefault();
+        void navigator.clipboard?.writeText(noteToMarkdown({ ...current, title: '', blocks: picked }).replace(/^# .*\n\n/, '')).catch(() => undefined);
+        if (event.key === 'c') return;
+      } else if (event.key !== 'Backspace' && event.key !== 'Delete') return;
+      event.preventDefault();
+      const rest = current.blocks.filter((_, i) => i < from || i > to);
+      edit({ ...current, blocks: rest.length ? rest : [makeBlock()] });
+      setBlockRange(undefined);
+    };
+    const onDown = (event: PointerEvent) => { if (!articleRef.current?.contains(event.target instanceof Node ? event.target : null)) setBlockRange(undefined); };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('pointerdown', onDown);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('pointerdown', onDown); };
+  }, [blockRange]); // eslint-disable-line react-hooks/exhaustive-deps -- latestNote and edit read current state
   const { edit, run, close } = useFolioStore.getState();
   const [active, setActive] = React.useState<{ id: string; editor: Editor }>();
   const [blockMenuID, setBlockMenuID] = React.useState<string>();
@@ -406,7 +466,6 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
         </button>}
       </div>}
       <div className="flex-1" />
-      {!mobile && <FolioCreditsBadge />}
       <span className={cn('px-2 text-xs text-muted-foreground', mobile && 'sr-only')} aria-live="polite">{saving || Object.keys(drafts).length ? t('folio.saving') : t('folio.saved')}</span>
       {note && !mobile && <button type="button" className={quiet} disabled={note.excludedFromAI} onClick={() => void compose()}>{t('folio.addToChat')}</button>}
       <div className="relative">
@@ -490,7 +549,8 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
         </button>)}
       </div>}
 
-      {note && <article ref={articleRef} className={cn('mx-auto w-full max-w-5xl pb-40', mobile ? 'pl-8 pr-4 pt-4' : 'pl-14 pr-8 pt-10')} style={{ fontSize: status.fontSize }}>
+      {note && <article ref={articleRef} className={cn('mx-auto w-full max-w-5xl pb-40', mobile ? 'pl-8 pr-4 pt-4' : 'pl-14 pr-8 pt-10', blockRange && 'select-none')} style={{ fontSize: status.fontSize }}
+        onPointerDown={onRangePointerDown} onPointerMove={onRangePointerMove} onPointerUp={onRangePointerUp}>
         <div className="group/title relative mb-1">
           {note.icon
             ? <button type="button" className="mb-2 rounded-md p-1 text-5xl leading-none hover:bg-interactive-hover" aria-label={t('folio.icon')} onClick={() => setIconOpen(!iconOpen)}><FolioIcon value={note.icon} large /></button>
@@ -508,12 +568,13 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
 
         {note.table && <FolioDatabase table={note.table} onChange={(table) => edit({ ...note, table })} />}
 
-        {note.blocks.map((block) => {
+        {note.blocks.map((block, blockIndex) => {
           numbered = block.kind === 'numbered' ? numbered + 1 : 0;
           if (hidden.has(block.id)) return null;
           const toggled = block.checked, isToggle = block.kind.startsWith('toggle');
           const linked = (block.kind === 'page' || block.kind === 'pageIn') && block.asset ? status.notes.find((n) => n.id === block.asset) : undefined;
-          return <div key={block.id} data-block-id={block.id} className="folio-block group/block relative flex items-start gap-1.5 rounded-sm" data-kind={block.kind} data-checked={block.checked}
+          const inRange = Boolean(blockRange) && blockIndex >= Math.min(blockRange?.anchor ?? 0, blockRange?.focus ?? 0) && blockIndex <= Math.max(blockRange?.anchor ?? 0, blockRange?.focus ?? 0);
+          return <div key={block.id} data-block-id={block.id} className={cn('folio-block group/block relative flex items-start gap-1.5 rounded-sm', inRange && 'bg-interactive-selection')} data-kind={block.kind} data-checked={block.checked}
             style={{ marginLeft: block.indent ? `${block.indent * 1.5}em` : undefined, backgroundColor: block.highlight === 'none' ? undefined : `color-mix(in srgb, ${folioColors[block.highlight]} ${status.highlightStrength * 100}%, transparent)` }}>
             {/* Handles only appear on hover, in the left margin, like Notion. */}
             <div className={cn('absolute top-0.5 flex opacity-0 transition-opacity group-hover/block:opacity-100', mobile ? '-left-7 group-focus-within/block:opacity-70' : '-left-12', blockMenuID === block.id && 'opacity-100')}>
@@ -568,6 +629,16 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
                 }} />}
                       </div>;
         })}
+        {/* Pages and databases inside this page are listed in it, like Notion's nested pages. */}
+        {(() => {
+          const linked = new Set(note.blocks.flatMap((b) => (b.kind === 'page' || b.kind === 'pageIn') && b.asset ? [b.asset] : []));
+          const inside = sortSiblings(status.notes.filter((n) => n.parentID === note.id && !n.trashed && !linked.has(n.id)));
+          if (!inside.length) return null;
+          return <div className="mt-4">{inside.map((child) => <button key={child.id} type="button" className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-interactive-hover" onClick={() => call({ command: 'select', noteID: child.id })}>
+            <span className="flex w-6 justify-center"><FolioIcon value={child.icon} /></span>
+            <span className="min-w-0 flex-1 truncate border-b border-border/70 pb-px">{child.title || t('folio.untitled')}</span>
+          </button>)}</div>;
+        })()}
         {/* Clicking the empty space below the last block continues writing, like Notion. */}
         <button type="button" className="block h-32 w-full cursor-text" aria-label={t('folio.newBlock')} onClick={() => {
           const last = note.blocks[note.blocks.length - 1];

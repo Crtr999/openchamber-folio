@@ -17,13 +17,16 @@ import { markdownToNote, noteToMarkdown } from '@/lib/folio/local-engine';
 import { sendChat } from '@/lib/folio/mobile-chat';
 import { makeBlock } from '@/lib/folio/schema';
 import { readKey, useMobileChatStore } from './chatStore';
-import { macAsset, macBella, useSyncStore } from './sync';
+import { askForChatsLink, hasLocalChanges, macAsset, macBella, useSyncStore } from './sync';
 import { createPhoneHost, nativeNotifications, nativePost } from './host';
 import { FolioMobileChat } from './FolioMobileChat';
 import { FolioMobileSettings } from './FolioMobileSettings';
 import { MobileAssistantList, MobileCalendar, MobileHome, MobileSearch, type MobileView } from './FolioMobileHome';
 import { useBalanceStore } from './balance';
 import './folio-mobile.css';
+
+/** The chats UI does not re-render when the notes around it change (typing in its forms stays smooth). */
+const StableMobileApp = React.memo(MobileApp);
 
 /** Where "back" goes from a chat: the conversation list if it was opened from there, otherwise home. */
 type ChatOrigin = 'home' | 'assistant';
@@ -136,6 +139,8 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
   const firstRun = React.useRef(true);
   React.useEffect(() => {
     if (firstRun.current) { firstRun.current = false; return; }
+    // Only real edits schedule a sync; the refresh after a sync must not schedule another one.
+    if (!hasLocalChanges(engine)) return;
     const timer = setTimeout(() => void useSyncStore.getState().syncNow(engine), 8000);
     return () => clearTimeout(timer);
   }, [notes, chats, engine]);
@@ -145,6 +150,7 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
     onOfflineChat: () => { useMobileChatStore.getState().open(undefined); setChatOrigin('home'); setView('chat'); },
     pendingConnectLink: connectLink,
     consumeConnectLink: () => setConnectLink(undefined),
+    requestConnectLink: () => { void askForChatsLink(); },
   }), [connectLink]);
   const goHome = () => setView('home');
   const openChat = (id: string | undefined, origin: ChatOrigin) => { useMobileChatStore.getState().open(id); setChatOrigin(origin); setView('chat'); };
@@ -191,7 +197,7 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
 
   return <div className="folio-mobile flex h-full flex-col bg-background pt-[env(safe-area-inset-top)]">
     {chatsMounted && <div className={cn('fixed inset-0 z-40 bg-background', view !== 'chats' && 'hidden')}>
-      <FolioShellContext.Provider value={shell}><MobileApp apis={apis} /></FolioShellContext.Provider>
+      <FolioShellContext.Provider value={shell}><StableMobileApp apis={apis} /></FolioShellContext.Provider>
     </div>}
     <div className="min-h-0 flex-1">
       {view === 'home' && <MobileHome onView={setView} onOpenNote={openNote} onNewPage={newPage} onAsk={() => openChat(undefined, 'home')} />}

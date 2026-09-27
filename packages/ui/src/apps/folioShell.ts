@@ -10,6 +10,8 @@ export interface FolioShell {
   onOfflineChat: () => void;
   pendingConnectLink?: string;
   consumeConnectLink: () => void;
+  /** Asks the Mac (over the notes pairing) for a one-time link that connects the chats; it arrives as pendingConnectLink. */
+  requestConnectLink?: () => void;
 }
 
 export const FolioShellContext = React.createContext<FolioShell | null>(null);

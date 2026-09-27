@@ -122,6 +122,9 @@ export const MobileConnectionWelcome: React.FC<{
 
   // Inside the Folio iPhone app, a pairing link scanned with the Camera app arrives here.
   const folioShell = useFolioShell();
+  // Inside the Folio iPhone app, a phone already paired for notes gets its chats link from the Mac automatically.
+  const requestConnectLink = folioShell?.requestConnectLink;
+  React.useEffect(() => { requestConnectLink?.(); }, [requestConnectLink]);
   const pendingLink = folioShell?.pendingConnectLink;
   React.useEffect(() => {
     if (!pendingLink) return;

@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { FolioCreditsBadge } from '@/components/folio/FolioCreditsBadge';
 import { useGuestsStore } from '@/lib/guests/store';
 import {
   Tooltip,
@@ -1596,6 +1597,8 @@ export const Header: React.FC = () => {
         {activeSurfaceHeader || isVSCode || !sessionTabsEnabled ? <div className="flex-1" /> : null}
 
         <div className="flex shrink-0 items-center gap-1">
+          {/* OpenRouter balance (Mac desktop only; renders nothing elsewhere), visible from chats and notes alike. */}
+          <FolioCreditsBadge />
           {showDesktopHeaderContextUsage && stableDesktopContextUsage ? (
             <ContextUsageDisplay
               reading={toContextUsageReading(stableDesktopContextUsage)}

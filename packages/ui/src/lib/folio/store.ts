@@ -58,7 +58,17 @@ export const useFolioStore = create<FolioStore>((set, get) => {
     try {
       while (Object.keys(get().drafts).length) {
         const draft = Object.values(get().drafts)[0];
-        const response = await request({ command: 'save', note: draft.note, expectedModified: draft.base });
+        let response: FolioResponse;
+        try {
+          response = await request({ command: 'save', note: draft.note, expectedModified: draft.base });
+        } catch (error) {
+          // The page moved on underneath the edit (sync, another view, a stale base). Keep the edit and
+          // save it on top of the latest version once, instead of leaving every later save stuck behind it.
+          const latest = (await request({ command: 'state' })).state?.notes.find((note) => note.id === draft.note.id);
+          if (!latest || latest.modified === draft.base) throw error;
+          set((state) => ({ drafts: { ...state.drafts, [draft.note.id]: { ...draft, base: latest.modified } } }));
+          response = await request({ command: 'save', note: { ...draft.note, modified: latest.modified }, expectedModified: latest.modified });
+        }
         const saved = response.state?.notes.find(note => note.id === draft.note.id);
         if (!saved) throw new Error('Folio did not confirm the saved page. Your edit is still open.');
         set(state => {
@@ -101,7 +111,9 @@ export const useFolioStore = create<FolioStore>((set, get) => {
     },
     run: async input => {
       try {
-        await get().flush();
+        // Opening a page never waits on a save that failed: the unsaved edit stays in drafts and retries.
+        if (input.command === 'select') await get().flush().catch(() => undefined);
+        else await get().flush();
         const response = await request(input);
         if (input.command === 'select' || input.command === 'create') set({ open: true, home: false });
         set({ error: undefined });

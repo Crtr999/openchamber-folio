@@ -20,6 +20,17 @@ test('failed save retains draft and blocks navigation instead of losing it',asyn
  useFolioStore.setState({drafts:{},status:state,open:true});const requests:FolioRequest[]=[];
  useFolioStore.getState().bind({request:async input=>{requests.push(input);return {id:'test',ok:false,error:'Conflict'};}});
  useFolioStore.getState().edit({...note,title:'Keep this'});await useFolioStore.getState().close();
- assert.equal(useFolioStore.getState().open,true);assert.equal(useFolioStore.getState().drafts[note.id].note.title,'Keep this');assert.equal(requests.length,1);
+ assert.equal(useFolioStore.getState().open,true);assert.equal(useFolioStore.getState().drafts[note.id].note.title,'Keep this');assert.deepEqual(requests.map(r=>r.command),['save','state']);
  useFolioStore.setState({drafts:{}});
+});
+test('a save that lost its base is saved again on top of the latest version',async()=>{
+ useFolioStore.setState({drafts:{},status:state,open:true});const requests:FolioRequest[]=[];let saves=0;
+ const moved={...note,modified:note.modified+50};
+ useFolioStore.getState().bind({request:async input=>{requests.push(input);
+  if(input.command==='state')return {id:'t',ok:true,state:{...state,notes:[moved]}};
+  saves+=1;if(saves===1)return {id:'t',ok:false,error:'This page changed in another view.'};
+  return {id:'t',ok:true,state:{...state,notes:[{...moved,title:'Keep this',modified:moved.modified+1}]}};}});
+ useFolioStore.getState().edit({...note,title:'Keep this'});await useFolioStore.getState().flush();
+ assert.deepEqual(requests.map(r=>r.command),['save','state','save']);assert.equal(requests[2].expectedModified,moved.modified);
+ assert.deepEqual(useFolioStore.getState().drafts,{});
 });

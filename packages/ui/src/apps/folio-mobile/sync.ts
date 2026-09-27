@@ -6,7 +6,7 @@ import { useFolioStore } from '@/lib/folio/store';
 import { useHandoffStore, type FolioFocus } from '@/lib/folio/handoff';
 import { isCapacitorApp } from '@/lib/platform';
 import { runtimeFetch } from '@/lib/runtime-fetch';
-import { getRuntimeApiBaseUrl, getRuntimeKey, MOBILE_DISCONNECTED_RUNTIME_KEY } from '@/lib/runtime-switch';
+import { getRuntimeApiBaseUrl, getRuntimeKey, isTransientRuntimeKey } from '@/lib/runtime-switch';
 import { isRelayModeActive } from '@/lib/relay/runtime-tunnel';
 import { hiddenChats, readSecret, useMobileChatStore, writeSecret, type MobileChat } from './chatStore';
 
@@ -197,6 +197,25 @@ async function applyAssistant(incoming: z.infer<typeof assistantChatSchema>[], s
 let running: Promise<void> | undefined;
 let lastConnectAsk = 0;
 
+/**
+ * Gets a one-time link from the Mac that connects the phone's chats (Wi-Fi or relay) and hands it to
+ * the app, which redeems it. The notes pairing already proves this phone belongs to the Mac, so the
+ * chats never need a second code. At most once a minute.
+ */
+export async function askForChatsLink(): Promise<void> {
+  const pairing = useSyncStore.getState().pairing;
+  if (!pairing || Date.now() - lastConnectAsk < 60_000) return;
+  lastConnectAsk = Date.now();
+  try { useSyncStore.setState({ connectLink: (await request(pairing, { op: 'connect', t: Date.now() }, connectReplySchema)).link }); }
+  catch { lastConnectAsk = Date.now() - 45_000; /* Mac away or older app: try again shortly */ }
+}
+
+/** Whether anything changed on the phone since the last sync (so an edit, not a refresh, schedules one). */
+export function hasLocalChanges(engine: LocalEngine): boolean {
+  const since = readLocal(STATE, stateSchema)?.localSince ?? 0;
+  return engine.changedSince(since).length > 0 || useMobileChatStore.getState().chats.some((c) => c.modified > since);
+}
+
 async function request<T>(pairing: Pairing, value: SyncRequest, schema: z.ZodType<T>): Promise<T> {
   const key = await readSecret(KEY_NAME);
   if (!key) throw new Error('Pair with your Mac first.');
@@ -204,7 +223,7 @@ async function request<T>(pairing: Pairing, value: SyncRequest, schema: z.ZodTyp
   const body = await seal(key, value);
   let lastError = new Error('Could not reach your Mac.');
   // When the chats are connected to the Mac (Wi-Fi or the private relay, from anywhere), sync rides that connection.
-  if (getRuntimeKey() !== MOBILE_DISCONNECTED_RUNTIME_KEY && (getRuntimeApiBaseUrl() || isRelayModeActive())) {
+  if (!isTransientRuntimeKey(getRuntimeKey()) && (getRuntimeApiBaseUrl() || isRelayModeActive())) {
     try {
       const response = await runtimeFetch('/api/folio/sync', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body });
       if (response.ok) return await open(key, await response.text(), schema);
@@ -272,11 +291,8 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         const next = { ...state, cursor: reply.cursor, localSince: started, lastSync: Date.now(), macChats: reply.macChats };
         writeLocal(STATE, { ...(readLocal(STATE, stateSchema) ?? {}), ...next });
         if (reply.macFocus) set({ macFocus: reply.macFocus });
-        // Chats not connected yet: this pairing already trusts the Mac, so ask it for a chats link once in a while.
-        if (getRuntimeKey() === MOBILE_DISCONNECTED_RUNTIME_KEY && Date.now() - lastConnectAsk > 10 * 60_000) {
-          lastConnectAsk = Date.now();
-          try { set({ connectLink: (await request(pairing, { op: 'connect', t: Date.now() }, connectReplySchema)).link }); } catch { /* older Mac app, or OpenChamber not ready */ }
-        }
+        // Chats not connected yet: this pairing already trusts the Mac, so ask it for a chats link.
+        if (isTransientRuntimeKey(getRuntimeKey())) await askForChatsLink();
         set({ lastSync: next.lastSync, macChats: reply.macChats, error: uploadFailures ? `${uploadFailures} attachment${uploadFailures === 1 ? '' : 's'} could not be copied to your Mac yet. Folio will try again.` : undefined });
         await useFolioStore.getState().refresh();
       } catch (error) {
