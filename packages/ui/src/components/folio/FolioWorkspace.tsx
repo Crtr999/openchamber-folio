@@ -266,7 +266,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
       }
     };
     window.addEventListener('keydown', shortcut, true); return () => window.removeEventListener('keydown', shortcut, true);
-  }, []);
+  }, [mobile]);
 
   // ---- Block edits always start from the latest saved-or-draft page.
   const updateBlock = React.useCallback((block: FolioBlock) => { const current = latestNote(); if (current) edit({ ...current, blocks: current.blocks.map((b) => b.id === block.id ? block : b) }); }, [edit]);
@@ -290,6 +290,16 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   };
   // ---- Drag a block by its handle to another place, like Notion. Nested lines travel with their parent.
   const [dragging, setDragging] = React.useState<{ id: string; before: number; lineTop: number }>();
+  // Phone: one toolbar above the keyboard (like Notion) while a line is being edited.
+  const [editing, setEditing] = React.useState(false);
+  const [turnInto, setTurnInto] = React.useState(false);
+  React.useEffect(() => {
+    if (!mobile) return;
+    const update = () => { const inside = Boolean(articleRef.current?.contains(document.activeElement)); setEditing(inside); if (!inside) setTurnInto(false); };
+    const later = () => setTimeout(update, 0);
+    document.addEventListener('focusin', update); document.addEventListener('focusout', later);
+    return () => { document.removeEventListener('focusin', update); document.removeEventListener('focusout', later); };
+  }, [mobile]);
   const dragStart = React.useRef<{ id: string; x: number; y: number; moved: boolean } | undefined>(undefined);
   const dropSlot = (y: number): { before: number; lineTop: number } | undefined => {
     const current = latestNote(); const article = articleRef.current; if (!current || !article) return undefined;
@@ -661,13 +671,14 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
           const inRange = Boolean(blockRange) && blockIndex >= Math.min(blockRange?.anchor ?? 0, blockRange?.focus ?? 0) && blockIndex <= Math.max(blockRange?.anchor ?? 0, blockRange?.focus ?? 0);
           return <div key={block.id} data-block-id={block.id} className={cn('folio-block group/block relative flex items-start gap-1.5 rounded-sm', inRange && 'bg-interactive-selection', dragging?.id === block.id && 'opacity-40')} data-kind={block.kind} data-checked={block.checked}
             style={{ marginLeft: block.indent ? `${block.indent * 1.5}em` : undefined, backgroundColor: block.highlight === 'none' ? undefined : `color-mix(in srgb, ${folioColors[block.highlight]} ${status.highlightStrength * 100}%, transparent)` }}>
-            {/* Handles only appear on hover, in the left margin, like Notion. */}
-            <div className={cn('absolute top-0.5 flex opacity-0 transition-opacity group-hover/block:opacity-100', mobile ? '-left-7 group-focus-within/block:opacity-70' : '-left-12', blockMenuID === block.id && 'opacity-100')}>
+            {/* Handles only appear on hover, in the left margin, like Notion. The phone has none: every line
+                carrying its own controls made iOS slow down each keystroke, so it uses one keyboard toolbar. */}
+            {!mobile && <div className={cn('absolute top-0.5 flex opacity-0 transition-opacity group-hover/block:opacity-100', mobile ? '-left-7 group-focus-within/block:opacity-70' : '-left-12', blockMenuID === block.id && 'opacity-100')}>
               {!mobile && <button type="button" className="rounded p-0.5 text-muted-foreground hover:bg-interactive-hover" aria-label={t('folio.newBlock')} title={t('folio.newBlock')} onClick={() => insertAfter(block.id, makeBlock())}><Icon name="add" className="size-4" /></button>}
               <button type="button" className="cursor-grab touch-none rounded p-0.5 text-muted-foreground hover:bg-interactive-hover active:cursor-grabbing" aria-label={t('folio.block')} title={`${t('folio.dragBlock')} · ${t('folio.block')}`}
                 onPointerDown={(e) => onHandleDown(e, block.id)} onPointerMove={onHandleMove} onPointerUp={(e) => onHandleUp(e, block.id)} onPointerCancel={() => { dragStart.current = undefined; setDragging(undefined); }}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setBlockMenuID(blockMenuID === block.id ? undefined : block.id); } }}><Icon name="draggable" className="size-4" /></button>
-            </div>
+            </div>}
             {blockMenuID === block.id && <>
               <div className="fixed inset-0 z-30" onClick={() => setBlockMenuID(undefined)} />
               <div className={cn('absolute top-7 z-40 max-h-96 w-60 overflow-y-auto rounded-xl border border-border bg-background p-1.5 shadow-2xl', mobile ? 'left-0' : '-left-12')}>
@@ -761,6 +772,32 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
         <FolioIcon value={target.icon} /><span className="truncate">{target.title || t('folio.untitled')}</span>
       </button>)}
     </div>}
+
+    {mobile && editing && active && (() => {
+      const current = note?.blocks.find((b) => b.id === active.id);
+      if (!current) return null;
+      // Buttons never take focus, so the keyboard stays up and the caret stays put.
+      const keep = (e: React.PointerEvent | React.MouseEvent) => e.preventDefault();
+      const key = 'flex h-10 min-w-10 shrink-0 items-center justify-center rounded-lg px-2 text-[15px] text-foreground active:bg-interactive-selection disabled:opacity-40';
+      const kinds: BlockKind[] = ['text', 'heading1', 'heading2', 'heading3', 'bullet', 'numbered', 'task', 'toggle', 'quote', 'callout', 'code', 'divider'];
+      return <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur" onPointerDown={keep} onMouseDown={keep}>
+        {turnInto && <div className="flex gap-1 overflow-x-auto border-b border-border px-2 py-1.5">
+          {kinds.map((kind) => <button key={kind} type="button" className={cn(key, 'text-sm', current.kind === kind && 'bg-interactive-selection')} onClick={() => { setKind(current.id, kind); setTurnInto(false); }}>{t(`folio.block.${kind}`)}</button>)}
+        </div>}
+        <div className="flex items-center gap-0.5 overflow-x-auto px-2 py-1" role="toolbar" aria-label={t('folio.block')}>
+          <button type="button" className={cn(key, 'font-semibold', turnInto && 'bg-interactive-selection')} aria-label={t('folio.turnInto')} aria-expanded={turnInto} onClick={() => setTurnInto(!turnInto)}>Aa</button>
+          <button type="button" className={cn(key, current.kind === 'task' && 'bg-interactive-selection')} aria-label={t('folio.block.task')} onClick={() => setKind(current.id, current.kind === 'task' ? 'text' : 'task')}><Icon name="checkbox" className="size-5" /></button>
+          <button type="button" className={cn(key, current.kind === 'bullet' && 'bg-interactive-selection')} aria-label={t('folio.block.bullet')} onClick={() => setKind(current.id, current.kind === 'bullet' ? 'text' : 'bullet')}><Icon name="list-unordered" className="size-5" /></button>
+          <button type="button" className={key} aria-label={t('folio.outdent')} disabled={!current.indent} onClick={() => updateBlock({ ...current, indent: (current.indent ?? 1) - 1 || undefined })}>⇤</button>
+          <button type="button" className={key} aria-label={t('folio.indent')} disabled={(current.indent ?? 0) >= 8} onClick={() => updateBlock({ ...current, indent: (current.indent ?? 0) + 1 })}>⇥</button>
+          <button type="button" className={key} aria-label={t('folio.up')} onClick={() => { move(current.id, -1); focusBlock(current.id, 'end'); }}><Icon name="arrow-up" className="size-5" /></button>
+          <button type="button" className={key} aria-label={t('folio.down')} onClick={() => { move(current.id, 1); focusBlock(current.id, 'end'); }}><Icon name="arrow-down" className="size-5" /></button>
+          <button type="button" className={key} aria-label={t('folio.undo')} onClick={() => { if (!active.editor.isDestroyed) active.editor.commands.undo(); }}><Icon name="arrow-go-back" className="size-5" /></button>
+          <div className="flex-1" />
+          <button type="button" className={key} aria-label={t('folio.hideKeyboard')} onClick={() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }}><Icon name="arrow-down-s" className="size-6" /></button>
+        </div>
+      </div>;
+    })()}
 
     {bubble && active && !active.editor.isDestroyed && <div ref={bubbleRef} role="toolbar" aria-label={t('folio.block')} className="fixed z-50 flex flex-col gap-1.5 rounded-xl border border-border bg-background/95 p-2 shadow-xl backdrop-blur" style={{ top: bubble.top, left: bubble.left, width: Math.min(420, window.innerWidth - 16) }} onMouseDown={(e) => e.preventDefault()}>
       <div className="flex items-center gap-0.5">

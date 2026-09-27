@@ -295,7 +295,10 @@ export const folioI18n = {
     "folio.askPermission": "The AI wants to: {action}",
     "folio.askAllow": "Allow",
     "folio.askDeny": "Deny",
-    "folio.dragBlock": "Drag to move"
+    "folio.dragBlock": "Drag to move",
+    "folio.turnInto": "Turn into",
+    "folio.hideKeyboard": "Hide keyboard",
+    "folio.undo": "Undo"
   },
   "de": {
     "folio.pages": "Folio-Seiten",
@@ -593,7 +596,10 @@ export const folioI18n = {
     "folio.askPermission": "Die KI möchte: {action}",
     "folio.askAllow": "Erlauben",
     "folio.askDeny": "Ablehnen",
-    "folio.dragBlock": "Zum Verschieben ziehen"
+    "folio.dragBlock": "Zum Verschieben ziehen",
+    "folio.turnInto": "Umwandeln in",
+    "folio.hideKeyboard": "Tastatur ausblenden",
+    "folio.undo": "Rückgängig"
   },
   "es": {
     "folio.pages": "Páginas de Folio",
@@ -891,7 +897,10 @@ export const folioI18n = {
     "folio.askPermission": "La IA quiere: {action}",
     "folio.askAllow": "Permitir",
     "folio.askDeny": "Denegar",
-    "folio.dragBlock": "Arrastra para mover"
+    "folio.dragBlock": "Arrastra para mover",
+    "folio.turnInto": "Convertir en",
+    "folio.hideKeyboard": "Ocultar teclado",
+    "folio.undo": "Deshacer"
   },
   "fr": {
     "folio.pages": "Pages Folio",
@@ -1189,7 +1198,10 @@ export const folioI18n = {
     "folio.askPermission": "L’IA souhaite : {action}",
     "folio.askAllow": "Autoriser",
     "folio.askDeny": "Refuser",
-    "folio.dragBlock": "Glisser pour déplacer"
+    "folio.dragBlock": "Glisser pour déplacer",
+    "folio.turnInto": "Transformer en",
+    "folio.hideKeyboard": "Masquer le clavier",
+    "folio.undo": "Annuler"
   },
   "ja": {
     "folio.pages": "Folioページ",
@@ -1487,7 +1499,10 @@ export const folioI18n = {
     "folio.askPermission": "AIが次を求めています: {action}",
     "folio.askAllow": "許可",
     "folio.askDeny": "拒否",
-    "folio.dragBlock": "ドラッグして移動"
+    "folio.dragBlock": "ドラッグして移動",
+    "folio.turnInto": "変換",
+    "folio.hideKeyboard": "キーボードを隠す",
+    "folio.undo": "取り消す"
   },
   "ko": {
     "folio.pages": "Folio 페이지",
@@ -1785,7 +1800,10 @@ export const folioI18n = {
     "folio.askPermission": "AI가 다음을 요청합니다: {action}",
     "folio.askAllow": "허용",
     "folio.askDeny": "거부",
-    "folio.dragBlock": "드래그하여 이동"
+    "folio.dragBlock": "드래그하여 이동",
+    "folio.turnInto": "변환",
+    "folio.hideKeyboard": "키보드 숨기기",
+    "folio.undo": "실행 취소"
   },
   "pl": {
     "folio.pages": "Strony Folio",
@@ -2083,7 +2101,10 @@ export const folioI18n = {
     "folio.askPermission": "AI chce: {action}",
     "folio.askAllow": "Zezwól",
     "folio.askDeny": "Odmów",
-    "folio.dragBlock": "Przeciągnij, aby przenieść"
+    "folio.dragBlock": "Przeciągnij, aby przenieść",
+    "folio.turnInto": "Zamień na",
+    "folio.hideKeyboard": "Ukryj klawiaturę",
+    "folio.undo": "Cofnij"
   },
   "pt-BR": {
     "folio.pages": "Páginas do Folio",
@@ -2381,7 +2402,10 @@ export const folioI18n = {
     "folio.askPermission": "A IA quer: {action}",
     "folio.askAllow": "Permitir",
     "folio.askDeny": "Negar",
-    "folio.dragBlock": "Arraste para mover"
+    "folio.dragBlock": "Arraste para mover",
+    "folio.turnInto": "Transformar em",
+    "folio.hideKeyboard": "Ocultar teclado",
+    "folio.undo": "Desfazer"
   },
   "tr": {
     "folio.pages": "Folio sayfaları",
@@ -2679,7 +2703,10 @@ export const folioI18n = {
     "folio.askPermission": "Yapay zekâ şunu istiyor: {action}",
     "folio.askAllow": "İzin ver",
     "folio.askDeny": "Reddet",
-    "folio.dragBlock": "Taşımak için sürükle"
+    "folio.dragBlock": "Taşımak için sürükle",
+    "folio.turnInto": "Dönüştür",
+    "folio.hideKeyboard": "Klavyeyi gizle",
+    "folio.undo": "Geri al"
   },
   "uk": {
     "folio.pages": "Сторінки Folio",
@@ -2977,7 +3004,10 @@ export const folioI18n = {
     "folio.askPermission": "ШІ хоче: {action}",
     "folio.askAllow": "Дозволити",
     "folio.askDeny": "Відхилити",
-    "folio.dragBlock": "Перетягніть, щоб перемістити"
+    "folio.dragBlock": "Перетягніть, щоб перемістити",
+    "folio.turnInto": "Перетворити на",
+    "folio.hideKeyboard": "Сховати клавіатуру",
+    "folio.undo": "Скасувати"
   },
   "zh-CN": {
     "folio.pages": "Folio 页面",
@@ -3275,7 +3305,10 @@ export const folioI18n = {
     "folio.askPermission": "AI 想要：{action}",
     "folio.askAllow": "允许",
     "folio.askDeny": "拒绝",
-    "folio.dragBlock": "拖动以移动"
+    "folio.dragBlock": "拖动以移动",
+    "folio.turnInto": "转换为",
+    "folio.hideKeyboard": "隐藏键盘",
+    "folio.undo": "撤销"
   },
   "zh-TW": {
     "folio.pages": "Folio 頁面",
@@ -3573,6 +3606,9 @@ export const folioI18n = {
     "folio.askPermission": "AI 想要：{action}",
     "folio.askAllow": "允許",
     "folio.askDeny": "拒絕",
-    "folio.dragBlock": "拖曳以移動"
+    "folio.dragBlock": "拖曳以移動",
+    "folio.turnInto": "轉換為",
+    "folio.hideKeyboard": "隱藏鍵盤",
+    "folio.undo": "復原"
   }
 } as const;

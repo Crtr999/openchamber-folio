@@ -1,6 +1,6 @@
 import type { FolioBlock, FolioNote } from './schema';
 
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const same = <T,>(a: T, b: T): boolean => JSON.stringify(a) === JSON.stringify(b);
 
 /**
  * Three-way merge of one page, for a save whose base moved underneath it (the AI edited the page,
