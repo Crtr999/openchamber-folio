@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { registerPlugin, type PluginListenerHandle } from '@capacitor/core';
+import type { FolioNote } from '@/lib/folio/schema';
 import type { FolioHost } from '@/lib/folio/local-engine';
 import { isCapacitorApp } from '@/lib/platform';
 
@@ -38,6 +39,17 @@ interface FolioNotificationsPlugin {
   addListener(event: 'opened', listener: (data: { eventID: string }) => void): Promise<PluginListenerHandle>;
 }
 export const nativeNotifications = registerPlugin<FolioNotificationsPlugin>('FolioNotifications');
+
+/** The native iPhone page editor (FolioNoteEditor.swift). Pages come and go as Folio page JSON. */
+interface FolioEditorPlugin {
+  open(options: { note: FolioNote; titles: Record<string, string> }): Promise<void>;
+  close(): Promise<void>;
+  addListener(event: 'change', listener: (data: { note: unknown }) => void): Promise<PluginListenerHandle>;
+  addListener(event: 'closed', listener: (data: { noteID: string }) => void): Promise<PluginListenerHandle>;
+  addListener(event: 'openNote', listener: (data: { noteID: string }) => void): Promise<PluginListenerHandle>;
+  addListener(event: 'action', listener: (data: { kind: string; noteID: string }) => void): Promise<PluginListenerHandle>;
+}
+export const nativeEditor = registerPlugin<FolioEditorPlugin>('FolioEditor');
 const REMINDERS = 'folio.reminders';
 
 /** Splits text into sentence groups short enough for Bella to answer quickly. */

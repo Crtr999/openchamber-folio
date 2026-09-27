@@ -76,7 +76,8 @@ export interface FolioMobileHooks {
   onExport: (note: FolioNote, kind: string) => void;
   onExportLibrary: () => void;
   /** Summarizes the page with the phone's chat model and appends the summary. */
-  onSummarize: (note: FolioNote) => void;
+  /** `done` runs once the summary is on the page (the native editor reopens it). */
+  onSummarize: (note: FolioNote, done?: () => void) => void;
 }
 
 /** The Mac engine writes seconds since 2001; the iPhone engine writes milliseconds since 1970. */

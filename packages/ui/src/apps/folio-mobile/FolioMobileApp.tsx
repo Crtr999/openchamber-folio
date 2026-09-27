@@ -20,7 +20,8 @@ import { sendChat } from '@/lib/folio/mobile-chat';
 import { makeBlock } from '@/lib/folio/schema';
 import { readKey, useMobileChatStore } from './chatStore';
 import { askForChatsLink, hasLocalChanges, macAsset, macBella, useSyncStore } from './sync';
-import { createPhoneHost, nativeNotifications, nativePost } from './host';
+import { createPhoneHost, nativeEditor, nativeNotifications, nativePost } from './host';
+import { noteSchema } from '@/lib/folio/schema';
 import { FolioMobileChat } from './FolioMobileChat';
 import { FolioMobileSettings } from './FolioMobileSettings';
 import { MobileAssistantList, MobileCalendar, MobileHome, MobileSearch, type MobileView } from './FolioMobileHome';
@@ -170,7 +171,7 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
     onImport: () => { void host.pickFiles('.json,.md,.markdown,.txt,application/json,text/markdown,text/plain', true).then((files) => engine.importFiles(files)); },
     onExport: (note, kind) => { const file = engine.exportFile(note, kind); if (file) void host.share(file); },
     onExportLibrary: () => { void host.share(engine.backupFile()); },
-    onSummarize: (note) => {
+    onSummarize: (note, done) => {
       void (async () => {
         const model = useMobileChatStore.getState().model;
         const pending = toast.loading(t('folio.summarizing'));
@@ -190,6 +191,7 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
             useFolioStore.getState().edit({ ...latest, blocks: [...latest.blocks, { ...makeBlock(), kind: 'heading2', text: t('folio.summary') }, ...parsed] });
           }
           toast.success(t('folio.summaryAdded'), { id: pending });
+          done?.();
         } catch (error) {
           toast.error(error instanceof Error ? error.message : String(error), { id: pending });
         }
@@ -211,6 +213,59 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
       setView('chats');
     } else openChat(undefined, 'home');
   };
+  // ---- Pages open in the native iPhone editor (FolioNoteEditor.swift); databases, and pages the user
+  // asked to see in the classic editor, stay in the web editor.
+  const [classicFor, setClassicFor] = React.useState<string>();
+  const [nativeEpoch, setNativeEpoch] = React.useState(0);
+  const mobileRef = React.useRef(mobile); mobileRef.current = mobile;
+  const nativeFor = React.useRef<string | undefined>(undefined);
+  const afterClose = React.useRef<MobileView>('home');
+  const viewNow = React.useRef(view); viewNow.current = view;
+  const selectedNote = useFolioStore((s) => s.status?.notes.find((n) => n.id === s.status?.selectedID));
+  const useNative = isCapacitorApp() && view === 'notes' && Boolean(selectedNote) && !selectedNote?.table && classicFor !== selectedNote?.id;
+  React.useEffect(() => {
+    if (!useNative || !selectedNote || nativeFor.current === selectedNote.id) return;
+    nativeFor.current = selectedNote.id;
+    const state = useFolioStore.getState();
+    const latest = state.drafts[selectedNote.id]?.note ?? selectedNote;
+    const titles: Record<string, string> = {};
+    for (const n of state.status?.notes ?? []) titles[n.id] = n.title || t('folio.untitled');
+    void nativeEditor.open({ note: latest, titles }).catch(() => { nativeFor.current = undefined; setClassicFor(selectedNote.id); });
+  }, [useNative, selectedNote, t, nativeEpoch]);
+  const closeNative = React.useCallback((next: MobileView) => { afterClose.current = next; void nativeEditor.close(); }, []);
+  React.useEffect(() => {
+    if (!isCapacitorApp()) return;
+    const handles: Array<Promise<{ remove: () => Promise<void> }>> = [
+      nativeEditor.addListener('change', ({ note }) => {
+        const parsed = noteSchema.safeParse(note);
+        if (parsed.success) useFolioStore.getState().edit(parsed.data);
+      }),
+      nativeEditor.addListener('closed', () => {
+        nativeFor.current = undefined;
+        void useFolioStore.getState().flush().catch(() => undefined);
+        const next = afterClose.current; afterClose.current = 'home';
+        if (viewNow.current === 'notes') setView(next);
+      }),
+      nativeEditor.addListener('openNote', ({ noteID }) => {
+        if (useFolioStore.getState().status?.notes.some((n) => n.id === noteID)) void useFolioStore.getState().run({ command: 'select', noteID });
+      }),
+      nativeEditor.addListener('action', ({ kind, noteID }) => {
+        const store = useFolioStore.getState();
+        const note = store.drafts[noteID]?.note ?? store.status?.notes.find((n) => n.id === noteID);
+        if (!note) return;
+        if (kind === 'ask') { closeNative('chat'); mobileRef.current.onAddToChat('', noteID); }
+        else if (kind === 'summarize') mobileRef.current.onSummarize(note, () => { nativeFor.current = undefined; setNativeEpoch((n) => n + 1); });
+        else if (kind === 'read') void store.run({ command: 'read', noteID });
+        else if (kind === 'share') mobileRef.current.onExport(note, 'md');
+        else if (kind === 'trash') { closeNative('home'); void store.flush().then(() => store.run({ command: 'trash', noteID })); }
+        else if (kind === 'classic') { setClassicFor(noteID); closeNative('notes'); }
+      }),
+    ];
+    return () => { for (const handle of handles) void handle.then((h) => h.remove()); };
+  }, [closeNative]);
+  // Leaving the page by any other route (a notification, a pairing link) closes the native editor too.
+  React.useEffect(() => { if (view !== 'notes' && nativeFor.current) { afterClose.current = view; void nativeEditor.close(); } }, [view]);
+
   const pane = (content: React.ReactNode) => <SwipeBackPane onBack={goHome} onPeek={setPeek}>{content}</SwipeBackPane>;
 
   return <div className="folio-mobile flex h-full flex-col bg-background pt-[env(safe-area-inset-top)]">
@@ -222,11 +277,11 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
     </div>}
     <div className="relative min-h-0 flex-1 overflow-hidden">
       {/* Home is the root of every screen. Covered, it stops re-rendering (typing in a page never redraws it). */}
-      <React.Activity mode={view === 'home' || peek ? 'visible' : 'hidden'}>
+      <React.Activity mode={view === 'home' || peek || useNative ? 'visible' : 'hidden'}>
         <MobileHome onView={setView} onOpenNote={openNote} onNewPage={newPage} onAsk={askAI}
           onOpenSessions={() => { setView('chats'); setSessionsRequest((n) => n + 1); }} />
       </React.Activity>
-      {view === 'notes' && pane(<FolioWorkspace mobile={mobile} />)}
+      {view === 'notes' && !useNative && pane(<FolioWorkspace mobile={mobile} />)}
       {view === 'search' && pane(<MobileSearch onBack={goHome} onOpenNote={openNote} onAsk={(prompt) => { useMobileChatStore.setState({ pendingPrompt: prompt }); openChat(undefined, 'home'); }} />)}
       {view === 'calendar' && pane(<MobileCalendar onBack={goHome} onOpened={() => setView('notes')} />)}
       {view === 'assistant' && pane(<MobileAssistantList onBack={goHome} onOpen={(id) => openChat(id, 'assistant')} />)}

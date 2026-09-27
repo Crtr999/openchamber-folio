@@ -77,6 +77,7 @@ class FolioViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(FolioCalendarPlugin())
         bridge?.registerPluginInstance(FolioRecorderPlugin())
         bridge?.registerPluginInstance(FolioNotificationsPlugin())
+        bridge?.registerPluginInstance(FolioEditorPlugin())
     }
 }
 
