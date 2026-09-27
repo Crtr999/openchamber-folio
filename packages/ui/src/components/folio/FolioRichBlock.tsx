@@ -5,6 +5,7 @@ import Highlight from '@tiptap/extension-highlight';
 import { TextStyle, Color } from '@tiptap/extension-text-style';
 import type { FolioBlock } from '@/lib/folio/schema';
 import { blockToDocument, documentToText } from '@/lib/folio/rich-text';
+import { registerPendingEdit } from '@/lib/folio/store';
 
 export type FocusAt = 'start' | 'end';
 export interface SlashState { blockID: string; query: string; left: number; top: number; bottom: number }
@@ -21,6 +22,8 @@ interface FolioRichBlockProps {
   block: FolioBlock;
   placeholder?: string;
   focusAt?: FocusAt;
+  /** Milliseconds to batch typing before `onChange` (0: every keystroke). Pending typing is flushed by `flushPendingEdits`. */
+  commitDelay?: number;
   onChange: (block: FolioBlock) => void;
   onFocus: (editor: Editor) => void;
   onBlur: (editor: Editor) => void;
@@ -34,7 +37,7 @@ interface FolioRichBlockProps {
 }
 
 // Callbacks are read through a ref and must look up the latest page themselves, so a block re-renders only when its own content changes.
-export const FolioRichBlock = React.memo(FolioRichBlockInner, (previous, next) => previous.block === next.block && previous.focusAt === next.focusAt && previous.placeholder === next.placeholder);
+export const FolioRichBlock = React.memo(FolioRichBlockInner, (previous, next) => previous.block === next.block && previous.focusAt === next.focusAt && previous.placeholder === next.placeholder && previous.commitDelay === next.commitDelay);
 
 function FolioRichBlockInner(props: FolioRichBlockProps) {
   const mount = React.useRef<HTMLDivElement>(null);
@@ -42,9 +45,20 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
   const editorRef = React.useRef<Editor | null>(null);
   const slashOpen = React.useRef(false);
   const mentionOpen = React.useRef(false);
+  // Typing not yet handed to onChange (only when commitDelay batches keystrokes).
+  const pending = React.useRef<{ timer: ReturnType<typeof setTimeout>; unregister: () => void } | null>(null);
 
   React.useEffect(() => {
     if (!mount.current) return;
+    const commitNow = () => {
+      const waiting = pending.current;
+      if (!waiting) return;
+      pending.current = null;
+      clearTimeout(waiting.timer);
+      waiting.unregister();
+      const live = editorRef.current;
+      if (live && !live.isDestroyed) current.current.onChange({ ...current.current.block, ...documentToText(live.getJSON()) });
+    };
     const reportSlash = (editor: Editor) => {
       const text = editor.getText();
       const { from, empty } = editor.state.selection;
@@ -141,14 +155,19 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
         if (mentionOpen.current) { mentionOpen.current = false; setTimeout(() => current.current.onMention?.(null), 150); }
       },
       onUpdate: ({ editor }) => {
-        current.current.onChange({ ...current.current.block, ...documentToText(editor.getJSON()) });
+        const delay = current.current.commitDelay ?? 0;
+        if (delay > 0) {
+          if (pending.current) clearTimeout(pending.current.timer);
+          const unregister = pending.current?.unregister ?? registerPendingEdit(commitNow);
+          pending.current = { timer: setTimeout(commitNow, delay), unregister };
+        } else current.current.onChange({ ...current.current.block, ...documentToText(editor.getJSON()) });
         reportSlash(editor);
         reportMention(editor);
       },
     });
     editorRef.current = editor;
     if (current.current.focusAt) editor.commands.focus(current.current.focusAt);
-    return () => { editorRef.current = null; editor.destroy(); };
+    return () => { commitNow(); editorRef.current = null; editor.destroy(); };
   }, []);
 
   React.useEffect(() => {
@@ -159,6 +178,8 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
 
   React.useEffect(() => {
     const editor = editorRef.current; if (!editor) return;
+    // Typing still waiting to be handed over is newer than this block; it commits shortly.
+    if (pending.current) return;
     const rendered = documentToText(editor.getJSON()), expected = documentToText(blockToDocument(props.block));
     if (rendered.text !== expected.text || JSON.stringify(rendered.marks) !== JSON.stringify(expected.marks)) editor.commands.setContent(blockToDocument(props.block), { emitUpdate: false });
   }, [props.block]);

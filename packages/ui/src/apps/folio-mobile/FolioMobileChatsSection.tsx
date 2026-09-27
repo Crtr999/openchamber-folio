@@ -9,7 +9,8 @@ import { isChatDirectoryPath, CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectorie
 import { sortProjectsByOrder } from '@/components/session/sidebar/list/projectSort';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { refreshGlobalSessions, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useMobileSessionTreeStore } from '@/stores/useMobileSessionTreeStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import type { Session } from '@/lib/opencode/model';
@@ -21,7 +22,7 @@ const row = 'flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-
 
 interface Folder { id: string; label: string; sessions: Session[] }
 
-function FolderBlock({ folder, sortable, expanded, onToggle, onOpen, onMore }: { folder: Folder; sortable: boolean; expanded: boolean; onToggle: () => void; onOpen: (session: Session) => void; onMore: () => void }) {
+function FolderBlock({ folder, sortable, expanded, loading, onToggle, onOpen, onNew, onMore }: { folder: Folder; sortable: boolean; expanded: boolean; loading: boolean; onToggle: () => void; onOpen: (session: Session) => void; onNew: () => void; onMore: () => void }) {
   const { t } = useI18n();
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: folder.id, disabled: !sortable });
   return <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} className={cn(isDragging && 'relative z-10 rounded-lg bg-secondary opacity-90')}>
@@ -31,7 +32,11 @@ function FolderBlock({ folder, sortable, expanded, onToggle, onOpen, onMore }: {
       <Icon name="arrow-right-s" className={cn('size-5 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-90')} />
     </button>
     {expanded && <div className="pl-7">
-      {folder.sessions.length === 0 && <p className="px-2 py-1.5 text-sm text-muted-foreground">{t('folio.noChatsYet')}</p>}
+      <button type="button" className={cn(row, 'py-1.5 text-[15px] text-muted-foreground')} onClick={onNew}>
+        <Icon name="add" className="size-4 shrink-0" /><span className="min-w-0 flex-1 truncate">{t('folio.newChatIn', { name: folder.label })}</span>
+      </button>
+      {/* Until the Mac has answered, an empty folder is "loading", never "no chats". */}
+      {folder.sessions.length === 0 && <p className="px-2 py-1.5 text-sm text-muted-foreground">{loading ? t('folio.chatsLoading') : t('folio.noChatsYet')}</p>}
       {folder.sessions.slice(0, PER_FOLDER).map((session) => <button key={session.id} type="button" className={cn(row, 'py-1.5 text-[15px]')} onClick={() => onOpen(session)}>
         <span className="min-w-0 flex-1 truncate">{session.title || t('folio.newChat')}</span>
         <span className="shrink-0 text-xs text-muted-foreground">{new Date(session.time.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
@@ -46,7 +51,7 @@ function FolderBlock({ folder, sortable, expanded, onToggle, onOpen, onMore }: {
  * Folders collapse (shared with the chats drawer) and can be long-pressed and dragged into order,
  * which is the same project order the Mac uses. Hidden until the chats are connected to the Mac.
  */
-export function MobileChatsSection({ onOpenChats }: { onOpenChats: () => void }) {
+export function MobileChatsSection({ onOpenChats, onOpenSessions }: { onOpenChats: () => void; onOpenSessions: () => void }) {
   const { t } = useI18n();
   const projects = useProjectsStore((s) => s.projects);
   const manualOrder = useProjectsStore((s) => s.manualProjectOrder);
@@ -56,6 +61,18 @@ export function MobileChatsSection({ onOpenChats }: { onOpenChats: () => void })
   const expandedMap = useMobileSessionTreeStore((s) => s.projectExpanded);
   const setExpanded = useMobileSessionTreeStore((s) => s.setProjectExpanded);
   const setCurrentSession = useSessionUIStore((s) => s.setCurrentSession);
+  const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
+  const loaded = useGlobalSessionsStore((s) => s.hasLoaded);
+  // Ask the Mac for its chat list whenever home is shown, the Mac connection changes, or its projects arrive,
+  // so folders fill in right away instead of only after a chat has been opened.
+  const hasProjects = projects.length > 0;
+  React.useEffect(() => {
+    let last = 0;
+    const load = () => { if (Date.now() - last < 15_000) return; last = Date.now(); void refreshGlobalSessions().catch(() => undefined); };
+    if (hasProjects) load();
+    const unsubscribe = subscribeRuntimeEndpointChanged(() => { last = 0; setTimeout(load, 1000); });
+    return unsubscribe;
+  }, [hasProjects]);
   const [open, setOpen] = React.useState(() => { try { return localStorage.getItem('folio.home.chatsCollapsed') !== '1'; } catch { return true; } });
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -78,9 +95,15 @@ export function MobileChatsSection({ onOpenChats }: { onOpenChats: () => void })
     return list;
   }, [projects, manualOrder, sortOrder, sessions, t]);
 
-  if (!projects.length && !sessions.length) return null;
+
   const toggleSection = () => setOpen((value) => { try { localStorage.setItem('folio.home.chatsCollapsed', value ? '1' : '0'); } catch { /* storage blocked */ } return !value; });
   const openSession = (session: Session) => { void setCurrentSession(session.id, getSessionDirectory(session) || null); onOpenChats(); };
+  const newChat = (folder: Folder) => {
+    const project = projects.find((p) => p.id === folder.id);
+    if (project) openNewSessionDraft({ selectedProjectId: project.id, directoryOverride: project.path });
+    else openNewSessionDraft();
+    onOpenChats();
+  };
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
     const from = projects.findIndex((p) => p.id === active.id);
@@ -94,12 +117,17 @@ export function MobileChatsSection({ onOpenChats }: { onOpenChats: () => void })
       <button type="button" className="flex items-center gap-1 text-[15px] font-medium text-muted-foreground" aria-expanded={open} onClick={toggleSection}>
         {t('folio.chats')}<Icon name="arrow-down-s" className={cn('size-4 transition-transform', !open && '-rotate-90')} />
       </button>
+      <div className="flex-1" />
+      {hasProjects && <button type="button" className="px-2 py-1 text-[15px] text-primary" onClick={onOpenSessions}>{t('folio.allChats')}</button>}
     </div>
+    {open && !hasProjects && !sessions.length && <button type="button" className={cn(row, 'text-muted-foreground')} onClick={onOpenChats}>
+      <Icon name="macbook" className="size-5 shrink-0" /><span className="min-w-0 flex-1 truncate">{t('folio.chatsConnecting')}</span>
+    </button>}
     {open && <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
       <SortableContext items={folders.filter((f) => f.id !== CHAT_DRAFT_PROJECT_ID).map((f) => f.id)} strategy={verticalListSortingStrategy}>
         {folders.map((folder) => <FolderBlock key={folder.id} folder={folder} sortable={sortable && folder.id !== CHAT_DRAFT_PROJECT_ID}
-          expanded={expandedMap[folder.id] ?? false} onToggle={() => setExpanded(folder.id, !(expandedMap[folder.id] ?? false))}
-          onOpen={openSession} onMore={onOpenChats} />)}
+          expanded={expandedMap[folder.id] ?? false} loading={!loaded} onToggle={() => setExpanded(folder.id, !(expandedMap[folder.id] ?? false))}
+          onOpen={openSession} onNew={() => newChat(folder)} onMore={onOpenSessions} />)}
       </SortableContext>
     </DndContext>}
   </section>;

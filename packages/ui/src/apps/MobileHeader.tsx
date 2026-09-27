@@ -8,6 +8,7 @@ import { useGitStore, useIsGitRepo } from '@/stores/useGitStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSession } from '@/sync/sync-context';
 
+import { useFolioShell } from './folioShell';
 import { MobileSessionMetadataButton } from './MobileSessionMetadata';
 import { MobileSessionSwitcher } from './MobileSessionSwitcher';
 
@@ -20,6 +21,8 @@ export const MobileHeader: React.FC<{
   compactTitle?: boolean;
 }> = ({ onOpenSessions, onOpenWorkspace, compactTitle = false }) => {
   const { t } = useI18n();
+  // In the Folio iPhone app, home already lists every chat folder: the leading button goes home.
+  const folioShell = useFolioShell();
   const [metadataOpen, setMetadataOpen] = React.useState(false);
   const [switcherOpen, setSwitcherOpen] = React.useState(false);
   const titleRef = React.useRef<HTMLButtonElement>(null);
@@ -84,11 +87,11 @@ export const MobileHeader: React.FC<{
           <button
             type="button"
             className="flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label={t('mobile.sessions.openSheetAria')}
-            onClick={handleOpenSessions}
+            aria-label={folioShell ? t('folio.home') : t('mobile.sessions.openSheetAria')}
+            onClick={folioShell ? () => { setMetadataOpen(false); setSwitcherOpen(false); folioShell.onOpenNotes(); } : handleOpenSessions}
             style={{ touchAction: 'manipulation' }}
           >
-            <Icon name="list-unordered" className="size-5" />
+            <Icon name={folioShell ? 'arrow-left-s' : 'list-unordered'} className={folioShell ? 'size-6' : 'size-5'} />
           </button>
 
           {/* Session title doubles as the recent-sessions switcher trigger. */}

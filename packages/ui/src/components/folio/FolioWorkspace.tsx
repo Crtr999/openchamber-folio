@@ -4,7 +4,7 @@ import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { useFolioStore } from '@/lib/folio/store';
+import { flushPendingEdits, useFolioStore } from '@/lib/folio/store';
 import { blockKinds, colorNames, makeBlock, type FolioBlock, type FolioNote, type FolioRequest } from '@/lib/folio/schema';
 import { folioColors } from '@/lib/folio/rich-text';
 import { useInputStore } from '@/sync/input-store';
@@ -22,6 +22,8 @@ import { useHandoffStore } from '@/lib/folio/handoff';
 import { folioSyncCommand, reportFolioFocus } from '@/lib/desktop';
 
 type ColorName = typeof colorNames[number];
+/** On the phone, keystrokes reach the store (and redraw the page around the block) once typing pauses. */
+const MOBILE_COMMIT_DELAY = 300;
 type Paint = 'textColor' | 'highlight';
 type BlockKind = FolioBlock['kind'];
 type SlashCommand = { id: string; glyph?: string; kind?: BlockKind; database?: 'board' | 'table' | 'library'; label: string; icon: IconName; keys: string[]; group: 'basic' | 'databases' };
@@ -45,11 +47,13 @@ function Swatches({ kind, label, onPick, compact }: { kind: Paint; label: (color
 }
 
 function latestNote(): FolioNote | undefined {
+  flushPendingEdits();
   const s = useFolioStore.getState();
   const base = s.status?.notes.find((n) => n.id === s.status?.selectedID);
   return base && (s.drafts[base.id]?.note || base);
 }
 function noteByID(id: string): FolioNote | undefined {
+  flushPendingEdits();
   const s = useFolioStore.getState();
   return s.drafts[id]?.note ?? s.status?.notes.find((n) => n.id === id);
 }
@@ -100,6 +104,8 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   const home = useFolioStore((s) => s.home);
   const found = useFolioStore((s) => s.found);
   const articleRef = React.useRef<HTMLElement>(null);
+  // The title grows with its text; measuring forces a layout of the page, so only when the title changes.
+  const titleRef = React.useRef<HTMLTextAreaElement>(null);
   // Dragging across blocks selects whole blocks, like Notion: then Delete removes them and ⌘C copies them.
   const [blockRange, setBlockRange] = React.useState<{ anchor: number; focus: number }>();
   const rangeStart = React.useRef<{ index: number; x: number; y: number } | undefined>(undefined);
@@ -192,6 +198,13 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
 
   const selected = status?.notes.find((n) => n.id === status.selectedID);
   const note = !home && selected ? (drafts[selected.id]?.note || selected) : undefined;
+  const title = note?.title;
+  React.useLayoutEffect(() => {
+    const element = titleRef.current;
+    if (!element) return;
+    element.style.height = 'auto';
+    element.style.height = `${element.scrollHeight}px`;
+  }, [title, note?.id]);
   const call = (input: FolioRequest) => { setMenuOpen(false); void run({ noteID: note?.id, ...input }); };
   const utility = (kind: string) => call({ command: 'utility', kind });
   const focusBlock = (id: string, at: FocusAt) => setFocus((old) => ({ id, at, n: (old?.n ?? 0) + 1 }));
@@ -211,10 +224,14 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
     const top = below + menuHeight < window.innerHeight - 8 ? below : Math.max(8, start.top - menuHeight - 12);
     setBubble({ top, left: Math.max(8, Math.min(window.innerWidth - menuWidth - 8, Math.min(start.left, end.left))) });
   }, []);
+  const bubbleShown = React.useRef(false);
+  bubbleShown.current = bubble !== undefined;
   const trackSelection = React.useCallback((editor: Editor, blockID: string) => {
     activeEditor.current = editor;
     setActive((previous) => previous?.editor === editor ? previous : { id: blockID, editor });
-    setSelectionTick((n) => n + 1);
+    // The format menu (the only thing showing the selection's marks) needs a redraw only while a
+    // selection is highlighted. A caret moving as you type must not redraw the whole page.
+    if (!editor.state.selection.empty || bubbleShown.current) setSelectionTick((n) => n + 1);
     placeBubble(editor);
   }, [placeBubble]);
   React.useEffect(() => {
@@ -560,7 +577,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
             onRemove={() => { const current = latestNote(); if (current) edit({ ...current, icon: '' }); setIconOpen(false); }} />}
         </div>
         {/* Wraps like Notion instead of cutting off long titles. */}
-        <textarea rows={1} ref={(element) => { if (element) { element.style.height = 'auto'; element.style.height = `${element.scrollHeight}px`; } }}
+        <textarea rows={1} ref={titleRef}
           aria-label={t('folio.title')} placeholder={t('folio.untitled')} className={cn('mb-1 block w-full resize-none overflow-hidden bg-transparent font-bold leading-tight outline-none placeholder:text-muted-foreground/50', mobile ? 'text-[2em]' : 'text-[2.5em]')} value={note.title}
           onChange={(e) => { edit({ ...note, title: e.target.value.replace(/\n/g, ' ') }); e.target.style.height = 'auto'; e.target.style.height = `${e.target.scrollHeight}px`; }}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const first = note.blocks[0]; if (first) focusBlock(first.id, 'start'); else insertAfter(undefined, makeBlock()); } }} />
@@ -606,7 +623,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
               : block.kind === 'attachment' ? <button type="button" className="flex items-center gap-2 rounded-md px-1 py-0.5 text-sm hover:bg-interactive-hover" onClick={() => call({ command: 'open-attachment', blockID: block.id })}><Icon name="clipboard" className="size-4" />{block.text || t('folio.attach')}</button>
               : linked ? <button type="button" className="flex items-center gap-2 rounded-md px-1 py-0.5 font-medium underline decoration-border underline-offset-4 hover:bg-interactive-hover" onClick={() => call({ command: 'select', noteID: linked.id })}><FolioIcon value={linked.icon} />{linked.title || t('folio.untitled')}</button>
               : (block.kind === 'page' || block.kind === 'pageIn') && !block.text ? <select className="rounded-md bg-transparent px-1 py-0.5 text-sm text-muted-foreground hover:bg-interactive-hover" aria-label={t('folio.openPage')} value="" onChange={(e) => updateBlock({ ...block, asset: e.target.value })}><option value="">{t('folio.openPage')}…</option>{status.notes.filter((n) => !n.trashed && n.id !== note.id).map((n) => <option key={n.id} value={n.id}>{n.title || t('folio.untitled')}</option>)}</select>
-              : <FolioRichBlock block={block}
+              : <FolioRichBlock block={block} commitDelay={mobile ? MOBILE_COMMIT_DELAY : 0}
                 placeholder={block.kind === 'text' ? t('folio.slashPlaceholder') : t(`folio.block.${block.kind}`)}
                 focusAt={focus?.id === block.id ? focus.at : undefined}
                 onChange={updateBlock}

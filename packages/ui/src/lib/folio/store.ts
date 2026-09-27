@@ -23,6 +23,18 @@ interface FolioStore {
   close: () => Promise<void>;
 }
 let timer: ReturnType<typeof setTimeout> | undefined;
+
+// Editors that hold typing not yet handed to the store (the phone batches keystrokes). Anything that
+// reads or saves the page flushes them first, so no operation ever works from text older than the screen.
+const pendingEdits = new Set<() => void>();
+export function registerPendingEdit(flush: () => void): () => void {
+  pendingEdits.add(flush);
+  return () => { pendingEdits.delete(flush); };
+}
+export function flushPendingEdits(): void {
+  for (const flush of [...pendingEdits]) flush();
+}
+
 let saving: Promise<void> | undefined;
 let refreshing = false;
 
@@ -102,6 +114,7 @@ export const useFolioStore = create<FolioStore>((set, get) => {
       timer = setTimeout(() => { void get().flush().catch(() => undefined); }, 350);
     },
     flush: async () => {
+      flushPendingEdits();
       clearTimeout(timer);
       if (!saving) saving = saveDrafts().catch(error => {
         set({ error: error instanceof Error ? error.message : String(error) });

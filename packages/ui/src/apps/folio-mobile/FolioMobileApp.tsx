@@ -7,6 +7,8 @@ import { createIndexedDBStorage, createLocalFolioEngine } from '@/lib/folio/loca
 import { useFolioStore } from '@/lib/folio/store';
 import { App as CapacitorApp } from '@capacitor/app';
 import { isCapacitorApp } from '@/lib/platform';
+import { Keyboard, KeyboardResize } from '@capacitor/keyboard';
+import { FOLIO_CHATS_OFFSTAGE_CLASS } from '../mobileNativeChrome';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import type { RuntimeAPIs } from '@/lib/api/types';
 import { MobileApp } from '../MobileApp';
@@ -23,6 +25,7 @@ import { FolioMobileChat } from './FolioMobileChat';
 import { FolioMobileSettings } from './FolioMobileSettings';
 import { MobileAssistantList, MobileCalendar, MobileHome, MobileSearch, type MobileView } from './FolioMobileHome';
 import { useBalanceStore } from './balance';
+import { SwipeBackPane } from './SwipeBack';
 import './folio-mobile.css';
 
 /** The chats UI does not re-render when the notes around it change (typing in its forms stays smooth). */
@@ -133,25 +136,28 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
   const calendarConnected = useFolioStore((s) => s.status?.calendarConnected);
   React.useEffect(() => { if (calendarConnected) { try { localStorage.setItem('folio.calendar', '1'); } catch { /* storage blocked */ } } }, [calendarConnected]);
 
-  // Sync a few seconds after edits or new chat replies settle.
-  const notes = useFolioStore((s) => s.status?.notes);
-  const chats = useMobileChatStore((s) => s.chats);
-  const firstRun = React.useRef(true);
+
+  // The chats stay mounted behind the notes. Only while they are on screen does the keyboard overlay
+  // the web view (their layout lifts itself); every other screen lets iOS shrink the web view, so the
+  // caret stays visible without any extra bar or offset.
+  const [sessionsRequest, setSessionsRequest] = React.useState(0);
   React.useEffect(() => {
-    if (firstRun.current) { firstRun.current = false; return; }
-    // Only real edits schedule a sync; the refresh after a sync must not schedule another one.
-    if (!hasLocalChanges(engine)) return;
-    const timer = setTimeout(() => void useSyncStore.getState().syncNow(engine), 8000);
-    return () => clearTimeout(timer);
-  }, [notes, chats, engine]);
+    const onChats = view === 'chats';
+    document.documentElement.classList.toggle(FOLIO_CHATS_OFFSTAGE_CLASS, !onChats);
+    if (isCapacitorApp()) void Keyboard.setResizeMode({ mode: onChats ? KeyboardResize.None : KeyboardResize.Native }).catch(() => undefined);
+  }, [view]);
+  // Home stays drawn under every other screen only while a swipe back is revealing it.
+  const [peek, setPeek] = React.useState(false);
+  React.useEffect(() => { if (view === 'home') setPeek(false); }, [view]);
 
   const shell = React.useMemo((): FolioShell => ({
     onOpenNotes: () => setView('home'),
+    sessionsRequest,
     onOfflineChat: () => { useMobileChatStore.getState().open(undefined); setChatOrigin('home'); setView('chat'); },
     pendingConnectLink: connectLink,
     consumeConnectLink: () => setConnectLink(undefined),
     requestConnectLink: () => { void askForChatsLink(); },
-  }), [connectLink]);
+  }), [connectLink, sessionsRequest]);
   const goHome = () => setView('home');
   const openChat = (id: string | undefined, origin: ChatOrigin) => { useMobileChatStore.getState().open(id); setChatOrigin(origin); setView('chat'); };
   const newPage = () => { void useFolioStore.getState().run({ command: 'create', kind: 'note' }); };
@@ -195,18 +201,27 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
     },
   }), [engine, host, t]);
 
+  const pane = (content: React.ReactNode) => <SwipeBackPane onBack={goHome} onPeek={setPeek}>{content}</SwipeBackPane>;
+
   return <div className="folio-mobile flex h-full flex-col bg-background pt-[env(safe-area-inset-top)]">
-    {chatsMounted && <div className={cn('fixed inset-0 z-40 bg-background', view !== 'chats' && 'hidden')}>
-      <FolioShellContext.Provider value={shell}><StableMobileApp apis={apis} /></FolioShellContext.Provider>
+    <SyncScheduler engine={engine} />
+    {chatsMounted && <div className={cn('fixed inset-0 z-40', view !== 'chats' && 'hidden')}>
+      <SwipeBackPane onBack={goHome} onPeek={setPeek}>
+        <FolioShellContext.Provider value={shell}><StableMobileApp apis={apis} /></FolioShellContext.Provider>
+      </SwipeBackPane>
     </div>}
-    <div className="min-h-0 flex-1">
-      {view === 'home' && <MobileHome onView={setView} onOpenNote={openNote} onNewPage={newPage} onAsk={() => openChat(undefined, 'home')} />}
-      {view === 'notes' && <FolioWorkspace mobile={mobile} />}
-      {view === 'search' && <MobileSearch onBack={goHome} onOpenNote={openNote} onAsk={(prompt) => { useMobileChatStore.setState({ pendingPrompt: prompt }); openChat(undefined, 'home'); }} />}
-      {view === 'calendar' && <MobileCalendar onBack={goHome} onOpened={() => setView('notes')} />}
-      {view === 'assistant' && <MobileAssistantList onBack={goHome} onOpen={(id) => openChat(id, 'assistant')} />}
-      {view === 'chat' && <FolioMobileChat onMenu={() => setView(chatOrigin)} engine={engine} />}
-      {view === 'settings' && <FolioMobileSettings engine={engine} onMenu={goHome} onExportBackup={() => { void host.share(engine.backupFile()); }} />}
+    <div className="relative min-h-0 flex-1 overflow-hidden">
+      {/* Home is the root of every screen. Covered, it stops re-rendering (typing in a page never redraws it). */}
+      <React.Activity mode={view === 'home' || peek ? 'visible' : 'hidden'}>
+        <MobileHome onView={setView} onOpenNote={openNote} onNewPage={newPage} onAsk={() => openChat(undefined, 'home')}
+          onOpenSessions={() => { setView('chats'); setSessionsRequest((n) => n + 1); }} />
+      </React.Activity>
+      {view === 'notes' && pane(<FolioWorkspace mobile={mobile} />)}
+      {view === 'search' && pane(<MobileSearch onBack={goHome} onOpenNote={openNote} onAsk={(prompt) => { useMobileChatStore.setState({ pendingPrompt: prompt }); openChat(undefined, 'home'); }} />)}
+      {view === 'calendar' && pane(<MobileCalendar onBack={goHome} onOpened={() => setView('notes')} />)}
+      {view === 'assistant' && pane(<MobileAssistantList onBack={goHome} onOpen={(id) => openChat(id, 'assistant')} />)}
+      {view === 'chat' && pane(<FolioMobileChat onMenu={() => setView(chatOrigin)} engine={engine} />)}
+      {view === 'settings' && pane(<FolioMobileSettings engine={engine} onMenu={goHome} onExportBackup={() => { void host.share(engine.backupFile()); }} />)}
     </div>
     {view !== 'chats' && <Toaster position="top-center" offset="calc(env(safe-area-inset-top) + 16px)" />}
     {sheetFile && <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3 shadow-2xl" role="dialog" aria-label={sheetFile.name}>
@@ -217,4 +232,19 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
       </div>
     </div>}
   </div>;
+}
+
+/** Syncs a few seconds after edits or new chat replies settle. Its own component, so a save never redraws the app around it. */
+function SyncScheduler({ engine }: { engine: ReturnType<typeof createLocalFolioEngine> }) {
+  const notes = useFolioStore((s) => s.status?.notes);
+  const chats = useMobileChatStore((s) => s.chats);
+  const firstRun = React.useRef(true);
+  React.useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; }
+    // Only real edits schedule a sync; the refresh after a sync must not schedule another one.
+    if (!hasLocalChanges(engine)) return;
+    const timer = setTimeout(() => void useSyncStore.getState().syncNow(engine), 8000);
+    return () => clearTimeout(timer);
+  }, [notes, chats, engine]);
+  return null;
 }

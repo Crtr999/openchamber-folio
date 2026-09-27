@@ -51,18 +51,20 @@ function usePinnedToastStyles(shadow: string) {
 
     applyToAll()
 
+    // The body observer sees every DOM change in the app (each keystroke in an editor), so only
+    // mutations that touch a toaster may pay for a document-wide query.
     const observer = new MutationObserver((mutations) => {
+      let touchesToaster = false
       for (const m of mutations) {
+        if (!touchesToaster && m.target instanceof Element && m.target.closest("[data-sonner-toaster]")) touchesToaster = true
         m.addedNodes.forEach((node) => {
           if (!(node instanceof HTMLElement)) return
-          if (node.matches?.("[data-sonner-toast]")) apply(node)
-          node
-            .querySelectorAll?.<HTMLElement>("[data-sonner-toast]")
-            .forEach(apply)
+          if (node.matches("[data-sonner-toast]")) { apply(node); touchesToaster = true }
+          else if (node.matches("[data-sonner-toaster]")) { node.querySelectorAll<HTMLElement>("[data-sonner-toast]").forEach(apply); touchesToaster = true }
         })
       }
       // Re-pin in case sonner mutates style.cssText on interactions.
-      applyToAll()
+      if (touchesToaster) applyToAll()
     })
 
     observer.observe(document.body, {

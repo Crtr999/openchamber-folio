@@ -6,7 +6,10 @@ import React from 'react';
  * chat when the Mac can't be reached, and receive pairing links opened from the Camera app.
  */
 export interface FolioShell {
+  /** Goes to the Folio home screen (the root of the iPhone app; it lists every chat folder too). */
   onOpenNotes: () => void;
+  /** Bumped when home asks for the full chats list (sessions drawer, with chat settings and instances). */
+  sessionsRequest?: number;
   onOfflineChat: () => void;
   pendingConnectLink?: string;
   consumeConnectLink: () => void;

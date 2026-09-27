@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { useFolioStore } from './store';
+import { registerPendingEdit, useFolioStore } from './store';
 import { statusSchema, makeBlock, type FolioNote, type FolioRequest } from './schema';
 const note:FolioNote={id:'F61645A9-DC34-499F-B2FA-CA73D7254098',title:'Start',icon:'',blocks:[makeBlock()],tags:[],favorite:false,excludedFromAI:false,isMeeting:false,trashed:false,created:1,modified:1};
 const state=statusSchema.parse({notes:[note],selectedID:note.id,status:'',importing:false,importProgress:'',listening:false,dictation:'',speaking:false,paused:false,voiceID:'',rate:.4,voices:[],recording:false,recordingStarting:false,transcribing:false,recordingProgress:'',microphoneLevel:0,systemLevel:0,calendarConnected:false,events:[],reminders:false,fontSize:16,highlightStrength:.8,aiBusy:false,messages:[]});
@@ -33,4 +33,11 @@ test('a save that lost its base is saved again on top of the latest version',asy
  useFolioStore.getState().edit({...note,title:'Keep this'});await useFolioStore.getState().flush();
  assert.deepEqual(requests.map(r=>r.command),['save','state','save']);assert.equal(requests[2].expectedModified,moved.modified);
  assert.deepEqual(useFolioStore.getState().drafts,{});
+});
+test('typing an editor still holds is handed over before the page is saved',async()=>{
+ useFolioStore.setState({drafts:{},status:state,open:true});const saved:string[]=[];
+ useFolioStore.getState().bind({request:async input=>{saved.push(input.note?.title??'');return {id:'t',ok:true,state:{...state,notes:[{...input.note!,modified:input.note!.modified+1}]}};}});
+ const unregister=registerPendingEdit(()=>{unregister();useFolioStore.getState().edit({...note,title:'Typed on the phone'});});
+ await useFolioStore.getState().flush();
+ assert.deepEqual(saved,['Typed on the phone']);assert.deepEqual(useFolioStore.getState().drafts,{});
 });

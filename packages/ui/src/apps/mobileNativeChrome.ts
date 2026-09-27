@@ -13,6 +13,9 @@ export const isCapacitorMobileApp = (): boolean => {
   return window.location.protocol === 'capacitor:';
 };
 
+/** Set on <html> by the Folio iPhone app while its chats are mounted but not on screen. */
+export const FOLIO_CHATS_OFFSTAGE_CLASS = 'folio-chats-offstage';
+
 export const useNativeMobileChrome = (): void => {
   React.useEffect(() => {
     if (!isCapacitorMobileApp()) return;
@@ -211,6 +214,10 @@ export const useNativeMobileChrome = (): void => {
       };
 
       const showHandle = await Keyboard.addListener('keyboardWillShow', (info) => {
+        // Inside the Folio iPhone app the chats stay mounted behind the notes. While they are
+        // off screen the keyboard belongs to a notes screen (native resize), so none of this
+        // choreography — hidden caret, layout inset — may run.
+        if (root.classList.contains(FOLIO_CHATS_OFFSTAGE_CLASS)) return;
         clearSettle();
         observeNativeKeyboardHeight(info.keyboardHeight);
         keyboardOpen = true;

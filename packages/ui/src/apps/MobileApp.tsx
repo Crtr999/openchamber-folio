@@ -67,6 +67,7 @@ import { UsageStatsView } from '@/components/views/usage/UsageStatsView';
 import { MobileWorkspaceDrawer, type MobileWorkspaceTab } from './MobileWorkspaceDrawer';
 import { DedicatedMobileAppProvider, type MobileAppActions } from './mobileAppContext';
 import { autoConnectLastInstance, getAutoConnectTargetLabel, logMobileConnectEvent, reprobeActiveConnection, type AutoConnectOutcome } from './mobileConnections';
+import { useFolioShell } from './folioShell';
 import { isCapacitorMobileApp, useNativeAndroidBackButton, useNativeMobileChrome, useNativeMobileLifecycle } from './mobileNativeChrome';
 import { reconnectAppForTransportSwitch, resetAppForRuntimeEndpointChange } from './runtimeEndpointReset';
 import { useAppFontEffects } from './useAppFontEffects';
@@ -312,13 +313,22 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   // Edge swipes on the chat: left edge opens the sessions drawer (the
   // persistent sidebar on a tablet), right edge the workspace drawer.
   const chatMainRef = React.useRef<HTMLElement>(null);
+  // Inside the Folio iPhone app the left edge swipe goes back to Folio's home instead (handled there).
+  const folioShell = useFolioShell();
   useEdgeSwipe(chatMainRef, {
     onLeftEdgeSwipe: () => {
+      if (folioShell) return;
       if (isTabletLayout) setSidebarOpen(true);
       else setSessionsSheetOpen(true);
     },
     onRightEdgeSwipe: () => setWorkspaceOpen(true),
   });
+
+  // Folio's home asked for the full chats list (it also holds chat settings and the Mac connection).
+  const folioSessionsRequest = folioShell?.sessionsRequest ?? 0;
+  React.useEffect(() => {
+    if (folioSessionsRequest > 0) setSessionsSheetOpen(true);
+  }, [folioSessionsRequest]);
 
   // Settings owns a drill-down of its own (nav → page list → item), so the
   // hardware back button asks it to step up before the shell closes it.

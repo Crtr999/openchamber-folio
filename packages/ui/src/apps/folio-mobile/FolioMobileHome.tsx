@@ -21,7 +21,6 @@ import { useSyncStore } from './sync';
 export type MobileView = 'home' | 'notes' | 'search' | 'calendar' | 'assistant' | 'chat' | 'chats' | 'settings';
 
 const row = 'flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left text-[17px] active:bg-interactive-selection';
-const pill = 'flex h-12 items-center justify-center rounded-full bg-secondary text-muted-foreground active:bg-interactive-selection';
 
 const live = (notes: readonly FolioNote[] | undefined) => (notes ?? []).filter((n) => !n.trashed && !n.isChat);
 
@@ -88,8 +87,16 @@ function ContinueFromMac({ openNote }: { openNote: (id: string) => void }) {
   </button>;
 }
 
-/** Home, laid out like Notion on iPhone: tabs up top, recents and the page tree, search / ask / new page at the bottom. */
-export function MobileHome({ onView, onOpenNote: openNote, onNewPage, onAsk }: { onView: (view: MobileView) => void; onOpenNote: (id: string) => void; onNewPage: () => void; onAsk: () => void }) {
+function greetingKey(hour: number): 'folio.greetingMorning' | 'folio.greetingAfternoon' | 'folio.greetingEvening' {
+  return hour < 12 ? 'folio.greetingMorning' : hour < 18 ? 'folio.greetingAfternoon' : 'folio.greetingEvening';
+}
+
+/**
+ * Home: the root of the iPhone app. Everything starts here and a swipe from the left edge comes back here.
+ * One search field (it also asks AI), today's habits, the page to continue, the Mac's chat folders and the
+ * pages. The only floating controls are Ask AI and New page.
+ */
+export function MobileHome({ onView, onOpenNote: openNote, onNewPage, onAsk, onOpenSessions }: { onView: (view: MobileView) => void; onOpenNote: (id: string) => void; onNewPage: () => void; onAsk: () => void; onOpenSessions: () => void }) {
   const { t } = useI18n();
   const notes = live(useFolioStore((s) => s.status?.notes));
   const pairing = useSyncStore((s) => s.pairing);
@@ -114,21 +121,28 @@ export function MobileHome({ onView, onOpenNote: openNote, onNewPage, onAsk }: {
     if (key !== parentOf(target)) return;
     for (const note of reorderSiblings(notes.filter((n) => parentOf(n.id) === key), moved, target)) useFolioStore.getState().edit(note);
   };
-  const recents = [...notes].sort((a, b) => b.modified - a.modified).slice(0, 8);
+  const recents = [...notes].sort((a, b) => b.modified - a.modified).slice(0, 5);
   const initial = (pairing?.name.trim()[0] ?? 'F').toUpperCase();
+  const now = new Date();
 
   return <div className="relative flex h-full flex-col">
-    <nav className="flex shrink-0 items-center gap-2.5 px-4 pb-2 pt-3" aria-label={t('folio.menu')}>
-      <button type="button" className="flex size-12 shrink-0 items-center justify-center rounded-full border border-border bg-secondary text-lg font-medium text-muted-foreground" aria-label={t('folio.settings')} onClick={() => onView('settings')}>{initial}</button>
-      <div className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-secondary px-4 text-[17px] font-medium" aria-current="page"><Icon name="home" className="size-5" />{t('folio.home')}</div>
-      <button type="button" className={cn(pill, 'w-14')} aria-label={t('folio.chats')} onClick={() => onView('chats')}><Icon name="chat-3" className="size-5" /></button>
-      <button type="button" className={cn(pill, 'relative w-14')} aria-label={t('folio.calendar')} onClick={() => onView('calendar')}>
-        <Icon name="calendar" className="size-5" />{soon && <span className="absolute right-3 top-2.5 size-2 rounded-full bg-[var(--status-error)]" />}
+    <header className="flex shrink-0 items-end gap-2 px-5 pb-3 pt-4">
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-medium uppercase tracking-wide text-muted-foreground">{now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+        <h1 className="truncate text-[30px] font-bold leading-tight">{t(greetingKey(now.getHours()))}</h1>
+      </div>
+      <button type="button" className="relative flex size-11 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground active:bg-interactive-selection" aria-label={t('folio.calendar')} onClick={() => onView('calendar')}>
+        <Icon name="calendar" className="size-5" />{soon && <span className="absolute right-2 top-2 size-2 rounded-full bg-[var(--status-error)]" />}
       </button>
-      <button type="button" className={cn(pill, 'w-14')} aria-label={t('folio.offlineChat')} onClick={() => onView('assistant')}><Icon name="inbox" className="size-5" /></button>
-    </nav>
+      <button type="button" className="flex size-11 shrink-0 items-center justify-center rounded-full border border-border bg-secondary text-[17px] font-medium text-muted-foreground active:bg-interactive-selection" aria-label={t('folio.settings')} onClick={() => onView('settings')}>{initial}</button>
+    </header>
+    <div className="shrink-0 px-4 pb-2">
+      <button type="button" className="flex h-11 w-full items-center gap-2 rounded-xl bg-secondary px-3 text-left text-[17px] text-muted-foreground active:bg-interactive-selection" onClick={() => onView('search')}>
+        <Icon name="search" className="size-5 shrink-0" /><span className="truncate">{t('folio.searchOrAsk')}</span>
+      </button>
+    </div>
 
-    <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-32">
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-32">
       <ContinueFromMac openNote={openNote} />
       <Section title={t('folio.today')} open={todayOpen} onToggle={toggleToday}>
         <div className="px-2 pb-1"><FolioHabits compact /></div>
@@ -139,16 +153,20 @@ export function MobileHome({ onView, onOpenNote: openNote, onNewPage, onAsk }: {
           <span className="min-w-0 flex-1 truncate">{note.title || t('folio.untitled')}</span>
         </button>)}
       </Section>
-      <MobileChatsSection onOpenChats={() => onView('chats')} />
+      <MobileChatsSection onOpenChats={() => onView('chats')} onOpenSessions={onOpenSessions} />
+      <button type="button" className={cn(row, '-mt-3 mb-4 text-[16px]')} onClick={() => onView('assistant')}>
+        <Icon name="sparkling" className="size-5 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{t('folio.offlineChat')}</span>
+        <Icon name="arrow-right-s" className="size-5 shrink-0 text-muted-foreground" />
+      </button>
       {favorites.length > 0 && <Section title={t('folio.favorites')} open={favoritesOpen} onToggle={toggleFavorites} count={favorites.length}>
         {favorites.map((note) => <button key={note.id} type="button" className={row} onClick={() => openNote(note.id)}>
           <span className="flex w-7 shrink-0 justify-center text-[20px]"><FolioIcon value={note.icon} /></span>
           <span className="min-w-0 flex-1 truncate">{note.title || t('folio.untitled')}</span>
         </button>)}
       </Section>}
-      <Section title={t('folio.privatePages')} open={treeOpen} onToggle={toggleTree} count={notes.filter((n) => !n.parentID || !notes.some((p) => p.id === n.parentID)).length}
+      <Section title={t('folio.pagesSection')} open={treeOpen} onToggle={toggleTree} count={notes.filter((n) => !n.parentID || !notes.some((p) => p.id === n.parentID)).length}
         action={<div className="relative">
-          <button type="button" className="flex size-9 items-center justify-center text-muted-foreground" aria-label={t('folio.more')} aria-expanded={more} onClick={() => setMore(!more)}><Icon name="more-fill" className="size-5" /></button>
+          <button type="button" className="flex size-9 items-center justify-center text-muted-foreground" aria-label={t('folio.more')} aria-expanded={more} onClick={() => setMore(!more)}><Icon name="add" className="size-5" /></button>
           {more && <>
             <div className="fixed inset-0 z-40" onClick={() => setMore(false)} />
             <div className="absolute right-0 top-9 z-50 w-56 rounded-xl border border-border bg-background p-1.5 shadow-2xl">
@@ -164,7 +182,6 @@ export function MobileHome({ onView, onOpenNote: openNote, onNewPage, onAsk }: {
     </div>
 
     <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-3 px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-6 [background:linear-gradient(to_top,var(--background)_55%,transparent)]">
-      <button type="button" className="pointer-events-auto flex size-14 shrink-0 items-center justify-center rounded-full border border-border bg-background shadow-lg" aria-label={t('folio.search')} onClick={() => onView('search')}><Icon name="search" className="size-6" /></button>
       <button type="button" className="pointer-events-auto flex h-14 min-w-0 flex-1 items-center gap-3 rounded-full border border-border bg-background pl-2 pr-4 text-[17px] text-muted-foreground shadow-lg" onClick={onAsk}>
         <span className="flex size-10 items-center justify-center rounded-full bg-secondary"><Icon name="sparkling" className="size-5 text-foreground" /></span>{t('folio.askAI')}
       </button>

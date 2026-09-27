@@ -272,7 +272,15 @@ export const folioI18n = {
     "folio.slashPlaceholder": "Type / for commands",
     "folio.openPage": "Open page",
     "folio.properties": "Properties",
-    "folio.done": "Done"
+    "folio.done": "Done",
+    "folio.chatsLoading": "Loading chats…",
+    "folio.chatsConnecting": "Connecting to your Mac…",
+    "folio.newChatIn": "New chat in {name}",
+    "folio.allChats": "All chats",
+    "folio.greetingMorning": "Good morning",
+    "folio.greetingAfternoon": "Good afternoon",
+    "folio.greetingEvening": "Good evening",
+    "folio.pagesSection": "Pages"
   },
   "de": {
     "folio.pages": "Folio-Seiten",
@@ -547,7 +555,15 @@ export const folioI18n = {
     "folio.slashPlaceholder": "Type / for commands",
     "folio.openPage": "Open page",
     "folio.properties": "Properties",
-    "folio.done": "Done"
+    "folio.done": "Done",
+    "folio.chatsLoading": "Chats werden geladen…",
+    "folio.chatsConnecting": "Verbindung zu deinem Mac…",
+    "folio.newChatIn": "Neuer Chat in {name}",
+    "folio.allChats": "Alle Chats",
+    "folio.greetingMorning": "Guten Morgen",
+    "folio.greetingAfternoon": "Guten Tag",
+    "folio.greetingEvening": "Guten Abend",
+    "folio.pagesSection": "Seiten"
   },
   "es": {
     "folio.pages": "Páginas de Folio",
@@ -822,7 +838,15 @@ export const folioI18n = {
     "folio.slashPlaceholder": "Type / for commands",
     "folio.openPage": "Open page",
     "folio.properties": "Properties",
-    "folio.done": "Done"
+    "folio.done": "Done",
+    "folio.chatsLoading": "Cargando chats…",
+    "folio.chatsConnecting": "Conectando con tu Mac…",
+    "folio.newChatIn": "Nuevo chat en {name}",
+    "folio.allChats": "Todos los chats",
+    "folio.greetingMorning": "Buenos días",
+    "folio.greetingAfternoon": "Buenas tardes",
+    "folio.greetingEvening": "Buenas noches",
+    "folio.pagesSection": "Páginas"
   },
   "fr": {
     "folio.pages": "Pages Folio",
@@ -1097,7 +1121,15 @@ export const folioI18n = {
     "folio.slashPlaceholder": "Type / for commands",
     "folio.openPage": "Open page",
     "folio.properties": "Properties",
-    "folio.done": "Done"
+    "folio.done": "Done",
+    "folio.chatsLoading": "Chargement des discussions…",
+    "folio.chatsConnecting": "Connexion à votre Mac…",
+    "folio.newChatIn": "Nouvelle discussion dans {name}",
+    "folio.allChats": "Toutes les discussions",
+    "folio.greetingMorning": "Bonjour",
+    "folio.greetingAfternoon": "Bon après-midi",
+    "folio.greetingEvening": "Bonsoir",
+    "folio.pagesSection": "Pages"
   },
   "ja": {
     "folio.pages": "Folioページ",
@@ -1372,7 +1404,15 @@ export const folioI18n = {
     "folio.slashPlaceholder": "Type / for commands",
     "folio.openPage": "Open page",
     "folio.properties": "Properties",
-    "folio.done": "Done"
+    "folio.done": "Done",
+    "folio.chatsLoading": "チャットを読み込み中…",
+    "folio.chatsConnecting": "Macに接続中…",
+    "folio.newChatIn": "{name}で新しいチャット",
+    "folio.allChats": "すべてのチャット",
+    "folio.greetingMorning": "おはようございます",
+    "folio.greetingAfternoon": "こんにちは",
+    "folio.greetingEvening": "こんばんは",
+    "folio.pagesSection": "ページ"
   },
   "ko": {
     "folio.pages": "Folio 페이지",
@@ -1647,7 +1687,15 @@ export const folioI18n = {
     "folio.slashPlaceholder": "Type / for commands",
     "folio.openPage": "Open page",
     "folio.properties": "Properties",
-    "folio.done": "Done"
+    "folio.done": "Done",
+    "folio.chatsLoading": "채팅 불러오는 중…",
+    "folio.chatsConnecting": "Mac에 연결하는 중…",
+    "folio.newChatIn": "{name}에서 새 채팅",
+    "folio.allChats": "모든 채팅",
+    "folio.greetingMorning": "좋은 아침이에요",
+    "folio.greetingAfternoon": "좋은 오후예요",
+    "folio.greetingEvening": "좋은 저녁이에요",
+    "folio.pagesSection": "페이지"
   },
   "pl": {
     "folio.pages": "Strony Folio",
@@ -1922,7 +1970,15 @@ export const folioI18n = {
     "folio.slashPlaceholder": "Type / for commands",
     "folio.openPage": "Open page",
     "folio.properties": "Properties",
-    "folio.done": "Done"
+    "folio.done": "Done",
+    "folio.chatsLoading": "Wczytywanie czatów…",
+    "folio.chatsConnecting": "Łączenie z Twoim Makiem…",
+    "folio.newChatIn": "Nowy czat w {name}",
+    "folio.allChats": "Wszystkie czaty",
+    "folio.greetingMorning": "Dzień dobry",
+    "folio.greetingAfternoon": "Dzień dobry",
+    "folio.greetingEvening": "Dobry wieczór",
+    "folio.pagesSection": "Strony"
   },
   "pt-BR": {
     "folio.pages": "Páginas do Folio",
@@ -2197,7 +2253,15 @@ export const folioI18n = {
     "folio.slashPlaceholder": "Type / for commands",
     "folio.openPage": "Open page",
     "folio.properties": "Properties",
-    "folio.done": "Done"
+    "folio.done": "Done",
+    "folio.chatsLoading": "Carregando conversas…",
+    "folio.chatsConnecting": "Conectando ao seu Mac…",
+    "folio.newChatIn": "Nova conversa em {name}",
+    "folio.allChats": "Todas as conversas",
+    "folio.greetingMorning": "Bom dia",
+    "folio.greetingAfternoon": "Boa tarde",
+    "folio.greetingEvening": "Boa noite",
+    "folio.pagesSection": "Páginas"
   },
   "tr": {
     "folio.pages": "Folio sayfaları",
@@ -2472,7 +2536,15 @@ export const folioI18n = {
     "folio.slashPlaceholder": "Type / for commands",
     "folio.openPage": "Open page",
     "folio.properties": "Properties",
-    "folio.done": "Done"
+    "folio.done": "Done",
+    "folio.chatsLoading": "Sohbetler yükleniyor…",
+    "folio.chatsConnecting": "Mac'inize bağlanılıyor…",
+    "folio.newChatIn": "{name} içinde yeni sohbet",
+    "folio.allChats": "Tüm sohbetler",
+    "folio.greetingMorning": "Günaydın",
+    "folio.greetingAfternoon": "İyi günler",
+    "folio.greetingEvening": "İyi akşamlar",
+    "folio.pagesSection": "Sayfalar"
   },
   "uk": {
     "folio.pages": "Сторінки Folio",
@@ -2747,7 +2819,15 @@ export const folioI18n = {
     "folio.slashPlaceholder": "Type / for commands",
     "folio.openPage": "Open page",
     "folio.properties": "Properties",
-    "folio.done": "Done"
+    "folio.done": "Done",
+    "folio.chatsLoading": "Завантаження чатів…",
+    "folio.chatsConnecting": "Підключення до вашого Mac…",
+    "folio.newChatIn": "Новий чат у {name}",
+    "folio.allChats": "Усі чати",
+    "folio.greetingMorning": "Доброго ранку",
+    "folio.greetingAfternoon": "Добрий день",
+    "folio.greetingEvening": "Добрий вечір",
+    "folio.pagesSection": "Сторінки"
   },
   "zh-CN": {
     "folio.pages": "Folio 页面",
@@ -3022,7 +3102,15 @@ export const folioI18n = {
     "folio.slashPlaceholder": "Type / for commands",
     "folio.openPage": "Open page",
     "folio.properties": "Properties",
-    "folio.done": "Done"
+    "folio.done": "Done",
+    "folio.chatsLoading": "正在加载聊天…",
+    "folio.chatsConnecting": "正在连接你的 Mac…",
+    "folio.newChatIn": "在 {name} 中新建聊天",
+    "folio.allChats": "所有聊天",
+    "folio.greetingMorning": "早上好",
+    "folio.greetingAfternoon": "下午好",
+    "folio.greetingEvening": "晚上好",
+    "folio.pagesSection": "页面"
   },
   "zh-TW": {
     "folio.pages": "Folio 頁面",
@@ -3297,6 +3385,14 @@ export const folioI18n = {
     "folio.slashPlaceholder": "Type / for commands",
     "folio.openPage": "Open page",
     "folio.properties": "Properties",
-    "folio.done": "Done"
+    "folio.done": "Done",
+    "folio.chatsLoading": "正在載入聊天…",
+    "folio.chatsConnecting": "正在連線到你的 Mac…",
+    "folio.newChatIn": "在 {name} 中新增聊天",
+    "folio.allChats": "所有聊天",
+    "folio.greetingMorning": "早安",
+    "folio.greetingAfternoon": "午安",
+    "folio.greetingEvening": "晚安",
+    "folio.pagesSection": "頁面"
   }
 } as const;
