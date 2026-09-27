@@ -10,6 +10,8 @@ import { onExtensionStoreWrite, readExtensionStore } from './persist.js';
 import { buildPublicSocketBindings } from './sockets.js';
 import { isReservedBuiltInId, readBuiltInRegistry } from './builtins.js';
 
+const SUPERSEDED_FOLIO_PANEL_ID = 'folio';
+
 const builtInsByStore = new Map();
 
 /** Registers the app-shipped catalog for one server instance, never a user install directory. */
@@ -466,6 +468,11 @@ const listInstalledGuestsUncached = async ({ persistPath } = {}) => {
     // than this host. Install is the gate.
     const guest = await loadGuestFromPackageRoot(root, { skipEngineCheck: true });
     if (!guest || seen.has(guest.id) || isReservedBuiltInId(guest.id)) {
+      continue;
+    }
+    // Folio fork: the notebook is built in now. The early "Folio" panel extension kept its own,
+    // separate notes, so an installed copy of it is no longer listed (its files are left alone).
+    if (guest.id === SUPERSEDED_FOLIO_PANEL_ID) {
       continue;
     }
     seen.add(guest.id);

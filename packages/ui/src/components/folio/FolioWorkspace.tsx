@@ -18,6 +18,7 @@ import { FolioReader } from './FolioReader';
 import { FolioAskPanel } from './FolioAskPanel';
 import { FolioHabits } from './FolioHabits';
 import { sortSiblings } from '@/lib/folio/order';
+import { moveBlockBefore, moveBlockBeside, pageSegments } from '@/lib/folio/columns';
 import { noteToMarkdown } from '@/lib/folio/local-engine';
 import { useHandoffStore } from '@/lib/folio/handoff';
 import { folioSyncCommand, reportFolioFocus } from '@/lib/desktop';
@@ -290,7 +291,9 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
     focusBlock(current.blocks[index - 1].id, 'end');
   };
   // ---- Drag a block by its handle to another place, like Notion. Nested lines travel with their parent.
-  const [dragging, setDragging] = React.useState<{ id: string; before: number; lineTop: number }>();
+  // A drop lands between lines (a horizontal bar) or beside a block, making columns (a vertical bar).
+  type Drop = { id: string; before?: number; beside?: { targetID: string; side: 'left' | 'right' }; bar: { top: number; left: number; width: number; height: number } };
+  const [dragging, setDragging] = React.useState<Drop>();
   // Phone: one toolbar above the keyboard (like Notion) while a line is being edited.
   const [editing, setEditing] = React.useState(false);
   const [turnInto, setTurnInto] = React.useState(false);
@@ -302,31 +305,33 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
     return () => { document.removeEventListener('focusin', update); document.removeEventListener('focusout', later); };
   }, [mobile]);
   const dragStart = React.useRef<{ id: string; x: number; y: number; moved: boolean } | undefined>(undefined);
-  const dropSlot = (y: number): { before: number; lineTop: number } | undefined => {
+  const dropSlot = (id: string, x: number, y: number): Omit<Drop, 'id'> | undefined => {
     const current = latestNote(); const article = articleRef.current; if (!current || !article) return undefined;
-    const origin = article.getBoundingClientRect().top;
-    const rows = [...article.querySelectorAll<HTMLElement>('[data-block-id]')];
-    for (const row of rows) {
+    const box = article.getBoundingClientRect();
+    const rows = [...article.querySelectorAll<HTMLElement>('[data-block-id]')].filter((row) => row.dataset.blockId !== id);
+    // Near a block's left or right edge: side by side (the Mac only; the phone stacks columns).
+    const hit = !mobile ? document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-block-id]') : null;
+    if (hit && hit.dataset.blockId && hit.dataset.blockId !== id && article.contains(hit)) {
+      const rect = hit.getBoundingClientRect();
+      const edge = Math.min(90, rect.width * 0.25);
+      const side = x > rect.right - edge ? 'right' : x < rect.left + Math.min(50, rect.width * 0.15) ? 'left' : undefined;
+      if (side) return { beside: { targetID: hit.dataset.blockId, side }, bar: { top: rect.top - box.top, left: (side === 'right' ? rect.right + 6 : rect.left - 8) - box.left, width: 3, height: rect.height } };
+    }
+    // Otherwise between lines, within the column under the pointer.
+    const inColumn = rows.filter((row) => { const r = row.getBoundingClientRect(); return x >= r.left - 60 && x <= r.right + 30; });
+    const candidates = inColumn.length ? inColumn : rows;
+    for (const row of candidates) {
       const rect = row.getBoundingClientRect();
       if (y < rect.top + rect.height / 2) {
         const index = current.blocks.findIndex((b) => b.id === row.dataset.blockId);
-        if (index >= 0) return { before: index, lineTop: rect.top - origin - 1 };
+        if (index >= 0) return { before: index, bar: { top: rect.top - box.top - 1, left: rect.left - box.left, width: rect.width, height: 2 } };
       }
     }
-    const last = rows.at(-1)?.getBoundingClientRect();
-    return last ? { before: current.blocks.length, lineTop: last.bottom - origin } : undefined;
-  };
-  const moveBlockTo = (id: string, before: number) => {
-    const current = latestNote(); if (!current) return;
-    const from = current.blocks.findIndex((b) => b.id === id); if (from < 0) return;
-    const depth = current.blocks[from].indent ?? 0;
-    let end = from + 1;
-    while (end < current.blocks.length && (current.blocks[end].indent ?? 0) > depth) end += 1;
-    if (before >= from && before <= end) return; // dropped onto itself
-    const moving = current.blocks.slice(from, end);
-    const rest = [...current.blocks.slice(0, from), ...current.blocks.slice(end)];
-    const at = before > from ? before - moving.length : before;
-    edit({ ...current, blocks: [...rest.slice(0, at), ...moving, ...rest.slice(at)] });
+    const last = candidates.at(-1);
+    if (!last) return undefined;
+    const rect = last.getBoundingClientRect();
+    const lastIndex = current.blocks.findIndex((b) => b.id === last.dataset.blockId);
+    return { before: lastIndex + 1, bar: { top: rect.bottom - box.top, left: rect.left - box.left, width: rect.width, height: 2 } };
   };
   const onHandleDown = (event: React.PointerEvent<HTMLButtonElement>, id: string) => {
     if (event.button !== 0) return;
@@ -344,13 +349,23 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
       if (event.clientY < box.top + 60) scroller.scrollBy(0, -14);
       else if (event.clientY > box.bottom - 60) scroller.scrollBy(0, 14);
     }
-    const slot = dropSlot(event.clientY);
-    if (slot) setDragging((old) => (old?.before === slot.before && old.id === start.id ? old : { id: start.id, ...slot }));
+    const slot = dropSlot(start.id, event.clientX, event.clientY);
+    if (slot) setDragging((old) => (old && old.id === start.id && old.before === slot.before && old.beside?.targetID === slot.beside?.targetID && old.beside?.side === slot.beside?.side ? old : { id: start.id, ...slot }));
   };
   const onHandleUp = (event: React.PointerEvent<HTMLButtonElement>, id: string) => {
     const start = dragStart.current; dragStart.current = undefined;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    if (start?.moved) { const slot = dragging; setDragging(undefined); if (slot) moveBlockTo(id, slot.before); return; }
+    if (start?.moved) {
+      const slot = dragging; setDragging(undefined);
+      const current = latestNote();
+      if (slot && current) {
+        const blocks = slot.beside
+          ? moveBlockBeside(current.blocks, id, slot.beside.targetID, slot.beside.side, () => crypto.randomUUID().toUpperCase())
+          : moveBlockBefore(current.blocks, id, slot.before ?? current.blocks.length);
+        edit({ ...current, blocks });
+      }
+      return;
+    }
     setDragging(undefined);
     setBlockMenuID(blockMenuID === id ? undefined : id);
   };
@@ -646,7 +661,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
       {note && <article ref={articleRef} className={cn('relative mx-auto w-full max-w-5xl pb-40', mobile ? 'pl-8 pr-4 pt-4' : 'pl-14 pr-8 pt-10', blockRange && 'select-none')} style={{ fontSize: status.fontSize }}
         onPointerDown={onRangePointerDown} onPointerMove={onRangePointerMove} onPointerUp={onRangePointerUp}>
         {/* Where a dragged block will land. */}
-        {dragging && <div aria-hidden className="pointer-events-none absolute z-20 h-0.5 rounded bg-[var(--primary)]" style={{ top: dragging.lineTop, left: mobile ? 32 : 56, right: mobile ? 16 : 32 }} />}
+        {dragging && <div aria-hidden className="pointer-events-none absolute z-20 rounded bg-[var(--primary)]" style={{ top: dragging.bar.top, left: dragging.bar.left, width: dragging.bar.width, height: dragging.bar.height }} />}
         <div className="group/title relative mb-1">
           {note.icon
             ? <button type="button" className="mb-2 rounded-md p-1 text-5xl leading-none hover:bg-interactive-hover" aria-label={t('folio.icon')} onClick={() => setIconOpen(!iconOpen)}><FolioIcon value={note.icon} large /></button>
@@ -664,7 +679,8 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
 
         {note.table && <FolioDatabase table={note.table} onChange={(table) => edit({ ...note, table })} />}
 
-        {note.blocks.map((block, blockIndex) => {
+        {(() => {
+          const renderBlock = (block: FolioBlock, blockIndex: number): React.ReactNode => {
           numbered = block.kind === 'numbered' ? numbered + 1 : 0;
           if (hidden.has(block.id)) return null;
           const toggled = block.checked, isToggle = block.kind.startsWith('toggle');
@@ -727,7 +743,14 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
                   edit({ ...current, blocks }); focusBlock(next.id, 'start');
                 }} />}
                       </div>;
-        })}
+          };
+          // Blocks dragged beside each other sit in columns (stacked on the phone).
+          return pageSegments(note.blocks).map((segment) => segment.kind === 'block'
+            ? renderBlock(segment.block, segment.index)
+            : <div key={`row-${segment.row}`} className={cn('flex items-start', mobile ? 'flex-col' : 'gap-8')}>
+              {segment.columns.map((column, c) => <div key={c} className="min-w-0 flex-1">{column.map(({ block, index }) => renderBlock(block, index))}</div>)}
+            </div>);
+        })()}
         {/* Pages and databases inside this page are listed in it, like Notion's nested pages. */}
         {(() => {
           const linked = new Set(note.blocks.flatMap((b) => (b.kind === 'page' || b.kind === 'pageIn') && b.asset ? [b.asset] : []));

@@ -15,19 +15,35 @@ import { useMobileSessionTreeStore } from '@/stores/useMobileSessionTreeStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import type { Session } from '@/lib/opencode/model';
 import { getProjectLabel, normalizePath } from '../mobilePaths';
+import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
+import { useThemeSystem } from '@/contexts/useThemeSystem';
+import type { ProjectEntry } from '@/lib/api/types';
 import { getSessionDirectory } from '../mobileSessionFields';
 
 const PER_FOLDER = 5;
 const row = 'flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-[16px] active:bg-interactive-selection';
 
-interface Folder { id: string; label: string; sessions: Session[] }
+interface Folder { id: string; label: string; sessions: Session[]; project?: ProjectEntry }
+
+/** The folder's own icon and color, exactly as the Mac sidebar shows them. */
+function FolderIcon({ folder }: { folder: Folder }) {
+  const { currentTheme } = useThemeSystem();
+  const project = folder.project;
+  const iconName = project?.icon ? PROJECT_ICON_MAP[project.icon] : undefined;
+  const color = project?.color ? PROJECT_COLOR_MAP[project.color] : undefined;
+  const fallback = <Icon name={folder.id === CHAT_DRAFT_PROJECT_ID ? 'chat-3' : iconName ?? 'folder'} className="size-5 shrink-0 text-muted-foreground" style={color ? { color } : undefined} />;
+  if (!project?.iconImage) return fallback;
+  return <span className="inline-flex size-5 shrink-0 overflow-hidden rounded" style={project.iconBackground ? { backgroundColor: project.iconBackground } : undefined}>
+    <ProjectIconImage project={{ id: project.id, iconImage: project.iconImage }} options={{ themeVariant: currentTheme.metadata.variant, iconColor: currentTheme.colors.surface.foreground }} className="h-full w-full object-contain" fallback={fallback} />
+  </span>;
+}
 
 function FolderBlock({ folder, sortable, expanded, loading, onToggle, onOpen, onNew, onMore }: { folder: Folder; sortable: boolean; expanded: boolean; loading: boolean; onToggle: () => void; onOpen: (session: Session) => void; onNew: () => void; onMore: () => void }) {
   const { t } = useI18n();
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: folder.id, disabled: !sortable });
   return <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} className={cn(isDragging && 'relative z-10 rounded-lg bg-secondary opacity-90')}>
     <button type="button" ref={setActivatorNodeRef} className={cn(row, 'select-none font-medium', sortable && 'touch-manipulation')} aria-expanded={expanded} onClick={onToggle} {...(sortable ? attributes : {})} {...(sortable ? listeners : {})}>
-      <Icon name={folder.id === CHAT_DRAFT_PROJECT_ID ? 'chat-3' : 'folder'} className="size-5 shrink-0 text-muted-foreground" />
+      <FolderIcon folder={folder} />
       <span className="min-w-0 flex-1 truncate">{folder.label}</span>
       <Icon name="arrow-right-s" className={cn('size-5 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-90')} />
     </button>
@@ -90,7 +106,7 @@ export function MobileChatsSection({ onOpenChats, onOpenSessions }: { onOpenChat
     for (const project of ordered) {
       const inside = top.filter((s) => !taken.has(s.id) && normalizePath(getSessionDirectory(s)).startsWith(project.path));
       inside.forEach((s) => taken.add(s.id));
-      list.push({ id: project.id, label: project.label ?? project.path, sessions: inside });
+      list.push({ id: project.id, label: project.label ?? project.path, sessions: inside, project });
     }
     return list;
   }, [projects, manualOrder, sortOrder, sessions, t]);

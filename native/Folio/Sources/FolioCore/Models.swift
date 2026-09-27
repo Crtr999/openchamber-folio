@@ -40,8 +40,11 @@ public struct Block: Identifiable, Codable, Equatable, Sendable {
     public var marks: [InlineMark]?
     /// Outline depth (0–8) for nested lists and notes; nil means top level.
     public var indent: Int?
-    public init(id: UUID = UUID(), kind: BlockKind = .text, text: String = "", checked: Bool = false, highlight: Highlight = .none, asset: String? = nil, marks: [InlineMark]? = nil, indent: Int? = nil) {
-        self.id = id; self.kind = kind; self.text = text; self.checked = checked; self.highlight = highlight; self.asset = asset; self.marks = marks; self.indent = indent
+    /// Blocks sharing a row id sit side by side, in columns numbered by `column` (the notebook's Notion-style columns).
+    public var row: String?
+    public var column: Int?
+    public init(id: UUID = UUID(), kind: BlockKind = .text, text: String = "", checked: Bool = false, highlight: Highlight = .none, asset: String? = nil, marks: [InlineMark]? = nil, indent: Int? = nil, row: String? = nil, column: Int? = nil) {
+        self.id = id; self.kind = kind; self.text = text; self.checked = checked; self.highlight = highlight; self.asset = asset; self.marks = marks; self.indent = indent; self.row = row; self.column = column
     }
 }
 
