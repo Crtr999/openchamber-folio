@@ -2,6 +2,7 @@ import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { FolioWorkspace, type FolioMobileHooks } from '@/components/folio/FolioWorkspace';
 import { setFolioAssetReader } from '@/lib/folio/assets';
+import { useHandoffStore } from '@/lib/folio/handoff';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { createIndexedDBStorage, createLocalFolioEngine } from '@/lib/folio/local-engine';
@@ -265,6 +266,11 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
         if (!note) return;
         if (kind === 'ask') { closeNative('chat'); mobileRef.current.onAddToChat('', noteID); }
         else if (kind === 'summarize') mobileRef.current.onSummarize(note, () => { nativeFor.current = undefined; setNativeEpoch((n) => n + 1); });
+        // The paginated reader is the web app's, so the page is left in the classic editor and a read
+        // request goes in for the workspace that mounts underneath. The flag comes first: without it
+        // the workspace reopens the native editor straight over the reader, and the request has to be
+        // in place before it mounts, because the workspace reads it once, on mount.
+        else if (kind === 'reader') { setClassicFor(noteID); useHandoffStore.getState().openReader(noteID); closeNative('notes'); }
         else if (kind === 'read') void store.run({ command: 'read', noteID });
         else if (kind === 'share') mobileRef.current.onExport(note, 'md');
         else if (kind === 'trash') { closeNative('home'); void store.flush().then(() => store.run({ command: 'trash', noteID })); }

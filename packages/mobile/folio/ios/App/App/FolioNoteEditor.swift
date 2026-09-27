@@ -376,6 +376,7 @@ final class FolioNoteEditorController: UIViewController, UITextViewDelegate, UIT
         more.menu = UIMenu(children: [
             UIAction(title: "Ask AI about this page", image: UIImage(systemName: "sparkles")) { [weak self] _ in self?.action("ask") },
             UIAction(title: "Summarize", image: UIImage(systemName: "text.badge.star")) { [weak self] _ in self?.action("summarize") },
+            UIAction(title: "Read like a book", image: UIImage(systemName: "book")) { [weak self] _ in self?.action("reader") },
             UIAction(title: "Read aloud", image: UIImage(systemName: "speaker.wave.2")) { [weak self] _ in self?.action("read") },
             UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in self?.action("share") },
             UIAction(title: "Open classic editor", image: UIImage(systemName: "doc.richtext")) { [weak self] _ in self?.action("classic") },
