@@ -46,12 +46,15 @@
 .folio-reader-swatch[data-swatch="night"] { background: #000; color: #e9e7e3; }
 .folio-reader-swatch[data-swatch="sepia"] { background: #f8f1e3; color: #4f3a22; }
 .folio-reader-swatch[data-swatch="paper"] { background: #fff; color: #1c1c1e; }
-/* A comfortable reading measure: about 68 characters a line, centred in the page. The cap lives
-   here rather than on the frame so the reader can measure the width the browser actually gave the
-   text, and the two-column cap adds the same gap FolioReader.tsx keeps as GAP. The probe below is
-   sized in the same unit, so the reader can tell in pixels when two pages fit side by side. */
-.folio-reader-flow { margin-inline: auto; max-width: var(--folio-measure); transition: transform 260ms cubic-bezier(.2,.7,.2,1); will-change: transform; -webkit-user-select: text; }
-.folio-reader-flow[data-columns="2"] { max-width: calc(var(--folio-measure) * 2 + 64px); }
+/* One page of the reader: a comfortable measure of about 68 characters a line, centred, and the
+   box that clips to it. The cap lives here rather than on the frame so the reader can measure the
+   width the browser actually gave the text, and the two-column cap adds the same gap
+   FolioReader.tsx keeps as GAP. The probe below is sized in the same unit, so the reader can tell in
+   pixels when two pages fit side by side. This box clips because the flow inside it is a whole book
+   wide: a frame wider than the page would show the columns either side of the page showing. */
+.folio-reader-page { margin-inline: auto; max-width: var(--folio-measure); overflow: hidden; }
+.folio-reader-page[data-columns="2"] { max-width: calc(var(--folio-measure) * 2 + 64px); }
+.folio-reader-flow { transition: transform 260ms cubic-bezier(.2,.7,.2,1); will-change: transform; -webkit-user-select: text; }
 /* The measure in pixels. Laid out but not seen, so it keeps the width it asks for, and out of the
    text's way entirely, so measuring it cannot change how a single word is set. */
 .folio-reader-probe { position: absolute; top: 0; left: 0; width: var(--folio-measure); height: 0; visibility: hidden; pointer-events: none; }

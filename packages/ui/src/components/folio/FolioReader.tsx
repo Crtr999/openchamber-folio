@@ -135,10 +135,11 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
   const frame = React.useRef<HTMLDivElement>(null);
   const flow = React.useRef<HTMLDivElement>(null);
   const probe = React.useRef<HTMLSpanElement>(null);
-  /** The frame and flow widths in pixels. The flow is capped and centred by its own CSS, so its
-      rendered width, not the frame's, is what the columns and the page step follow. */
+  /** The frame and flow widths in pixels. The page box is capped and centred by its own CSS and the
+      flow fills it, so the flow's rendered width, not the frame's, is what the columns and the page
+      step follow. */
   const [widths, setWidths] = React.useState({ frame: 0, flow: 0 });
-  /** The reading measure in pixels: what the flow's 68ch cap comes to in the font it is set in. */
+  /** The reading measure in pixels: what the page box's 68ch cap comes to in the font it is set in. */
   const [measure, setMeasure] = React.useState(0);
   const anchor = React.useRef<string | undefined>(startAt ?? (load(placeKey(note.id), placeSchema, { blockID: '', at: 0 }).blockID || undefined));
   React.useLayoutEffect(() => { setPart(partOfBlock(anchor.current)); }, [partOfBlock]);
@@ -155,10 +156,13 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
   // for each of them to hold the whole measure. Below that one page is kept, which the cap then
   // centres, so the text never runs out to the edge of the window.
   const columns = wide && measure > 0 && widths.frame >= 2 * measure + GAP ? 2 : 1;
-  // The columns divide the flow's own width, so a page is exactly the flow plus the gap between
-  // pages and every page boundary lands on a column boundary. The width is unknown until the
-  // observer below has measured it, and the flow carries no padding that would shift it.
-  const columnWidth = widths.flow > 0 ? (widths.flow - (columns - 1) * GAP) / columns : undefined;
+  // The columns divide the flow's own width. The browser is told how many there are and not how
+  // wide each one is, because a column width is only a suggestion: the browser fits as many as it
+  // can, so one measured a moment too early lays out four narrow columns where two wide ones
+  // belong, and the page step no longer divides them. With C columns of used width cw in a flow of
+  // F, F is C * cw and (C - 1) gaps, so the step F + GAP below is exactly C column pitches: page p
+  // starts at column p * C and every page boundary lands on a column boundary. The width is unknown
+  // until the observer has measured it, and the flow carries no padding that would shift it.
   const step = widths.flow + GAP;
 
   React.useEffect(() => keep(SETTINGS, settings), [settings]);
@@ -169,9 +173,12 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
     // Resize callbacks come in bursts, and a resize that moves no width changes no page, so a
     // measurement that matches what is stored is dropped: storing it would re-run the pagination
     // and lay the whole part out again. The height is not read at all, as no page depends on it.
+    // The flow is measured, not rounded: the cap is written in characters, so its width is rarely a
+    // whole number of pixels, and a step rounded down from it comes up short of a whole column on
+    // every page turned.
     const readWidths = () => {
       const frameWidth = Math.floor(frameElement.clientWidth);
-      const flowWidth = Math.floor(flowElement.clientWidth);
+      const flowWidth = flowElement.getBoundingClientRect().width;
       setWidths((current) => current.frame === frameWidth && current.flow === flowWidth ? current : { frame: frameWidth, flow: flowWidth });
     };
     readWidths();
@@ -203,8 +210,11 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
     const element = flow.current; if (!element || !widths.flow) return;
     // The flow's width is capped in characters, so new text can move it while this part is still
     // laid out at the previous width. Paginating that width would count pages against a step the
-    // next pass no longer uses, and the observer storing the new width runs after this effect.
-    if (Math.floor(element.clientWidth) !== widths.flow) return;
+    // next pass no longer uses, and the observer storing the new width runs after this effect. The
+    // width is read the way it was stored and not as a whole number of pixels: clientWidth rounds a
+    // fractional width up, so the two disagree by a pixel on roughly half the widths a count of
+    // characters produces, and then this effect never counts a page again.
+    if (element.getBoundingClientRect().width !== widths.flow) return;
     const count = Math.max(1, Math.round((element.scrollWidth + GAP) / step));
     counts.current.set(part, count);
     setTotal(count);
@@ -319,8 +329,9 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
   };
 
   const fontFamily = settings.font === 'sans' ? 'var(--font-sans, system-ui)' : settings.font === 'serif' ? 'ui-serif, "New York", Georgia, serif' : '"Iowan Old Style", "Palatino", ui-serif, Georgia, serif';
-  // The text and the probe that measures the measure are set in one style, so the pixels the probe
-  // reports are the ones the text is laid out in.
+  // The page, the text in it and the probe that measures the measure are set in one style: the cap
+  // is written in characters, so it has to resolve against the font the text is set in, and the
+  // pixels the probe reports have to be the ones the text is laid out in.
   const type: React.CSSProperties = { fontFamily, fontSize: settings.size };
   const round = 'flex size-11 items-center justify-center rounded-full bg-[var(--reader-control)] text-[var(--reader-muted)] backdrop-blur';
   const row = 'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[15px] active:bg-[var(--reader-control)]';
@@ -335,9 +346,14 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
     <div className="group/pages relative flex min-h-0 flex-1">
     <div ref={frame} className="relative min-h-0 flex-1 overflow-hidden" style={wide ? undefined : { marginInline: 28 }} onPointerDown={onPointerDown} onPointerUp={onPointerUp} onWheel={onWheel}>
       <span ref={probe} aria-hidden className="folio-reader-probe" style={type} />
-      <div ref={flow} className="folio-reader-flow h-full" data-columns={columns}
-        style={{ ...type, columnWidth, columnGap: GAP, columnFill: 'auto', lineHeight: settings.spacing, transform: `translateX(${-page * step}px)` }}>
-        <BookPart title={part === 0 ? note.title || t('folio.untitled') : undefined} blocks={blocks} numbers={numbers} table={tableText} />
+      {/* One page of the book, capped and centred, and the box that clips it. The flow is as wide
+          as the whole book, so the columns either side of the page have to be clipped here: a frame
+          wider than the page would show them. */}
+      <div className="folio-reader-page h-full" data-columns={columns} style={type}>
+        <div ref={flow} className="folio-reader-flow h-full"
+          style={{ columnCount: columns, columnGap: GAP, columnFill: 'auto', lineHeight: settings.spacing, transform: `translateX(${-page * step}px)` }}>
+          <BookPart title={part === 0 ? note.title || t('folio.untitled') : undefined} blocks={blocks} numbers={numbers} table={tableText} />
+        </div>
       </div>
     </div>
     {/* Arrows appear when the pointer rests near either side (Mac). */}

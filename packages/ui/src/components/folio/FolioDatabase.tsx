@@ -151,6 +151,9 @@ export function FolioDatabase({ table, onChange, viewID, pageOf, onOpenRow, mobi
   const addRow = (values: Record<string, string> = {}) => update({ rows: [...table.rows, { id: crypto.randomUUID(), values }] });
   const removeRow = (rowID: string) => update({ rows: table.rows.filter((r) => r.id !== rowID) });
   const [iconRow, setIconRow] = React.useState<string>();
+  const [removingRow, setRemovingRow] = React.useState<string>();
+  // A row that another surface or a sync removed while its confirmation stood open has nothing left to confirm.
+  const removing = table.rows.find((r) => r.id === removingRow);
   const setIcon = (row: Row, icon: string | undefined) => {
     update({ rows: table.rows.map((r) => { if (r.id !== row.id) return r; const next = { ...r }; if (icon) next.icon = icon; else delete next.icon; return next; }) });
     setPageIcon(row.page, icon ?? '');
@@ -169,6 +172,14 @@ export function FolioDatabase({ table, onChange, viewID, pageOf, onOpenRow, mobi
   const viewName = (v: FolioView) => v.name.trim() || t(`folio.${v.kind}`);
   const more = rows.length > limit && <button type="button" className="mt-1 w-full rounded px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-interactive-hover" onClick={() => setLimit(limit + 200)}>{t('folio.db.showMore', { count: rows.length - limit })}</button>;
   const open = (row: Row) => onOpenRow?.(row.id);
+  /** The row's Open button. A pointer reveals it over the title on hover, as before; touch has no hover, so the phone shows it in the row, where a long title truncates instead of hiding underneath it. */
+  const rowOpen = (row: Row) => <button type="button" onClick={() => open(row)}
+    className={cn('rounded border border-border bg-background text-[11px] text-muted-foreground hover:text-foreground',
+      mobile ? 'min-h-8 shrink-0 px-2 py-1' : 'absolute right-1 top-1 hidden px-1.5 shadow-sm group-hover/row:block')}>{t('folio.db.open')}</button>;
+  /** The row's delete button. A pointer reveals it on hover, as before; touch has no hover, so the phone keeps it in the row, where it asks first, because a row that cannot be brought back must not go on a mis-tap. */
+  const rowRemove = (row: Row) => <button type="button" aria-label={t('folio.remove')}
+    className={cn('rounded px-2 text-muted-foreground hover:bg-interactive-hover', mobile ? 'min-h-8 shrink-0 py-1' : 'invisible group-hover/row:visible')}
+    onClick={() => { if (mobile) setRemovingRow(row.id); else removeRow(row.id); }}>×</button>;
   const props = (row: Row) => shown.filter((c) => c.id !== titleColumn?.id && row.values[c.id]).map((c) => <span key={c.id} className="max-w-full text-xs text-muted-foreground"><CellValue column={c} value={row.values[c.id]} /></span>);
 
   return <section className="my-2 min-w-0 text-sm">
@@ -222,11 +233,10 @@ export function FolioDatabase({ table, onChange, viewID, pageOf, onOpenRow, mobi
         <tbody>{rows.slice(0, limit).map((row) => <tr key={row.id} className="group/row border-b border-border/60 align-top">
           {shown.map((c) => <td key={c.id} className="relative max-w-80 border-r border-border/60 p-0.5 last:border-r-0">
             {c.id === titleColumn?.id
-              ? <div className="flex items-center gap-0.5">{rowIcon(row, true)}<div className="min-w-0 flex-1"><Cell column={c} value={row.values[c.id] || ''} onChange={(value) => setValue(row.id, c.id, value)} /></div></div>
+              ? <div className="flex items-center gap-0.5">{rowIcon(row, true)}<div className="min-w-0 flex-1"><Cell column={c} value={row.values[c.id] || ''} onChange={(value) => setValue(row.id, c.id, value)} /></div>{onOpenRow && rowOpen(row)}</div>
               : <Cell column={c} value={row.values[c.id] || ''} onChange={(value) => setValue(row.id, c.id, value)} />}
-            {c.id === titleColumn?.id && onOpenRow && <button type="button" className="absolute right-1 top-1 hidden rounded border border-border bg-background px-1.5 text-[11px] text-muted-foreground shadow-sm hover:text-foreground group-hover/row:block" onClick={() => open(row)}>{t('folio.db.open')}</button>}
           </td>)}
-          <td><button type="button" aria-label={t('folio.remove')} className="invisible rounded px-2 text-muted-foreground hover:bg-interactive-hover group-hover/row:visible" onClick={() => removeRow(row.id)}>×</button></td>
+          <td>{rowRemove(row)}</td>
         </tr>)}</tbody>
       </table>
       {more}
@@ -282,6 +292,18 @@ export function FolioDatabase({ table, onChange, viewID, pageOf, onOpenRow, mobi
 
     {view.kind === 'chart' && <div role="img" aria-label={t('folio.chart')}>
       <Chart points={chartPoints(table, view, rows)} kind={view.chart?.kind ?? (table.columns.find((c) => c.id === view.chart?.x)?.kind === 'date' ? 'line' : 'bar')} />
+    </div>}
+
+    {mobile && removing && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setRemovingRow(undefined)}>
+      <div role="dialog" aria-label={t('folio.remove')} className="w-full max-w-xs rounded-lg border border-border bg-background p-3 text-sm shadow-lg"
+        onKeyDown={(e) => { if (e.key === 'Escape') setRemovingRow(undefined); }} onClick={(e) => e.stopPropagation()}>
+        <p className="mb-1 font-medium">{t('folio.remove')}</p>
+        <p className="mb-3 text-xs text-muted-foreground">{t('folio.db.deleteRowWarning')}</p>
+        <div className="flex gap-2">
+          <button type="button" className="flex-1 rounded-md bg-destructive px-3 py-2 text-destructive-foreground" onClick={() => { removeRow(removing.id); setRemovingRow(undefined); }}>{t('folio.remove')}</button>
+          <button type="button" autoFocus className="rounded-md bg-secondary px-3 py-2" onClick={() => setRemovingRow(undefined)}>{t('folio.cancel')}</button>
+        </div>
+      </div>
     </div>}
   </section>;
 }

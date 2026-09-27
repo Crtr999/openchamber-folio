@@ -223,6 +223,7 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
   const nativeFor = React.useRef<string | undefined>(undefined);
   const afterClose = React.useRef<MobileView>('home');
   const viewNow = React.useRef(view); viewNow.current = view;
+  const tNow = React.useRef(t); tNow.current = t;
   const selectedNote = useFolioStore((s) => s.status?.notes.find((n) => n.id === s.status?.selectedID));
   const useNative = isCapacitorApp() && view === 'notes' && Boolean(selectedNote) && !selectedNote?.table && classicFor !== selectedNote?.id;
   React.useEffect(() => {
@@ -249,7 +250,14 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
         if (viewNow.current === 'notes') setView(next);
       }),
       nativeEditor.addListener('openNote', ({ noteID }) => {
-        if (useFolioStore.getState().status?.notes.some((n) => n.id === noteID)) void useFolioStore.getState().run({ command: 'select', noteID });
+        const store = useFolioStore.getState();
+        if (!store.status?.notes.some((n) => n.id === noteID)) {
+          // The native editor sits on top of the web view, so the toast only reaches the user once it steps aside.
+          toast.error(tNow.current('folio.db.missing'));
+          closeNative('home');
+          return;
+        }
+        void store.run({ command: 'select', noteID });
       }),
       nativeEditor.addListener('action', ({ kind, noteID }) => {
         const store = useFolioStore.getState();
@@ -267,8 +275,10 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
   }, [closeNative]);
   // The classic editor is a one-time choice for that visit to the page.
   React.useEffect(() => { if (view !== 'notes') setClassicFor(undefined); }, [view]);
-  // Leaving the page by any other route (a notification, a pairing link) closes the native editor too.
-  React.useEffect(() => { if (view !== 'notes' && nativeFor.current) { afterClose.current = view; void nativeEditor.close(); } }, [view]);
+  // Leaving the page by any other route (a notification, a pairing link) closes the native editor too,
+  // and so does a page that turns out to belong in the classic editor: the native one covers the web view
+  // it mounts in, so without this the tap that selected a database would leave the user where they were.
+  React.useEffect(() => { if (nativeFor.current && (view !== 'notes' || !useNative)) { afterClose.current = view; void nativeEditor.close(); } }, [view, useNative]);
 
   // In the classic editor, a button switches back to the native one.
   const classicActive = Boolean(classicFor && classicFor === selectedNote?.id);

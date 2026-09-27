@@ -152,7 +152,12 @@ enum FolioCodec {
         if kind == "task", bool(block["checked"]) {
             body.addAttributes([.strikethroughStyle: NSUnderlineStyle.single.rawValue, .foregroundColor: UIColor.secondaryLabel], range: NSRange(location: 0, length: body.length))
         }
-        if kind == "page" || kind == "pageIn" || kind == "database" { body.addAttribute(.foregroundColor, value: UIColor.link, range: NSRange(location: 0, length: body.length)) }
+        // Tapping one of these lines opens the page it points at, so it is drawn the way a real link
+        // looks in this text view. One pointing at nothing stays plain, rather than inviting a tap
+        // that goes nowhere.
+        if (kind == "page" || kind == "pageIn" || kind == "database"), titles[string(block["asset"])] != nil {
+            body.addAttributes([.foregroundColor: UIColor.link, .underlineStyle: NSUnderlineStyle.single.rawValue], range: NSRange(location: 0, length: body.length))
+        }
         if !locked.contains(kind), kind != "code", let marks = block["marks"] as? [Any] {
             for case let mark as [String: Any] in marks {
                 let start = int(mark["start"]), length = int(mark["length"])
