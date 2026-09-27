@@ -1,4 +1,6 @@
 import { responseSchema, requestSchema } from '@/lib/folio/schema';
+import { withNoteDeltas } from '@/lib/folio/delta';
+import { setFolioAssetReader } from '@/lib/folio/assets';
 import { z } from 'zod';
 import type { RuntimeAPIs } from '@/lib/api/types';
 import { getInjectedBootOutcome } from '@/lib/desktopBoot';
@@ -859,7 +861,14 @@ export const fetchDesktopInstalledApps = async (
 
 export const createDesktopFolioAPI = (): RuntimeAPIs['folio'] => {
   if (!canUseElectronDesktopIPC() || getElectronPlatform() !== 'darwin') return undefined;
-  return { async request(input) { const payload = requestSchema.parse(input); return responseSchema.parse(await invokeDesktop('desktop_folio', payload)); } };
+  setFolioAssetReader(async (asset) => {
+    const reply = await invokeDesktop<{ data?: string }>('desktop_folio_asset', { asset });
+    if (!reply?.data) return undefined;
+    const bytes = Uint8Array.from(atob(reply.data), (c) => c.charCodeAt(0));
+    const ext = asset.split('.').pop()?.toLowerCase() ?? '';
+    return new Blob([bytes], { type: ext === 'svg' ? 'image/svg+xml' : ext === 'jpg' ? 'image/jpeg' : `image/${ext}` });
+  });
+  return withNoteDeltas(async (input) => responseSchema.parse(await invokeDesktop('desktop_folio', requestSchema.parse(input))));
 };
 
 const folioSyncStatusSchema = z.object({

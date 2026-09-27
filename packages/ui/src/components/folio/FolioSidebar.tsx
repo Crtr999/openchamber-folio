@@ -75,9 +75,14 @@ export function FolioSidebar() {
   const trashed = (notes ?? []).filter((note) => note.trashed);
   const favorites = live.filter((note) => note.favorite);
   const byParent = new Map<string, FolioNote[]>();
+  const liveIDs = new Set(live.map((n) => n.id));
+  // A database's row pages open from its rows (like Notion), not from the page tree.
+  const rowPages = new Set(live.flatMap((n) => n.table?.rows.flatMap((r) => (r.page ? [r.page] : [])) ?? []));
   for (const note of live) {
-    const key = note.parentID && live.some((p) => p.id === note.parentID) ? note.parentID : '';
-    byParent.set(key, [...(byParent.get(key) ?? []), note]);
+    if (rowPages.has(note.id)) continue;
+    const key = note.parentID && liveIDs.has(note.parentID) ? note.parentID : '';
+    const list = byParent.get(key);
+    if (list) list.push(note); else byParent.set(key, [note]);
   }
   const leave = () => useUIStore.getState().closeMainSurfaces();
   const open = (note: FolioNote) => { leave(); void useFolioStore.getState().run({ command: 'select', noteID: note.id }); };

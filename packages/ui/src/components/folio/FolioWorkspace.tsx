@@ -16,6 +16,9 @@ import { FolioRichBlock, folioNoteLinkPrefix, type FocusAt, type MentionState, t
 import './folio.css';
 import { FolioReader } from './FolioReader';
 import { FolioAskPanel } from './FolioAskPanel';
+import { FolioAttachment, FolioButton, FolioDatabaseBlock, FolioRowProperties, FolioSimpleTable } from './FolioBlocks';
+import { openDatabaseRow, useRowOf } from '@/lib/folio/rows';
+import { useFolioAskStore } from '@/lib/folio/ask';
 import { FolioHabits } from './FolioHabits';
 import { sortSiblings } from '@/lib/folio/order';
 import { moveBlockBefore, moveBlockBeside, pageSegments } from '@/lib/folio/columns';
@@ -79,6 +82,8 @@ export interface FolioMobileHooks {
   /** Summarizes the page with the phone's chat model and appends the summary. */
   /** `done` runs once the summary is on the page (the native editor reopens it). */
   onSummarize: (note: FolioNote, done?: () => void) => void;
+  /** Set while the classic editor is showing on the iPhone: switches back to the native editor. */
+  onNativeEditor?: () => void;
 }
 
 /** The Mac engine writes seconds since 2001; the iPhone engine writes milliseconds since 1970. */
@@ -189,9 +194,8 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   React.useEffect(() => { if (localFocus && !mobile) void reportFolioFocus(localFocus).catch(() => undefined); }, [localFocus, mobile]);
   const [syncOpen, setSyncOpen] = React.useState(false);
   // Ask AI sits beside the page on the Mac (the phone has its own chat screen).
-  const [askOpen, setAskOpenState] = React.useState(() => { try { return localStorage.getItem('folio.ask.open') === '1'; } catch { return false; } });
-  const setAskOpen = React.useCallback((open: boolean) => { setAskOpenState(open); try { localStorage.setItem('folio.ask.open', open ? '1' : '0'); } catch { /* storage blocked */ } }, []);
-  const askToggle = React.useRef(() => {}); askToggle.current = () => setAskOpen(!askOpen);
+  const askOpen = useFolioAskStore((s) => s.open);
+  const setAskOpen = useFolioAskStore((s) => s.setOpen);
   const [recordConfirm, setRecordConfirm] = React.useState(false);
   const [iconOpen, setIconOpen] = React.useState(false);
   const [linkOpen, setLinkOpen] = React.useState(false);
@@ -206,6 +210,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   const selected = status?.notes.find((n) => n.id === status.selectedID);
   const note = !home && selected ? (drafts[selected.id]?.note || selected) : undefined;
   const title = note?.title;
+  const rowOf = useRowOf(note);
   React.useLayoutEffect(() => {
     const element = titleRef.current;
     if (!element) return;
@@ -263,7 +268,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
       if (key === 'n' || key === 'j' || (key === 'e' && event.shiftKey)) {
         event.preventDefault(); event.stopImmediatePropagation();
         if (key === 'n') void useFolioStore.getState().run({ command: 'create' });
-        if (key === 'j') { if (mobile) void useFolioStore.getState().run({ command: 'utility', kind: 'assistant' }); else askToggle.current(); }
+        if (key === 'j') { if (mobile) void useFolioStore.getState().run({ command: 'utility', kind: 'assistant' }); else useFolioAskStore.getState().toggle(); }
         if (key === 'e') void useFolioStore.getState().run({ command: 'export' });
       }
     };
@@ -379,7 +384,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
 
   // ---- "/" commands.
   const slashCommands = React.useMemo<SlashCommand[]>(() => [
-    ...blockKinds.filter((kind) => kind !== 'attachment' && kind !== 'pageIn' && kind !== 'toggleHeading4').map((kind): SlashCommand => ({
+    ...blockKinds.filter((kind) => kind !== 'attachment' && kind !== 'pageIn' && kind !== 'toggleHeading4' && kind !== 'database' && kind !== 'button').map((kind): SlashCommand => ({
       id: kind, kind, glyph: /eading([1-4])$/.exec(kind)?.[1] ? `H${/eading([1-4])$/.exec(kind)?.[1]}` : undefined, label: t(`folio.block.${kind}`), icon: blockIcons.get(kind) ?? (kind.startsWith('toggle') ? 'arrow-right-s' : 'text'), keys: blockAliases.get(kind) ?? [kind.toLowerCase()], group: 'basic',
     })),
     { id: 'db-board', database: 'board', label: t('folio.board'), icon: 'layout-column', keys: ['board', 'kanban', 'stages', 'todo board'], group: 'databases' },
@@ -400,10 +405,12 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
     const response = await run({ command: 'create', kind: kind === 'library' ? 'library' : 'table', parentID: original.id });
     const createdID = response?.state?.selectedID;
     if (!createdID || createdID === original.id) return;
+    // The database sits inside the page (Notion's inline database); the page stays open.
     const parent = noteByID(original.id);
-    if (parent) edit({ ...parent, blocks: parent.blocks.map((b) => b.id === blockID ? { ...b, kind: 'page', asset: createdID, text: '' } : b) });
+    if (parent) edit({ ...parent, blocks: parent.blocks.map((b) => b.id === blockID ? { ...b, kind: 'database', asset: createdID, text: '' } : b) });
     const created = noteByID(createdID);
     if (created?.table && kind === 'board') edit({ ...created, table: { ...created.table, view: 'board' } });
+    await run({ command: 'select', noteID: original.id });
   };
   const applySlash = (command: SlashCommand | undefined) => {
     const state = slash; setSlash(null);
@@ -411,6 +418,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
     const current = latestNote(); const block = current?.blocks.find((b) => b.id === state.blockID); if (!block) return;
     if (command.database) { void createDatabase(block.id, command.database); return; }
     if (!command.kind) return;
+    if (command.kind === 'table') { updateBlock({ ...block, kind: 'table', text: '\t\n\t', checked: true, marks: [] }); insertAfter(block.id, makeBlock()); return; }
     updateBlock({ ...block, kind: command.kind, text: '', marks: [] });
     if (command.kind === 'divider') insertAfter(block.id, makeBlock()); else focusBlock(block.id, 'end');
   };
@@ -553,6 +561,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
         </>}
       </nav>
       {note && <div className="ml-2 flex shrink-0 items-center gap-0.5" role="toolbar" aria-label={t('folio.more')} onMouseDown={(e) => e.preventDefault()}>
+        {mobile?.onNativeEditor && !note.table && <button type="button" className="mr-1 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground" onClick={() => { void useFolioStore.getState().flush().catch(() => undefined).then(() => mobile.onNativeEditor?.()); }}>{t('folio.newEditor')}</button>}
         <button type="button" className={tool} title={t('folio.readerOpen')} aria-label={t('folio.readerOpen')} onClick={() => { void useFolioStore.getState().flush().catch(() => undefined); setReading(true); }}>
           <Icon name="book-open" className="size-4" />
         </button>
@@ -574,9 +583,6 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
       <span className={cn('px-2 text-xs text-muted-foreground', mobile && 'sr-only')} aria-live="polite">{saving || Object.keys(drafts).length ? t('folio.saving') : t('folio.saved')}</span>
       {note && !mobile && <button type="button" className={quiet} disabled={note.excludedFromAI} onClick={() => void compose()}>{t('folio.addToChat')}</button>}
       <div className="relative">
-        {!mobile && note && <button type="button" className={cn(quiet, 'flex items-center gap-1.5', askOpen && 'bg-interactive-selection text-foreground')} aria-pressed={askOpen} title={`${t('folio.askTitle')} (⌘J)`} onClick={() => setAskOpen(!askOpen)}>
-          <Icon name="sparkling" className="size-4" />{t('folio.askTitle')}
-        </button>}
         <button type="button" className={quiet} aria-label={t('folio.more')} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}><Icon name="more-fill" className="size-4" /></button>
         {menuOpen && <>
           <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
@@ -593,6 +599,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
               <button type="button" className={menuItem} onClick={() => { edit({ ...note, excludedFromAI: !note.excludedFromAI }); setMenuOpen(false); }}><Icon name="lock" className="size-4 text-muted-foreground" />{t('folio.private')}{note.excludedFromAI ? ' ✓' : ''}</button>
               <label className={cn(menuItem, 'cursor-default')}><Icon name="folder" className="size-4 text-muted-foreground" /><select className="min-w-0 flex-1 bg-transparent text-sm" aria-label={t('folio.parent')} value={note.parentID || ''} onChange={(e) => edit({ ...note, parentID: e.target.value || undefined })}><option value="">{t('folio.parent')}: {t('folio.root')}</option>{status.notes.filter((n) => !isDescendant(n.id) && !n.trashed).map((n) => <option key={n.id} value={n.id}>{n.title || t('folio.untitled')}</option>)}</select></label>
               <button type="button" className={menuItem} onClick={() => { setMenuOpen(false); setReading(true); }}><Icon name="book-open" className="size-4 text-muted-foreground" />{t('folio.readerOpen')}</button>
+              {!mobile && <button type="button" className={menuItem} aria-pressed={Boolean(note.wide)} onClick={() => { setMenuOpen(false); const current = latestNote(); if (current) edit({ ...current, wide: !current.wide || undefined }); }}><Icon name="layout-column" className="size-4 text-muted-foreground" />{t(note.wide ? 'folio.narrow' : 'folio.wide')}</button>}
               <button type="button" className={menuItem} onClick={() => call({ command: 'duplicate' })}><Icon name="file-copy" className="size-4 text-muted-foreground" />{t('folio.duplicate')}</button>
               {!mobile && <button type="button" className={menuItem} onClick={() => utility('history')}><Icon name="history" className="size-4 text-muted-foreground" />{t('folio.history')}</button>}
               <div className="my-1 border-t border-border" />
@@ -604,6 +611,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
               {!mobile && <button type="button" className={cn(menuItem, 'pl-4')} onClick={exportForPhone}>{t('folio.exportForPhone')}</button>}
             </>}
             <div className="my-1 border-t border-border" />
+            {mobile?.onNativeEditor && note && !note.table && <button type="button" className={menuItem} onClick={() => { setMenuOpen(false); void useFolioStore.getState().flush().catch(() => undefined).then(() => mobile.onNativeEditor?.()); }}><Icon name="edit-2" className="size-4 text-muted-foreground" />{t('folio.newEditor')}</button>}
             {mobile && note && <button type="button" className={menuItem} disabled={note.excludedFromAI} onClick={() => { setMenuOpen(false); mobile.onSummarize(note); }}><Icon name="sparkling" className="size-4 text-muted-foreground" />{t('folio.summarize')}</button>}
             {(['calendar', 'assistant', 'settings'] as const).map((kind) => <button key={kind} type="button" className={menuItem} onClick={() => {
               // The iPhone reads its own calendar; the Mac opens the native calendar window.
@@ -658,7 +666,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
         </button>)}
       </div>}
 
-      {note && <article ref={articleRef} className={cn('relative mx-auto w-full max-w-5xl pb-40', mobile ? 'pl-8 pr-4 pt-4' : 'pl-14 pr-8 pt-10', blockRange && 'select-none')} style={{ fontSize: status.fontSize }}
+      {note && <article ref={articleRef} className={cn('relative mx-auto w-full pb-40', note.wide && !mobile ? 'max-w-none' : 'max-w-5xl', mobile ? 'pl-8 pr-4 pt-4' : 'pl-14 pr-8 pt-10', blockRange && 'select-none')} style={{ fontSize: status.fontSize }}
         onPointerDown={onRangePointerDown} onPointerMove={onRangePointerMove} onPointerUp={onRangePointerUp}>
         {/* Where a dragged block will land. */}
         {dragging && <div aria-hidden className="pointer-events-none absolute z-20 rounded bg-[var(--primary)]" style={{ top: dragging.bar.top, left: dragging.bar.left, width: dragging.bar.width, height: dragging.bar.height }} />}
@@ -673,11 +681,22 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
         {/* Wraps like Notion instead of cutting off long titles. */}
         <textarea rows={1} ref={titleRef}
           aria-label={t('folio.title')} placeholder={t('folio.untitled')} className={cn('mb-1 block w-full resize-none overflow-hidden bg-transparent font-bold leading-tight outline-none placeholder:text-muted-foreground/50', mobile ? 'text-[2em]' : 'text-[2.5em]')} value={note.title}
-          onChange={(e) => { edit({ ...note, title: e.target.value.replace(/\n/g, ' ') }); e.target.style.height = 'auto'; e.target.style.height = `${e.target.scrollHeight}px`; }}
+          onChange={(e) => {
+            const title = e.target.value.replace(/\n/g, ' ');
+            edit({ ...note, title });
+            // A database row's page and its row share one name, like Notion.
+            if (rowOf?.database.table) {
+              const titleColumn = rowOf.database.table.columns.find((c) => c.kind === 'title') ?? rowOf.database.table.columns[0];
+              if (titleColumn) edit({ ...rowOf.database, table: { ...rowOf.database.table, rows: rowOf.database.table.rows.map((r) => (r.id === rowOf.row.id ? { ...r, values: { ...r.values, [titleColumn.id]: title } } : r)) } });
+            }
+            e.target.style.height = 'auto'; e.target.style.height = `${e.target.scrollHeight}px`;
+          }}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const first = note.blocks[0]; if (first) focusBlock(first.id, 'start'); else insertAfter(undefined, makeBlock()); } }} />
         <input aria-label={t('folio.tags')} placeholder={`# ${t('folio.tags')}`} className="mb-6 w-full bg-transparent text-sm text-muted-foreground outline-none placeholder:text-muted-foreground/40" value={note.tags.join(', ')} onChange={(e) => edit({ ...note, tags: e.target.value.split(',').map((s) => s.trim()) })} />
 
-        {note.table && <FolioDatabase table={note.table} onChange={(table) => edit({ ...note, table })} />}
+        {rowOf && <FolioRowProperties database={rowOf.database} row={rowOf.row} />}
+        {note.table && <FolioDatabase table={note.table} onChange={(table) => { const current = latestNote(); if (current) edit({ ...current, table }); }} mobile={Boolean(mobile)}
+          pageOf={(id) => status.notes.find((n) => n.id === id)} onOpenRow={(rowID) => void openDatabaseRow(note.id, rowID)} />}
 
         {(() => {
           const renderBlock = (block: FolioBlock, blockIndex: number): React.ReactNode => {
@@ -700,7 +719,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
               <div className="fixed inset-0 z-30" onClick={() => setBlockMenuID(undefined)} />
               <div className={cn('absolute top-7 z-40 max-h-96 w-60 overflow-y-auto rounded-xl border border-border bg-background p-1.5 shadow-2xl', mobile ? 'left-0' : '-left-12')}>
                 <div className="px-2 pb-1 text-xs text-muted-foreground">{t('folio.block')}</div>
-                {blockKinds.filter((kind) => kind !== 'attachment').map((kind) => <button key={kind} type="button" className={cn(menuItem, block.kind === kind && 'bg-interactive-selection')} onClick={() => { setKind(block.id, kind); setBlockMenuID(undefined); }}>{t(`folio.block.${kind}`)}</button>)}
+                {blockKinds.filter((kind) => kind !== 'attachment' && kind !== 'database' && kind !== 'button').map((kind) => <button key={kind} type="button" className={cn(menuItem, block.kind === kind && 'bg-interactive-selection')} onClick={() => { setKind(block.id, kind); setBlockMenuID(undefined); }}>{t(`folio.block.${kind}`)}</button>)}
                 <div className="px-2 pb-1 pt-2 text-xs text-muted-foreground">{t('folio.highlight')}</div>
                 <div className="px-2 pb-2"><Swatches compact kind="highlight" label={colorLabel('highlight')} onPick={(color) => updateBlock({ ...block, highlight: color })} /></div>
                 <div className="flex border-t border-border pt-1">
@@ -718,7 +737,10 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
             {isToggle && <button type="button" className="mt-[0.2em] shrink-0 rounded p-0.5 text-muted-foreground hover:bg-interactive-hover" aria-expanded={!toggled} aria-label={t('folio.open')} onClick={() => updateBlock({ ...block, checked: !block.checked })}><Icon name="arrow-right-s" className={cn('size-4 transition-transform', !toggled && 'rotate-90')} /></button>}
             {block.kind === 'callout' && <span className="shrink-0 leading-[1.65]">💡</span>}
             {block.kind === 'divider' ? <hr className="my-3 flex-1 border-border" />
-              : block.kind === 'attachment' ? <button type="button" className="flex items-center gap-2 rounded-md px-1 py-0.5 text-sm hover:bg-interactive-hover" onClick={() => call({ command: 'open-attachment', blockID: block.id })}><Icon name="clipboard" className="size-4" />{block.text || t('folio.attach')}</button>
+              : block.kind === 'attachment' ? <FolioAttachment block={block} onOpen={() => call({ command: 'open-attachment', blockID: block.id })} />
+              : block.kind === 'database' ? <FolioDatabaseBlock block={block} mobile={Boolean(mobile)} />
+              : block.kind === 'table' ? <FolioSimpleTable block={block} onChange={updateBlock} />
+              : block.kind === 'button' ? <FolioButton block={block} />
               : linked ? <button type="button" className="flex items-center gap-2 rounded-md px-1 py-0.5 font-medium underline decoration-border underline-offset-4 hover:bg-interactive-hover" onClick={() => call({ command: 'select', noteID: linked.id })}><FolioIcon value={linked.icon} />{linked.title || t('folio.untitled')}</button>
               : (block.kind === 'page' || block.kind === 'pageIn') && !block.text ? <select className="rounded-md bg-transparent px-1 py-0.5 text-sm text-muted-foreground hover:bg-interactive-hover" aria-label={t('folio.openPage')} value="" onChange={(e) => updateBlock({ ...block, asset: e.target.value })}><option value="">{t('folio.openPage')}…</option>{status.notes.filter((n) => !n.trashed && n.id !== note.id).map((n) => <option key={n.id} value={n.id}>{n.title || t('folio.untitled')}</option>)}</select>
               : <FolioRichBlock block={block} commitDelay={mobile ? MOBILE_COMMIT_DELAY : 0} lazy={Boolean(mobile)}
@@ -748,12 +770,12 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
           return pageSegments(note.blocks).map((segment) => segment.kind === 'block'
             ? renderBlock(segment.block, segment.index)
             : <div key={`row-${segment.row}`} className={cn('flex items-start', mobile ? 'flex-col' : 'gap-8')}>
-              {segment.columns.map((column, c) => <div key={c} className="min-w-0 flex-1">{column.map(({ block, index }) => renderBlock(block, index))}</div>)}
+              {segment.columns.map((column, c) => { const share = mobile ? undefined : column[0]?.block.width; return <div key={c} className={cn('min-w-0', mobile ? 'w-full' : share ? 'shrink' : 'flex-1')} style={share ? { flex: `${share} 1 0%` } : undefined}>{column.map(({ block, index }) => renderBlock(block, index))}</div>; })}
             </div>);
         })()}
         {/* Pages and databases inside this page are listed in it, like Notion's nested pages. */}
         {(() => {
-          const linked = new Set(note.blocks.flatMap((b) => (b.kind === 'page' || b.kind === 'pageIn') && b.asset ? [b.asset] : []));
+          const linked = new Set([...note.blocks.flatMap((b) => (b.kind === 'page' || b.kind === 'pageIn' || b.kind === 'database' || b.kind === 'button') && b.asset ? [b.asset] : []), ...(note.table?.rows.flatMap((r) => (r.page ? [r.page] : [])) ?? [])]);
           const inside = sortSiblings(status.notes.filter((n) => n.parentID === note.id && !n.trashed && !linked.has(n.id)));
           if (!inside.length) return null;
           return <div className="mt-4">{inside.map((child) => <button key={child.id} type="button" className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-interactive-hover" onClick={() => call({ command: 'select', noteID: child.id })}>

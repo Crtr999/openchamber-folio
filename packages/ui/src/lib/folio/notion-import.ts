@@ -62,7 +62,8 @@ export function parseCSV(text: string): string[][] {
     } else field += c;
   }
   if (field || row.length) { row.push(field); rows.push(row); }
-  return rows.filter((r) => r.some((cell) => cell.trim()));
+  // A row of empty cells is still a record ("a,,"); only blank lines are dropped.
+  return rows.filter((r) => r.length > 1 || r.some((cell) => cell.trim()));
 }
 
 /** Markdown inline formatting to plain text plus Folio marks. */
@@ -249,16 +250,11 @@ function blocksFrom(markdown: string, dir: string, resolve: (target: string) => 
         i += 1;
         if (lines[i].trim().startsWith('|')) rows.push(lines[i].trim()); else rows[rows.length - 1] += `\n${lines[i].trim()}`;
       }
-      const cells = rows.filter((r) => !/^\|[\s|:-]+\|?$/.test(r)).map((r) => r.replace(/^\||\|$/g, '').split('|').map((c) => c.trim()));
+      const cells = rows.filter((r) => !/^\|[\s|:-]+\|?$/.test(r)).map((r) => r.replace(/^\||\|$/g, '').split('|').map((c) => c.trim().replace(/\n/g, ' ').replace(/\t/g, ' ')));
       const [head, ...body] = cells;
       if (head && head.length === 2 && !body.length) { push('text', `**${head[0]}**: ${head[1]}`, indent); continue; }
-      const table = body.length ? body : [];
-      if (head && head.length === 2) {
-        for (const row of [head, ...table]) push('text', `**${row[0]}**: ${row.slice(1).join(' ')}`, indent);
-      } else {
-        if (head) push('text', `**${head.join(' · ')}**`, indent);
-        for (const row of table) push('bullet', row.join(' · '), indent);
-      }
+      // A Notion table becomes a simple table block; its first row is the header in Markdown.
+      if (head) blocks.push({ ...makeBlock(), kind: 'table', text: cells.map((r) => r.join('\t')).join('\n'), checked: true, indent: indent || undefined });
       continue;
     }
 

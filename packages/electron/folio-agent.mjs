@@ -109,7 +109,7 @@ export function createFolioAgent({ engine, onChanged = () => {} }) {
       return {
         ...summary(note),
         markdown: noteToMarkdown(note),
-        blocks: note.blocks.map((block) => ({ id: block.id, kind: block.kind, text: block.text.slice(0, 500), ...(block.kind === 'task' ? { checked: block.checked } : {}), ...(block.kind === 'page' && block.asset ? { page: block.asset } : {}) })),
+        blocks: note.blocks.map((block) => ({ id: block.id, kind: block.kind, text: block.text.slice(0, 500), ...(block.kind === 'task' ? { checked: block.checked } : {}), ...(block.kind === 'page' && block.asset ? { page: block.asset } : {}), ...(block.kind === 'database' && block.asset ? { database: block.asset } : {}) })),
         ...(note.table ? { columns: note.table.columns.map((c) => ({ name: c.name, kind: c.kind, ...(c.options.length ? { options: c.options } : {}) })), rows: note.table.rows.map((row) => ({ id: row.id, ...Object.fromEntries(note.table.columns.map((c) => [c.name, row.values[c.id] ?? ''])) })) } : {}),
       };
     },

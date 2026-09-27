@@ -72,6 +72,8 @@ export interface LocalEngine extends FolioAPI {
   addNote(note: FolioNote): Promise<void>;
   /** An attachment's bytes, from the phone or copied from the Mac. */
   attachment(noteID: string, name: string): Promise<Blob | undefined>;
+  /** An attachment's bytes by its reference, for showing images inline. */
+  readAsset(asset: string): Promise<Blob | undefined>;
 }
 
 const assetPrefix = 'asset:';
@@ -143,6 +145,14 @@ export function noteToMarkdown(note: FolioNote, plain = false): string {
       case 'code': return `\`\`\`\n${t}\n\`\`\``;
       case 'equation': return `$$\n${t}\n$$`;
       case 'divider': return '---';
+      case 'database': return `[Database](folio://note/${b.asset ?? ''})`;
+      case 'button': return `[${b.text}]`;
+      case 'table': {
+        const rows = b.text.split('\n').map((line) => line.split('\t').map((cell) => cell.replace(/\|/g, '\\|')));
+        const width = Math.max(1, ...rows.map((r) => r.length));
+        const line = (cells: string[]) => `| ${[...cells, ...Array.from({ length: width - cells.length }, () => '')].join(' | ')} |`;
+        return [line(rows[0] ?? []), line(Array.from({ length: width }, () => '---')), ...rows.slice(1).map(line)].join('\n');
+      }
       default: return t;
     }
   }).join('\n\n');
@@ -438,6 +448,16 @@ export function createLocalFolioEngine({ storage, host, onChange, now = () => Da
   return {
     ready,
     backup,
+    /** An attachment's bytes for showing it inline: stored on the phone, or fetched from the Mac and kept. */
+    readAsset: async (asset: string) => {
+      await ready;
+      let file = asset.startsWith(assetPrefix) ? await storage.getAsset(asset.slice(assetPrefix.length)) : await storage.getAsset(asset);
+      if (!file && asset.startsWith(macAssetPrefix)) {
+        file = await host.downloadAsset(asset);
+        if (file) await storage.putAsset(asset, file);
+      }
+      return file;
+    },
     importBackup: async (text) => { const list = parseBackup(text); await addNotes(list); changed(); return list.length; },
     changedSince: (time) => notes.filter((n) => n.modified > time),
     attachFiles: async (noteID, files) => { await ready; await attach(noteID, files); changed(); },

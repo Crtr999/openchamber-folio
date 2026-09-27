@@ -3517,6 +3517,14 @@ const closeAllDevTunnels = () => {
 const handleInvoke = async (browserWindow, command, args = {}) => {
   switch (command) {
     case 'desktop_folio': return folioEngine.request(args);
+    case 'desktop_folio_asset': {
+      // An image attachment's bytes, so pages show pictures inline. Library files only, images only.
+      const asset = typeof args?.asset === 'string' ? args.asset : '';
+      if (!/^assets\/[A-Za-z0-9._-]+\.(png|jpe?g|gif|webp|heic|avif|svg)$/i.test(asset)) throw new Error('Only image attachments can be shown inline.');
+      const response = await folioEngine.syncRequest({ command: 'asset-read', text: asset });
+      if (!response.ok || typeof response.text !== 'string') throw new Error(response.error || 'Folio could not read the image.');
+      return { data: response.text };
+    }
     case 'desktop_folio_sync': {
       const action = args?.action;
       if (action === 'enable') return folioSync.enable();
@@ -4764,7 +4772,7 @@ const COMMANDS_SAFE_FOR_REMOTE = new Set([
 ]);
 
 ipcMain.handle('openchamber:invoke', async (event, command, args) => {
-  if ((command === 'desktop_folio' || command === 'desktop_folio_sync' || command === 'desktop_openrouter_credits') && event.senderFrame !== event.sender.mainFrame) throw new Error('Folio is available only to the local main application.');
+  if ((command === 'desktop_folio' || command === 'desktop_folio_asset' || command === 'desktop_folio_sync' || command === 'desktop_openrouter_credits') && event.senderFrame !== event.sender.mainFrame) throw new Error('Folio is available only to the local main application.');
   if (!isLocalSender(event.sender) && !COMMANDS_SAFE_FOR_REMOTE.has(command)) {
     log.warn(`[ipc] rejected ${command} from non-local origin: ${event.sender?.getURL?.() || '(unknown)'}`);
     throw new Error('IPC not available for this origin');

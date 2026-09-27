@@ -61,3 +61,6 @@
 .folio-reader-flow .folio-reader-file { font-size: 0.8em; color: var(--reader-muted); text-align: left; }
 .folio-reader-flow a { color: inherit; text-decoration-color: var(--reader-muted); }
 .folio-reader-flow mark { background: color-mix(in srgb, var(--reader-accent) 25%, transparent); color: inherit; }
+
+.folio-reader-table { border-collapse: collapse; margin: 0.8em 0; font-size: 0.9em; }
+.folio-reader-table td { border: 1px solid var(--border); padding: 0.3em 0.6em; vertical-align: top; }

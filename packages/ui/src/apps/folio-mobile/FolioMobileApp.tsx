@@ -1,6 +1,7 @@
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { FolioWorkspace, type FolioMobileHooks } from '@/components/folio/FolioWorkspace';
+import { setFolioAssetReader } from '@/lib/folio/assets';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { createIndexedDBStorage, createLocalFolioEngine } from '@/lib/folio/local-engine';
@@ -75,6 +76,7 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
 
   React.useEffect(() => {
     useFolioStore.getState().bind(engine);
+    setFolioAssetReader((asset) => engine.readAsset(asset));
     void engine.ready.then(() => { useFolioStore.setState({ open: true }); return useFolioStore.getState().refresh(); });
     void useMobileChatStore.getState().load();
     const sync = useSyncStore.getState();
@@ -268,6 +270,9 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
   // Leaving the page by any other route (a notification, a pairing link) closes the native editor too.
   React.useEffect(() => { if (view !== 'notes' && nativeFor.current) { afterClose.current = view; void nativeEditor.close(); } }, [view]);
 
+  // In the classic editor, a button switches back to the native one.
+  const classicActive = Boolean(classicFor && classicFor === selectedNote?.id);
+  const classicMobile = React.useMemo((): FolioMobileHooks => (classicActive ? { ...mobile, onNativeEditor: () => setClassicFor(undefined) } : mobile), [classicActive, mobile]);
   const pane = (content: React.ReactNode) => <SwipeBackPane onBack={goHome} onPeek={setPeek}>{content}</SwipeBackPane>;
 
   return <div className="folio-mobile flex h-full flex-col bg-background pt-[env(safe-area-inset-top)]">
@@ -283,7 +288,7 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
         <MobileHome onView={setView} onOpenNote={openNote} onNewPage={newPage} onAsk={askAI}
           onOpenSessions={() => { setView('chats'); setSessionsRequest((n) => n + 1); }} />
       </React.Activity>
-      {view === 'notes' && !useNative && pane(<FolioWorkspace mobile={mobile} />)}
+      {view === 'notes' && !useNative && pane(<FolioWorkspace mobile={classicMobile} />)}
       {view === 'search' && pane(<MobileSearch onBack={goHome} onOpenNote={openNote} onAsk={(prompt) => { useMobileChatStore.setState({ pendingPrompt: prompt }); openChat(undefined, 'home'); }} />)}
       {view === 'calendar' && pane(<MobileCalendar onBack={goHome} onOpened={() => setView('notes')} />)}
       {view === 'assistant' && pane(<MobileAssistantList onBack={goHome} onOpen={(id) => openChat(id, 'assistant')} />)}

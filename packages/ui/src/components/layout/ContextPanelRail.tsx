@@ -43,6 +43,8 @@ import { useGuestSurfaces } from '@/hooks/useGuestSurfaces';
 import { useGuestBadgeStore } from '@/lib/guests/badge-store';
 import { isPluginContextPanelMode, pluginIdFromMode } from '@/lib/surfaces/modes';
 import { ContextRailSurfacesDialog } from './ContextRailSurfacesDialog';
+import { useFolioAskStore } from '@/lib/folio/ask';
+import { useFolioStore } from '@/lib/folio/store';
 
 const RAIL_TOOLTIP_DELAY_MS = 150;
 // Hold the surface-switch modifier for this long before revealing the order
@@ -304,6 +306,9 @@ export const ContextPanelRail: React.FC = () => {
   }, [activeMode, closeContextPanel, directoryKey, githubAuthChecked, githubConnected]);
 
   const [isSurfacesDialogOpen, setIsSurfacesDialogOpen] = React.useState(false);
+  // Folio's Ask AI lives on this rail, under Configure panels, while a page is open.
+  const folioAskAvailable = useFolioStore((s) => s.open && !s.home && Boolean(s.status?.selectedID) && !s.status?.notes.find((n) => n.id === s.status?.selectedID)?.table);
+  const folioAskOpen = useFolioAskStore((s) => s.open);
 
   const handleDragEnd = React.useCallback((event: DragEndEvent) => {
     const { active, over } = event;
@@ -321,7 +326,7 @@ export const ContextPanelRail: React.FC = () => {
     setContextRailOrder(arrayMove(orderedIds, fromIndex, toIndex));
   }, [guestSurfaces, setContextRailOrder]);
 
-  if (!directoryKey) {
+  if (!directoryKey && !folioAskAvailable) {
     return null;
   }
 
@@ -332,7 +337,7 @@ export const ContextPanelRail: React.FC = () => {
     >
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={surfaces.map((surface) => surface.id)} strategy={verticalListSortingStrategy}>
-          {surfaces.map((surface, index) => {
+          {(directoryKey ? surfaces : []).map((surface, index) => {
             const label = surface.label ?? t(surface.labelKey);
             // Git shows a numeric badge instead of the old activity dot.
             // Other surfaces never inherit git's changed-files signal.
@@ -399,6 +404,22 @@ export const ContextPanelRail: React.FC = () => {
           {t('contextRail.configure.open')}
         </TooltipContent>
       </Tooltip>
+      {folioAskAvailable && <Tooltip delayDuration={RAIL_TOOLTIP_DELAY_MS}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={t('folio.askTitle')}
+            aria-pressed={folioAskOpen}
+            onClick={() => useFolioAskStore.getState().toggle()}
+            className={cn('flex h-9 w-9 items-center justify-center rounded-md transition-colors', folioAskOpen ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}
+          >
+            <Icon name="sparkling" className="h-[18px] w-[18px]" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="left" sideOffset={8}>
+          {t('folio.askTitle')} (⌘J)
+        </TooltipContent>
+      </Tooltip>}
       <ContextRailSurfacesDialog open={isSurfacesDialogOpen} onOpenChange={setIsSurfacesDialogOpen} />
     </nav>
   );

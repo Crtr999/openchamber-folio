@@ -73,7 +73,8 @@ function BookBlock({ block, index, number }: { block: FolioBlock; index: number;
     case 'code': case 'equation': return <pre {...common}>{block.text}</pre>;
     case 'divider': return <p {...common} className="folio-reader-divider" aria-hidden>⁂</p>;
     case 'attachment': return <p {...common} className="folio-reader-file">{block.text}</p>;
-    case 'page': case 'pageIn': return null;
+    case 'page': case 'pageIn': case 'database': case 'button': return null;
+    case 'table': return <table {...common} className="folio-reader-table"><tbody>{block.text.split('\n').map((line, r) => <tr key={r}>{line.split('\t').map((cell, c) => <td key={c}>{cell}</td>)}</tr>)}</tbody></table>;
     default: return block.text.trim() ? <p {...common}><Inline block={block} /></p> : null;
   }
 }

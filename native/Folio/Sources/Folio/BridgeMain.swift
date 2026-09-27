@@ -25,6 +25,8 @@ struct BridgeRequest: Decodable {
     var blockID: UUID?
     var revisionID: Int64?
     var eventID: String?
+    /// "epoch:version" from the last reply: the reply then carries only pages changed since, plus every page id.
+    var since: String?
 }
 struct BridgeVoice: Codable { var id: String; var name: String }
 struct BridgeRevision: Codable { var id: Int64; var date: Date; var note: Note }
@@ -65,8 +67,53 @@ struct BridgeResponse: Encodable {
     var error: String?
     var text: String?
     var revisions: [BridgeRevision]?
+    /// Set when `state.notes` holds only the pages changed since the request's `since`: every page id, in order.
+    var noteIDs: [UUID]?
+    /// "epoch:version" to send as `since` next time.
+    var version: String?
+}
+/// Encoded pages, reused while a page is unchanged. A notebook with large imported databases is many
+/// megabytes; re-encoding and re-sending all of it on every keystroke save made typing slow.
+@MainActor final class NoteEncodingCache {
+    let epoch = UUID().uuidString
+    private var counter = 0
+    private var entries: [UUID: (note: Note, data: Data, version: Int)] = [:]
+    private let encoder = JSONEncoder()
+    /// Brings the cache up to date with `notes`; returns the current version.
+    func update(_ notes: [Note]) -> Int {
+        var bumped = false
+        var live = Set<UUID>()
+        for note in notes {
+            live.insert(note.id)
+            // Unchanged pages share storage with the cached copy, so this comparison is cheap.
+            if let cached = entries[note.id], cached.note == note { continue }
+            guard let data = try? encoder.encode(note) else { continue }
+            if !bumped { counter += 1; bumped = true }
+            entries[note.id] = (note, data, counter)
+        }
+        if entries.count != live.count { for id in entries.keys where !live.contains(id) { entries.removeValue(forKey: id) } }
+        return counter
+    }
+    /// The encoded pages newer than `version` (all pages when nil), joined as a JSON array.
+    func json(_ notes: [Note], newerThan version: Int?) -> Data {
+        var out = Data("[".utf8)
+        var first = true
+        for note in notes {
+            guard let entry = entries[note.id], version.map({ entry.version > $0 }) ?? true else { continue }
+            if !first { out.append(UInt8(ascii: ",")) }
+            out.append(entry.data); first = false
+        }
+        out.append(UInt8(ascii: "]"))
+        return out
+    }
+    /// The version a client's `since` refers to, when it came from this engine run.
+    func version(from since: String?) -> Int? {
+        guard let since, let colon = since.lastIndex(of: ":"), since[..<colon] == epoch[...] else { return nil }
+        return Int(since[since.index(after: colon)...])
+    }
 }
 @MainActor final class FolioBridge {
+    let noteCache = NoteEncodingCache()
     let model = AppModel()
     let voice = VoiceController()
     let calendar = CalendarController()
@@ -88,10 +135,27 @@ struct BridgeResponse: Encodable {
             }.store(in: &subscriptions)
         }
     }
-    func snapshot() -> BridgeStatus {
+    func snapshot(withNotes: Bool = true) -> BridgeStatus {
         let selected = model.selectedID
         if let selected { chat.load(selected, model: model) }
-        return BridgeStatus(selectedID:selected, notes:model.notes, status:model.status, error:model.startupError ?? model.error ?? voice.error ?? recorder.error ?? calendar.error, importing:model.importing, importProgress:model.importProgress, listening:voice.listening, dictation:voice.partial, speaking:voice.speaking, paused:voice.paused, voiceID:voice.voiceID, rate:voice.rate, voices:[BridgeVoice(id:BellaVoiceEngine.voiceID,name:"Bella · American · bright")] + voice.voices.map { BridgeVoice(id:$0.identifier,name:$0.name) }, recording:recorder.isRecording, recordingStarting:recorder.isStarting, transcribing:recorder.isTranscribing, recordingProgress:recorder.progress, microphoneLevel:recorder.microphoneLevel, systemLevel:recorder.systemLevel, meeting:recorder.session, calendarConnected:calendar.connected, events:calendar.events, calendarPrompt:calendar.prompt, reminders:calendar.reminders, fontSize:model.preferences.fontSize, highlightStrength:model.preferences.highlightStrength, aiBusy:chat.busyNote != nil, messages:selected.flatMap { chat.messages[$0] } ?? [])
+        return BridgeStatus(selectedID:selected, notes:withNotes ? model.notes : [], status:model.status, error:model.startupError ?? model.error ?? voice.error ?? recorder.error ?? calendar.error, importing:model.importing, importProgress:model.importProgress, listening:voice.listening, dictation:voice.partial, speaking:voice.speaking, paused:voice.paused, voiceID:voice.voiceID, rate:voice.rate, voices:[BridgeVoice(id:BellaVoiceEngine.voiceID,name:"Bella · American · bright")] + voice.voices.map { BridgeVoice(id:$0.identifier,name:$0.name) }, recording:recorder.isRecording, recordingStarting:recorder.isStarting, transcribing:recorder.isTranscribing, recordingProgress:recorder.progress, microphoneLevel:recorder.microphoneLevel, systemLevel:recorder.systemLevel, meeting:recorder.session, calendarConnected:calendar.connected, events:calendar.events, calendarPrompt:calendar.prompt, reminders:calendar.reminders, fontSize:model.preferences.fontSize, highlightStrength:model.preferences.highlightStrength, aiBusy:chat.busyNote != nil, messages:selected.flatMap { chat.messages[$0] } ?? [])
+    }
+    /// Encodes a reply, splicing in the cached page JSON; with a current `since`, only changed pages are sent.
+    func encode(_ response: BridgeResponse, since: String?) -> Data? {
+        guard var state=response.state else {return try? JSONEncoder().encode(response)}
+        let notes=model.notes
+        let version=noteCache.update(notes)
+        let base=noteCache.version(from:since)
+        var reply=response
+        state.notes=[];reply.state=state
+        reply.version="\(noteCache.epoch):\(version)"
+        if base != nil {reply.noteIDs=notes.map(\.id)}
+        guard var data=try? JSONEncoder().encode(reply) else {return nil}
+        let marker=Data("\"notes\":[]".utf8)
+        guard let range=data.range(of:marker) else {return try? JSONEncoder().encode(response)}
+        var replacement=Data("\"notes\":".utf8);replacement.append(noteCache.json(notes,newerThan:base))
+        data.replaceSubrange(range,with:replacement)
+        return data
     }
     func utility(_ name: String) throws {
         windows[name]?.close()
@@ -288,7 +352,7 @@ struct BridgeResponse: Encodable {
                     let request=try JSONDecoder().decode(BridgeRequest.self,from:Data(line.utf8))
                     Task { @MainActor in
                         let response=await bridge.handle(request)
-                        if let data=try? JSONEncoder().encode(response) {FileHandle.standardOutput.write(data);FileHandle.standardOutput.write(Data([10]))}
+                        if let data=bridge.encode(response,since:request.since) {FileHandle.standardOutput.write(data);FileHandle.standardOutput.write(Data([10]))}
                     }
                 } catch {FileHandle.standardError.write(Data("Invalid Folio request\n".utf8))}
             }

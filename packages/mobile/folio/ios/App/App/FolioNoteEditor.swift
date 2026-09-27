@@ -67,9 +67,9 @@ enum FolioCodec {
     }
 
     /// Kinds whose line is not typed text: kept exactly as they were.
-    static let locked: Set<String> = ["divider", "page", "pageIn", "attachment"]
+    static let locked: Set<String> = ["divider", "page", "pageIn", "attachment", "database", "table", "button"]
     static let listKinds: Set<String> = ["bullet", "numbered", "task", "toggle", "quote", "callout"]
-    static let prefixPattern = try! NSRegularExpression(pattern: "^(•  |\\d+\\.  |☐  |☑  |▾  |▸  |│  |✦  |📎  |📄  )")
+    static let prefixPattern = try! NSRegularExpression(pattern: "^(•  |\\d+\\.  |☐  |☑  |▾  |▸  |│  |✦  |📎  |📄  |▦  |▶  )")
 
     static func headingLevel(_ kind: String) -> Int {
         if let last = kind.last, let level = Int(String(last)), kind.lowercased().contains("heading") { return level }
@@ -85,6 +85,8 @@ enum FolioCodec {
         case "callout": return "✦  "
         case "attachment": return "📎  "
         case "page", "pageIn": return "📄  "
+        case "database", "table": return "▦  "
+        case "button": return "▶  "
         default: return ""
         }
     }
@@ -138,13 +140,19 @@ enum FolioCodec {
         switch kind {
         case "divider": text = "──────────────"
         case "page", "pageIn": text = titles[string(block["asset"])] ?? (string(block["text"]).isEmpty ? "Untitled" : string(block["text"]))
-        default: text = string(block["text"])
+        // Shown as one line; the grid itself opens in the classic editor or on the Mac.
+        case "database": text = titles[string(block["asset"])] ?? "Database"
+        case "table":
+            let rows = string(block["text"]).components(separatedBy: "\n")
+            text = (rows.first ?? "").replacingOccurrences(of: "\t", with: " · ") + (rows.count > 1 ? "  (\(rows.count - 1) more rows)" : "")
+        // A line break inside a block is a line separator, so the block stays one paragraph (read back as "\n").
+        default: text = kind == "code" ? string(block["text"]) : string(block["text"]).replacingOccurrences(of: "\n", with: "\u{2028}")
         }
         let body = NSMutableAttributedString(string: text, attributes: attrs)
         if kind == "task", bool(block["checked"]) {
             body.addAttributes([.strikethroughStyle: NSUnderlineStyle.single.rawValue, .foregroundColor: UIColor.secondaryLabel], range: NSRange(location: 0, length: body.length))
         }
-        if kind == "page" || kind == "pageIn" { body.addAttribute(.foregroundColor, value: UIColor.link, range: NSRange(location: 0, length: body.length)) }
+        if kind == "page" || kind == "pageIn" || kind == "database" { body.addAttribute(.foregroundColor, value: UIColor.link, range: NSRange(location: 0, length: body.length)) }
         if !locked.contains(kind), kind != "code", let marks = block["marks"] as? [Any] {
             for case let mark as [String: Any] in marks {
                 let start = int(mark["start"]), length = int(mark["length"])
@@ -238,7 +246,7 @@ enum FolioCodec {
                     body = NSRange(location: content.location + match.range.length, length: content.length - match.range.length)
                 }
             }
-            block["text"] = kind == "divider" ? "" : text.substring(with: body)
+            block["text"] = kind == "divider" ? "" : text.substring(with: body).replacingOccurrences(of: "\u{2028}", with: "\n")
             var marks: [[String: Any]] = []
             if kind != "code" && body.length > 0 {
                 let heading = headingLevel(kind) > 0
@@ -558,7 +566,7 @@ final class FolioNoteEditorController: UIViewController, UITextViewDelegate, UIT
         let line = lineInfo(at: location)
         if line.kind == "task" && location <= line.range.location + 2 {
             restructure { blocks, index in blocks[index]["checked"] = !FolioCodec.bool(blocks[index]["checked"]) }
-        } else if line.kind == "page" || line.kind == "pageIn", let block = blocks.first(where: { FolioCodec.string($0["id"]).uppercased() == line.id.uppercased() }) {
+        } else if line.kind == "page" || line.kind == "pageIn" || line.kind == "database", let block = blocks.first(where: { FolioCodec.string($0["id"]).uppercased() == line.id.uppercased() }) {
             let target = FolioCodec.string(block["asset"])
             if !target.isEmpty { save(); onOpenNote?(target) }
         }

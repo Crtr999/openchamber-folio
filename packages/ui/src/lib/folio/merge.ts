@@ -42,7 +42,7 @@ export function mergeNote(base: FolioNote, mine: FolioNote, theirs: FolioNote): 
   return {
     ...theirs,
     title: pick('title'), icon: pick('icon'), tags: pick('tags'), favorite: pick('favorite'),
-    parentID: pick('parentID'), excludedFromAI: pick('excludedFromAI'), order: pick('order'), table: pick('table'),
+    parentID: pick('parentID'), excludedFromAI: pick('excludedFromAI'), order: pick('order'), table: pick('table'), wide: pick('wide'),
     blocks: blocks.length ? blocks : theirs.blocks,
   };
 }

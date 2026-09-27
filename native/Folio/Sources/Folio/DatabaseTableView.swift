@@ -167,7 +167,7 @@ struct DatabaseTableView: View {
     private func addRow() { var next = table; next.rows.append(DatabaseRow()); onChange(next) }
     private func addRowIfLast(_ id: String) { if table.rows.last?.id == id { addRow() } }
     private func removeRow(_ id: String) { var next = table; next.rows.removeAll { $0.id == id }; onChange(next) }
-    private func symbol(_ kind: TableColumnKind) -> String { switch kind { case .title: "doc.text"; case .text: "text.alignleft"; case .select: "list.bullet"; case .status: "circle.dotted"; case .number: "number"; case .date: "calendar"; case .rating: "star" } }
+    private func symbol(_ kind: TableColumnKind) -> String { switch kind { case .title: "doc.text"; case .text: "text.alignleft"; case .select: "list.bullet"; case .status: "circle.dotted"; case .number: "number"; case .date: "calendar"; case .rating: "star"; case .multiSelect: "list.bullet.indent"; case .checkbox: "checkmark.square"; case .url: "link" } }
     private func valueColor(_ text: String) -> Color {
         switch text.lowercased() { case "done", "fiction", "green": Palette.mint; case "reading", "poetry", "yellow": .yellow; case "to read", "philosophy", "blue": .blue; case "biography", "orange": .orange; case "history", "pink": .pink; default: Palette.muted }
     }

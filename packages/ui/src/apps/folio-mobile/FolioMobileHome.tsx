@@ -46,7 +46,7 @@ function Section({ title, open, onToggle, action, count, children }: { title: st
 function TreeRow({ note, depth, notes, openNote, expanded, onToggle }: { note: FolioNote; depth: number; notes: readonly FolioNote[]; openNote: (id: string) => void; expanded: Set<string>; onToggle: (id: string) => void }) {
   const { t } = useI18n();
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: note.id });
-  const hasChildren = notes.some((n) => n.parentID === note.id);
+  const hasChildren = notes.some((n) => n.parentID === note.id) && !(note.table && note.table.rows.length && notes.every((n) => n.parentID !== note.id || note.table?.rows.some((r) => r.page === n.id)));
   const open = expanded.has(note.id);
   return <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} className={cn(isDragging && 'relative z-10 rounded-lg bg-secondary opacity-90')}>
     <div className="flex items-center" style={{ paddingLeft: depth * 18 }}>
@@ -64,7 +64,10 @@ function TreeRow({ note, depth, notes, openNote, expanded, onToggle }: { note: F
 }
 
 function Tree({ notes, parentID, depth, openNote, expanded, onToggle }: { notes: readonly FolioNote[]; parentID?: string; depth: number; openNote: (id: string) => void; expanded: Set<string>; onToggle: (id: string) => void }) {
-  const children = sortSiblings(notes.filter((n) => (n.parentID && notes.some((p) => p.id === n.parentID) ? n.parentID : undefined) === parentID));
+  const ids = React.useMemo(() => new Set(notes.map((n) => n.id)), [notes]);
+  // A database's row pages open from its rows, not from the page tree.
+  const rowPages = React.useMemo(() => new Set(notes.flatMap((n) => n.table?.rows.flatMap((r) => (r.page ? [r.page] : [])) ?? [])), [notes]);
+  const children = sortSiblings(notes.filter((n) => !rowPages.has(n.id) && (n.parentID && ids.has(n.parentID) ? n.parentID : undefined) === parentID));
   return <SortableContext items={children.map((n) => n.id)} strategy={verticalListSortingStrategy}>
     {children.map((note) => <TreeRow key={note.id} note={note} depth={depth} notes={notes} openNote={openNote} expanded={expanded} onToggle={onToggle} />)}
   </SortableContext>;

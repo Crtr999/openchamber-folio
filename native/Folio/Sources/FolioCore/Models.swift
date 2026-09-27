@@ -1,13 +1,13 @@
 import Foundation
 
 public enum BlockKind: String, Codable, CaseIterable, Sendable {
-    case text, heading1, heading2, heading3, heading4, toggleHeading1, toggleHeading2, toggleHeading3, toggleHeading4, bullet, numbered, task, toggle, quote, callout, code, equation, divider, page, pageIn, attachment
+    case text, heading1, heading2, heading3, heading4, toggleHeading1, toggleHeading2, toggleHeading3, toggleHeading4, bullet, numbered, task, toggle, quote, callout, code, equation, divider, page, pageIn, attachment, database, table, button
     public var title: String {
         switch self {
         case .text: "Text"; case .heading1: "Heading 1"; case .heading2: "Heading 2"; case .heading3: "Heading 3"; case .heading4: "Heading 4"
         case .toggleHeading1: "Toggle heading 1"; case .toggleHeading2: "Toggle heading 2"; case .toggleHeading3: "Toggle heading 3"; case .toggleHeading4: "Toggle heading 4"
         case .bullet: "Bulleted list"; case .numbered: "Numbered list"; case .task: "To-do"; case .toggle: "Toggle list"
-        case .quote: "Quote"; case .callout: "Callout"; case .code: "Code"; case .equation: "Block equation"; case .divider: "Divider"; case .page: "Page"; case .pageIn: "Page in"; case .attachment: "Attachment"
+        case .quote: "Quote"; case .callout: "Callout"; case .code: "Code"; case .equation: "Block equation"; case .divider: "Divider"; case .page: "Page"; case .pageIn: "Page in"; case .attachment: "Attachment"; case .database: "Database"; case .table: "Table"; case .button: "Button"
         }
     }
     public var symbol: String {
@@ -16,7 +16,7 @@ public enum BlockKind: String, Codable, CaseIterable, Sendable {
         case .toggleHeading1, .toggleHeading2, .toggleHeading3, .toggleHeading4: "chevron.right.textformat"
         case .bullet: "list.bullet"; case .numbered: "list.number"; case .task: "checkmark.square"; case .toggle: "chevron.right.2"
         case .quote: "quote.opening"; case .callout: "lightbulb"; case .code: "chevron.left.forwardslash.chevron.right"; case .equation: "function"
-        case .divider: "minus"; case .page, .pageIn: "doc.text"; case .attachment: "paperclip"
+        case .divider: "minus"; case .page, .pageIn: "doc.text"; case .attachment: "paperclip"; case .database: "tablecells"; case .table: "tablecells"; case .button: "hand.tap"
         }
     }
     public var headingLevel: Int {
@@ -43,16 +43,18 @@ public struct Block: Identifiable, Codable, Equatable, Sendable {
     /// Blocks sharing a row id sit side by side, in columns numbered by `column` (the notebook's Notion-style columns).
     public var row: String?
     public var column: Int?
-    public init(id: UUID = UUID(), kind: BlockKind = .text, text: String = "", checked: Bool = false, highlight: Highlight = .none, asset: String? = nil, marks: [InlineMark]? = nil, indent: Int? = nil, row: String? = nil, column: Int? = nil) {
-        self.id = id; self.kind = kind; self.text = text; self.checked = checked; self.highlight = highlight; self.asset = asset; self.marks = marks; self.indent = indent; self.row = row; self.column = column
+    /// Share of the row's width for this block's column (read from a column's first block).
+    public var width: Double?
+    public init(id: UUID = UUID(), kind: BlockKind = .text, text: String = "", checked: Bool = false, highlight: Highlight = .none, asset: String? = nil, marks: [InlineMark]? = nil, indent: Int? = nil, row: String? = nil, column: Int? = nil, width: Double? = nil) {
+        self.id = id; self.kind = kind; self.text = text; self.checked = checked; self.highlight = highlight; self.asset = asset; self.marks = marks; self.indent = indent; self.row = row; self.column = column; self.width = width
     }
 }
 
 public enum TableViewKind: String, Codable, CaseIterable, Sendable { case table, board, chart }
-public enum TableColumnKind: String, Codable, CaseIterable, Sendable { case title, text, select, status, number, date, rating }
+public enum TableColumnKind: String, Codable, CaseIterable, Sendable { case title, text, select, status, number, date, rating, multiSelect, checkbox, url }
 extension TableColumnKind {
     public var title: String {
-        switch self { case .title: "Title"; case .text: "Text"; case .select: "Select"; case .status: "Status"; case .number: "Number"; case .date: "Date"; case .rating: "Rating" }
+        switch self { case .title: "Title"; case .text: "Text"; case .select: "Select"; case .status: "Status"; case .number: "Number"; case .date: "Date"; case .rating: "Rating"; case .multiSelect: "Multi-select"; case .checkbox: "Checkbox"; case .url: "URL" }
     }
 }
 public struct DatabaseColumn: Identifiable, Codable, Equatable, Sendable {
@@ -60,12 +62,27 @@ public struct DatabaseColumn: Identifiable, Codable, Equatable, Sendable {
     public var name: String
     public var kind: TableColumnKind
     public var options: [String]
-    public init(id: String = UUID().uuidString, name: String, kind: TableColumnKind = .text, options: [String] = []) { self.id = id; self.name = name; self.kind = kind; self.options = options }
+    /// Option name → color name, for select, status and multi-select chips.
+    public var colors: [String: String]?
+    public init(id: String = UUID().uuidString, name: String, kind: TableColumnKind = .text, options: [String] = [], colors: [String: String]? = nil) { self.id = id; self.name = name; self.kind = kind; self.options = options; self.colors = colors }
 }
 public struct DatabaseRow: Identifiable, Codable, Equatable, Sendable {
     public var id: String
     public var values: [String: String]
-    public init(id: String = UUID().uuidString, values: [String: String] = [:]) { self.id = id; self.values = values }
+    /// The row's own page (its body), a child page of the database.
+    public var page: String?
+    public init(id: String = UUID().uuidString, values: [String: String] = [:], page: String? = nil) { self.id = id; self.values = values; self.page = page }
+}
+public struct TableFilter: Codable, Equatable, Sendable { public var column: String; public var op: String; public var value: String?; public var values: [String]? }
+public struct TableSort: Codable, Equatable, Sendable { public var column: String; public var desc: Bool? }
+public struct TableChart: Codable, Equatable, Sendable { public var x: String?; public var kind: String?; public var bucket: String?; public var cumulative: Bool?; public var countOnly: String? }
+/// A saved way of looking at a database (Notion's views): layout, visible columns, filters and sorts.
+public struct TableView: Codable, Equatable, Sendable {
+    public var id: String; public var name: String; public var kind: String
+    public var columns: [String]?; public var sort: [TableSort]?; public var filter: [TableFilter]?; public var groupBy: String?
+    public var chart: TableChart?; public var cardSize: String?; public var cover: String?
+    /// Shown only where a page embeds it (Notion's linked view), not as a tab of the database.
+    public var linked: Bool?
 }
 public struct NoteTable: Codable, Equatable, Sendable {
     public var columns: [DatabaseColumn]
@@ -73,6 +90,8 @@ public struct NoteTable: Codable, Equatable, Sendable {
     public var view: TableViewKind
     public var groupBy: String?
     public var chartBy: String?
+    public var views: [TableView]?
+    public var activeView: String?
     public init(columns: [DatabaseColumn], rows: [DatabaseRow] = [], view: TableViewKind = .table, groupBy: String? = nil, chartBy: String? = nil) { self.columns = columns; self.rows = rows; self.view = view; self.groupBy = groupBy ?? columns.first(where: { $0.kind == .select || $0.kind == .status })?.id; self.chartBy = chartBy ?? columns.first(where: { $0.kind == .select || $0.kind == .status })?.id }
     public static var library: NoteTable {
         NoteTable(columns: [
@@ -103,6 +122,8 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
     public var isChat: Bool?
     /// Position among sibling pages, set when the user drags pages into order; nil keeps the default order.
     public var order: Double?
+    /// Full-width page (Notion's "Full width"), for dashboards laid out in columns.
+    public var wide: Bool?
     public var table: NoteTable?
     public var trashed: Bool
     public var created: Date
@@ -161,6 +182,12 @@ public enum Markdown {
             case .page, .pageIn: return "[\(t)](folio://note/\(b.asset ?? ""))"
             case .divider: return "---"
             case .attachment: return "[\(t.replacingOccurrences(of: "]", with: "\\]"))](\(b.asset ?? ""))"
+            case .database: return "[Database](folio://note/\(b.asset ?? ""))"
+            case .table:
+                let rows = b.text.components(separatedBy: "\n").map { $0.components(separatedBy: "\t").map { $0.replacingOccurrences(of: "|", with: "\\|") } }
+                guard let first = rows.first else { return "" }
+                let line: ([String]) -> String = { "| " + $0.joined(separator: " | ") + " |" }
+                return ([line(first), line(first.map { _ in "---" })] + rows.dropFirst().map(line)).joined(separator: "\n")
             default: return t
             }
         }.joined(separator: "\n\n")
