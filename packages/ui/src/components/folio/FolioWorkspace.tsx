@@ -211,6 +211,12 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   const note = !home && selected ? (drafts[selected.id]?.note || selected) : undefined;
   const title = note?.title;
   const rowOf = useRowOf(note);
+  // A row page's icon is its row's icon too.
+  const syncRowIcon = (icon: string) => {
+    const table = rowOf?.database.table;
+    if (!rowOf || !table) return;
+    edit({ ...rowOf.database, table: { ...table, rows: table.rows.map((r) => { if (r.id !== rowOf.row.id) return r; const next = { ...r }; if (icon) next.icon = icon; else delete next.icon; return next; }) } });
+  };
   React.useLayoutEffect(() => {
     const element = titleRef.current;
     if (!element) return;
@@ -666,7 +672,8 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
         </button>)}
       </div>}
 
-      {note && <article ref={articleRef} className={cn('relative mx-auto w-full pb-40', note.wide && !mobile ? 'max-w-none' : 'max-w-5xl', mobile ? 'pl-8 pr-4 pt-4' : 'pl-14 pr-8 pt-10', blockRange && 'select-none')} style={{ fontSize: status.fontSize }}
+      {/* While reading, the editor is not drawn behind the book: long pages made every page turn slow. */}
+      {note && !reading && <article ref={articleRef} className={cn('relative mx-auto w-full pb-40', note.wide && !mobile ? 'max-w-none' : 'max-w-5xl', mobile ? 'pl-8 pr-4 pt-4' : 'pl-14 pr-8 pt-10', blockRange && 'select-none')} style={{ fontSize: status.fontSize }}
         onPointerDown={onRangePointerDown} onPointerMove={onRangePointerMove} onPointerUp={onRangePointerUp}>
         {/* Where a dragged block will land. */}
         {dragging && <div aria-hidden className="pointer-events-none absolute z-20 rounded bg-[var(--primary)]" style={{ top: dragging.bar.top, left: dragging.bar.left, width: dragging.bar.width, height: dragging.bar.height }} />}
@@ -675,8 +682,8 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
             ? <button type="button" className="mb-2 rounded-md p-1 text-5xl leading-none hover:bg-interactive-hover" aria-label={t('folio.icon')} onClick={() => setIconOpen(!iconOpen)}><FolioIcon value={note.icon} large /></button>
             : <button type="button" className={cn(quiet, 'mb-2 flex items-center gap-1.5 opacity-0 focus-visible:opacity-100 group-hover/title:opacity-100', iconOpen && 'opacity-100')} onClick={() => setIconOpen(!iconOpen)}><Icon name="emotion-happy" className="size-4" />{t('folio.addIcon')}</button>}
           {iconOpen && <FolioIconPicker onClose={() => setIconOpen(false)}
-            onPick={(icon) => { const current = latestNote(); if (current) edit({ ...current, icon }); setIconOpen(false); }}
-            onRemove={() => { const current = latestNote(); if (current) edit({ ...current, icon: '' }); setIconOpen(false); }} />}
+            onPick={(icon) => { const current = latestNote(); if (current) edit({ ...current, icon }); syncRowIcon(icon); setIconOpen(false); }}
+            onRemove={() => { const current = latestNote(); if (current) edit({ ...current, icon: '' }); syncRowIcon(''); setIconOpen(false); }} />}
         </div>
         {/* Wraps like Notion instead of cutting off long titles. */}
         <textarea rows={1} ref={titleRef}

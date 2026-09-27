@@ -71,7 +71,9 @@ public struct DatabaseRow: Identifiable, Codable, Equatable, Sendable {
     public var values: [String: String]
     /// The row's own page (its body), a child page of the database.
     public var page: String?
-    public init(id: String = UUID().uuidString, values: [String: String] = [:], page: String? = nil) { self.id = id; self.values = values; self.page = page }
+    /// The row's icon (emoji, glyph or small uploaded image), like a Notion page icon.
+    public var icon: String?
+    public init(id: String = UUID().uuidString, values: [String: String] = [:], page: String? = nil, icon: String? = nil) { self.id = id; self.values = values; self.page = page; self.icon = icon }
 }
 public struct TableFilter: Codable, Equatable, Sendable { public var column: String; public var op: String; public var value: String?; public var values: [String]? }
 public struct TableSort: Codable, Equatable, Sendable { public var column: String; public var desc: Bool? }

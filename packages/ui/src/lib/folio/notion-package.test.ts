@@ -70,7 +70,7 @@ describe('importNotionPackage', () => {
     const database = root?.blocks.find((b) => b.kind === 'database');
     expect(database?.asset).toBe(books?.id);
     expect(database?.column).toBe(0);
-    expect(database?.width).toBeCloseTo(0.6875);
+    expect(database?.width).toBe(0.6875);
     const reading = root?.blocks.find((b) => b.text.startsWith('Reading'));
     expect(reading?.column).toBe(1);
     expect(reading?.marks?.some((m) => m.style === 'color' && m.value === 'blue')).toBe(true);

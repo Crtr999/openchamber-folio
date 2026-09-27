@@ -6,6 +6,9 @@ import { cn } from '@/lib/utils';
 import { columnKinds, columnKindSchema, viewKinds, type FolioNote, type FolioTable, type FolioView } from '@/lib/folio/schema';
 import { folioColors } from '@/lib/folio/rich-text';
 import { isImageName, useFolioAssetURL } from '@/lib/folio/assets';
+import { FolioIcon } from './FolioIcon';
+import { FolioIconPicker } from './FolioIconPicker';
+import { setPageIcon } from '@/lib/folio/rows';
 import { chartPoints, defaultView, displayColumns, groupsFor, splitValues, viewRows, type FilterOp } from '@/lib/folio/database';
 
 type Column = FolioTable['columns'][number];
@@ -78,10 +81,11 @@ function Cell({ column, value, onChange, compact }: { column: Column; value: str
     onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value); setEditing(false); } }} />;
 }
 
-function Cover({ page }: { page?: FolioNote }) {
+function Cover({ page, icon }: { page?: FolioNote; icon?: string }) {
   const image = page?.blocks.find((b) => b.kind === 'attachment' && b.asset && isImageName(b.text || b.asset));
   const url = useFolioAssetURL(image?.asset);
-  if (!url) return <div className="flex h-full items-center justify-center bg-secondary/40 text-3xl text-muted-foreground/50">{page?.icon && !page.icon.startsWith('data:') && !page.icon.startsWith('icon:') ? page.icon : ''}</div>;
+  const mark = icon || page?.icon;
+  if (!url) return <div className="flex h-full items-center justify-center bg-secondary/40 text-4xl">{mark ? <FolioIcon value={mark} large /> : null}</div>;
   return <img src={url} alt="" className="h-full w-full object-cover" />;
 }
 
@@ -146,6 +150,21 @@ export function FolioDatabase({ table, onChange, viewID, pageOf, onOpenRow, mobi
   const setValue = (rowID: string, columnID: string, value: string) => update({ rows: table.rows.map((row) => (row.id === rowID ? { ...row, values: { ...row.values, [columnID]: value } } : row)) });
   const addRow = (values: Record<string, string> = {}) => update({ rows: [...table.rows, { id: crypto.randomUUID(), values }] });
   const removeRow = (rowID: string) => update({ rows: table.rows.filter((r) => r.id !== rowID) });
+  const [iconRow, setIconRow] = React.useState<string>();
+  const setIcon = (row: Row, icon: string | undefined) => {
+    update({ rows: table.rows.map((r) => { if (r.id !== row.id) return r; const next = { ...r }; if (icon) next.icon = icon; else delete next.icon; return next; }) });
+    setPageIcon(row.page, icon ?? '');
+    setIconRow(undefined);
+  };
+  /** The row's icon, and (for the title cell) a button to pick one, like a Notion page icon. */
+  const rowIcon = (row: Row, pickable: boolean) => <span className="relative shrink-0">
+    {pickable
+      ? <button type="button" aria-label={t('folio.icon')} title={t('folio.icon')} className={cn('flex size-6 items-center justify-center rounded hover:bg-interactive-hover', !row.icon && 'opacity-0 group-hover/row:opacity-60')} onClick={() => setIconRow(iconRow === row.id ? undefined : row.id)}>
+        {row.icon ? <FolioIcon value={row.icon} /> : <Icon name="emotion-happy" className="size-3.5 text-muted-foreground" />}
+      </button>
+      : row.icon ? <FolioIcon value={row.icon} /> : null}
+    {pickable && iconRow === row.id && <div className="absolute -top-14 left-0 z-40"><FolioIconPicker onClose={() => setIconRow(undefined)} onPick={(icon) => setIcon(row, icon)} onRemove={() => setIcon(row, undefined)} /></div>}
+  </span>;
   const column = table.columns.find((c) => c.id === editingColumn);
   const viewName = (v: FolioView) => v.name.trim() || t(`folio.${v.kind}`);
   const more = rows.length > limit && <button type="button" className="mt-1 w-full rounded px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-interactive-hover" onClick={() => setLimit(limit + 200)}>{t('folio.db.showMore', { count: rows.length - limit })}</button>;
@@ -202,7 +221,9 @@ export function FolioDatabase({ table, onChange, viewID, pageOf, onOpenRow, mobi
         </tr></thead>
         <tbody>{rows.slice(0, limit).map((row) => <tr key={row.id} className="group/row border-b border-border/60 align-top">
           {shown.map((c) => <td key={c.id} className="relative max-w-80 border-r border-border/60 p-0.5 last:border-r-0">
-            <Cell column={c} value={row.values[c.id] || ''} onChange={(value) => setValue(row.id, c.id, value)} />
+            {c.id === titleColumn?.id
+              ? <div className="flex items-center gap-0.5">{rowIcon(row, true)}<div className="min-w-0 flex-1"><Cell column={c} value={row.values[c.id] || ''} onChange={(value) => setValue(row.id, c.id, value)} /></div></div>
+              : <Cell column={c} value={row.values[c.id] || ''} onChange={(value) => setValue(row.id, c.id, value)} />}
             {c.id === titleColumn?.id && onOpenRow && <button type="button" className="absolute right-1 top-1 hidden rounded border border-border bg-background px-1.5 text-[11px] text-muted-foreground shadow-sm hover:text-foreground group-hover/row:block" onClick={() => open(row)}>{t('folio.db.open')}</button>}
           </td>)}
           <td><button type="button" aria-label={t('folio.remove')} className="invisible rounded px-2 text-muted-foreground hover:bg-interactive-hover group-hover/row:visible" onClick={() => removeRow(row.id)}>×</button></td>
@@ -215,7 +236,7 @@ export function FolioDatabase({ table, onChange, viewID, pageOf, onOpenRow, mobi
 
     {view.kind === 'list' && <div className="py-1">
       {rows.slice(0, limit).map((row) => <button key={row.id} type="button" className="flex w-full items-center gap-3 rounded-md border-b border-border/50 px-2 py-1.5 text-left hover:bg-interactive-hover" onClick={() => open(row)}>
-        <Icon name="file-text" className="size-4 shrink-0 text-muted-foreground" />
+        {row.icon ? <FolioIcon value={row.icon} /> : <Icon name="file-text" className="size-4 shrink-0 text-muted-foreground" />}
         <span className="min-w-0 flex-1 truncate font-medium">{(titleColumn && row.values[titleColumn.id]) || t('folio.untitled')}</span>
         <span className="flex min-w-0 shrink items-center gap-2 overflow-hidden">{props(row)}</span>
       </button>)}
@@ -224,9 +245,9 @@ export function FolioDatabase({ table, onChange, viewID, pageOf, onOpenRow, mobi
 
     {view.kind === 'gallery' && <div className={cn('grid gap-3 py-2', view.cardSize === 'large' ? 'grid-cols-[repeat(auto-fill,minmax(260px,1fr))]' : view.cardSize === 'medium' ? 'grid-cols-[repeat(auto-fill,minmax(200px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(150px,1fr))]')}>
       {rows.slice(0, limit).map((row) => <button key={row.id} type="button" className="overflow-hidden rounded-lg border border-border text-left shadow-sm transition-colors hover:border-foreground/30" onClick={() => open(row)}>
-        {view.cover !== 'none' && <div className={cn('overflow-hidden', view.cardSize === 'small' ? 'h-20' : 'h-32')}><Cover page={row.page ? pageOf?.(row.page) : undefined} /></div>}
+        {view.cover !== 'none' && <div className={cn('overflow-hidden', view.cardSize === 'small' ? 'h-20' : 'h-32')}><Cover page={row.page ? pageOf?.(row.page) : undefined} icon={row.icon} /></div>}
         <div className="space-y-1 p-2">
-          <div className="truncate text-sm font-medium">{(titleColumn && row.values[titleColumn.id]) || t('folio.untitled')}</div>
+          <div className="flex items-center gap-1.5 truncate text-sm font-medium">{row.icon && <FolioIcon value={row.icon} />}{(titleColumn && row.values[titleColumn.id]) || t('folio.untitled')}</div>
           <div className="flex flex-col gap-0.5">{props(row)}</div>
         </div>
       </button>)}
@@ -249,7 +270,7 @@ export function FolioDatabase({ table, onChange, viewID, pageOf, onOpenRow, mobi
             {inGroup.slice(0, limit).map((row) => <div key={row.id} draggable onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDragRow(row.id); }} onDragEnd={() => { setDragRow(undefined); setDropGroup(undefined); }}
               className={cn('cursor-grab rounded-md border border-border/70 bg-background p-2 shadow-sm hover:border-border', dragRow === row.id && 'opacity-50')}>
               <button type="button" className="block w-full text-left" onClick={() => open(row)}>
-                <div className="truncate font-medium">{(titleColumn && row.values[titleColumn.id]) || t('folio.untitled')}</div>
+                <div className="flex items-center gap-1.5 truncate font-medium">{row.icon && <FolioIcon value={row.icon} />}{(titleColumn && row.values[titleColumn.id]) || t('folio.untitled')}</div>
                 <div className="mt-1 flex flex-wrap gap-1">{props(row).filter((p) => p.key !== groupColumn?.id)}</div>
               </button>
             </div>)}

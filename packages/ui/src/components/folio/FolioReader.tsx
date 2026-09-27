@@ -79,12 +79,52 @@ function BookBlock({ block, index, number }: { block: FolioBlock; index: number;
   }
 }
 
+/** One part of the book, laid out in columns. Memoized so turning a page never re-renders the text. */
+const BookPart = React.memo(function BookPart({ title, blocks, numbers, table }: { title?: string; blocks: readonly FolioBlock[]; numbers: readonly number[]; table?: string }) {
+  return <>
+    {title !== undefined && <h1 className="folio-reader-title">{title}</h1>}
+    {blocks.map((block, i) => <BookBlock key={block.id} block={block} index={i} number={numbers[i]} />)}
+    {table && <p>{table}</p>}
+  </>;
+});
+
+/**
+ * Long books are laid out one part at a time (a few hundred passages, split at chapters where
+ * possible): laying out a whole book in columns at once made opening and turning pages slow.
+ */
+const PART_SIZE = 350;
+function splitParts(blocks: readonly FolioBlock[]): Array<{ from: number; to: number }> {
+  const parts: Array<{ from: number; to: number }> = [];
+  let from = 0;
+  while (from < blocks.length) {
+    let to = Math.min(blocks.length, from + PART_SIZE);
+    if (to < blocks.length) {
+      // Prefer ending just before a chapter heading in the last third of the part.
+      for (let i = to; i > from + Math.floor(PART_SIZE * 0.66); i -= 1) if (chapterKinds.has(blocks[i].kind)) { to = i; break; }
+    }
+    parts.push({ from, to });
+    from = to;
+  }
+  return parts.length ? parts : [{ from: 0, to: 0 }];
+}
+const textLength = (blocks: readonly FolioBlock[]) => blocks.reduce((n, b) => n + b.text.length + 40, 0);
+
 export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { note: FolioNote; onClose: () => void; onListen?: (text: string) => void; startAt?: string; onPlace?: (blockID: string) => void }) {
   const { t } = useI18n();
   const [settings, setSettings] = React.useState<ReaderSettings>(() => load(SETTINGS, settingsSchema, { page: 'auto', font: 'original', size: window.innerWidth < 700 ? 20 : 21, spacing: 1.5 }));
   const [marks, setMarks] = React.useState<Bookmark[]>(() => load(marksKey(note.id), marksSchema, []));
   const [page, setPage] = React.useState(0);
   const [total, setTotal] = React.useState(1);
+  const blocksAll = note.blocks;
+  const parts = React.useMemo(() => splitParts(blocksAll), [blocksAll]);
+  const partOfBlock = React.useCallback((blockID: string | undefined) => {
+    const index = blockID ? blocksAll.findIndex((b) => b.id === blockID) : -1;
+    return index < 0 ? 0 : Math.max(0, parts.findIndex((p) => index >= p.from && index < p.to));
+  }, [blocksAll, parts]);
+  const [part, setPart] = React.useState(0);
+  /** Measured page counts of parts already laid out; others are estimated from their length. */
+  const counts = React.useRef(new Map<number, number>());
+  const pendingEnd = React.useRef(false);
   const [chapterStarts, setChapterStarts] = React.useState<number[]>([]);
   const [chrome, setChrome] = React.useState(true);
   const [panel, setPanel] = React.useState<'none' | 'menu' | 'contents' | 'marks'>('none');
@@ -92,11 +132,15 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
   const flow = React.useRef<HTMLDivElement>(null);
   const [size, setSize] = React.useState({ width: 0, height: 0 });
   const anchor = React.useRef<string | undefined>(startAt ?? (load(placeKey(note.id), placeSchema, { blockID: '', at: 0 }).blockID || undefined));
+  React.useLayoutEffect(() => { setPart(partOfBlock(anchor.current)); }, [partOfBlock]);
   const drag = React.useRef<{ x: number; y: number } | undefined>(undefined);
 
-  const blocks = note.blocks;
+  const range = parts[Math.min(part, parts.length - 1)];
+  const blocks = React.useMemo(() => blocksAll.slice(range.from, range.to), [blocksAll, range]);
   const numbers = React.useMemo(() => { let n = 0; return blocks.map((b) => (b.kind === 'numbered' ? (n += 1) : (n = 0))); }, [blocks]);
+  const allChapters = React.useMemo(() => blocksAll.filter((b) => chapterKinds.has(b.kind) && b.text.trim()), [blocksAll]);
   const chapters = React.useMemo(() => blocks.filter((b) => chapterKinds.has(b.kind) && b.text.trim()), [blocks]);
+  const tableText = React.useMemo(() => (part === parts.length - 1 && note.table ? note.table.rows.map((r) => note.table?.columns.map((c) => r.values[c.id] ?? '').filter(Boolean).join(' · ')).join('\n') : undefined), [note.table, part, parts.length]);
   // Two pages side by side on a wide window, one on a phone.
   const wide = window.innerWidth >= 1100;
   const columns = wide && size.width >= 900 ? 2 : 1;
@@ -123,11 +167,20 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
   React.useLayoutEffect(() => {
     const element = flow.current; if (!element || !size.width) return;
     const count = Math.max(1, Math.round((element.scrollWidth + GAP) / step));
+    counts.current.set(part, count);
     setTotal(count);
     setChapterStarts(chapters.flatMap((c) => { const found = element.querySelector(`[data-block="${c.id}"]`); return found ? [pageOf(found)] : []; }));
+    if (pendingEnd.current) { pendingEnd.current = false; setPage(count - 1); return; }
     const target = anchor.current ? element.querySelector(`[data-block="${anchor.current}"]`) : null;
     setPage(target ? Math.min(count - 1, pageOf(target)) : 0);
-  }, [size, settings.size, settings.font, settings.spacing, blocks, chapters, step, pageOf]);
+  }, [size, settings.size, settings.font, settings.spacing, blocks, chapters, step, pageOf, part]);
+  // Sizes change page counts everywhere: measured counts of other parts are stale.
+  React.useEffect(() => { const keepPart = counts.current.get(part); counts.current.clear(); if (keepPart) counts.current.set(part, keepPart); }, [size, settings.size, settings.font, settings.spacing]); // eslint-disable-line react-hooks/exhaustive-deps -- only layout inputs invalidate
+  const lengths = React.useMemo(() => parts.map((p) => textLength(blocksAll.slice(p.from, p.to))), [parts, blocksAll]);
+  const pagesOf = (index: number) => counts.current.get(index) ?? Math.max(1, Math.round((lengths[index] / Math.max(1, lengths[part])) * total));
+  const before = parts.slice(0, part).reduce((n, _, i) => n + pagesOf(i), 0);
+  const overall = parts.reduce((n, _, i) => n + (i === part ? total : pagesOf(i)), 0);
+  const estimated = parts.some((_, i) => i !== part && !counts.current.has(i));
 
   /** The passage showing at the top of a page (the last one that starts on or before it): the saved place and the bookmark target. */
   const firstBlockOn = React.useCallback((index: number): string | undefined => {
@@ -142,18 +195,36 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
     return found?.getAttribute('data-block') ?? undefined;
   }, [pageOf]);
 
+  // The saved place and the other device's "continue reading" update once reading pauses, not on every page.
+  const placeTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  React.useEffect(() => () => clearTimeout(placeTimer.current), []);
   const go = React.useCallback((next: number) => {
+    if (next >= total && part < parts.length - 1) { anchor.current = blocksAll[parts[part + 1].from]?.id; setPart(part + 1); return; }
+    if (next < 0 && part > 0) { pendingEnd.current = true; anchor.current = undefined; setPart(part - 1); return; }
     const clamped = Math.max(0, Math.min(total - 1, next));
     setPage(clamped);
     const blockID = firstBlockOn(clamped);
     anchor.current = blockID;
-    if (blockID) { keep(placeKey(note.id), { blockID, at: Date.now() }); onPlace?.(blockID); }
-  }, [total, firstBlockOn, note.id, onPlace]);
+    clearTimeout(placeTimer.current);
+    if (blockID) placeTimer.current = setTimeout(() => { keep(placeKey(note.id), { blockID, at: Date.now() }); onPlace?.(blockID); }, 1200);
+  }, [total, firstBlockOn, note.id, onPlace, part, parts, blocksAll]);
 
   const jumpTo = (blockID: string) => {
-    const found = flow.current?.querySelector(`[data-block="${blockID}"]`);
-    if (found) go(pageOf(found));
+    const target = partOfBlock(blockID);
+    anchor.current = blockID;
+    if (target !== part) setPart(target);
+    else { const found = flow.current?.querySelector(`[data-block="${blockID}"]`); if (found) go(pageOf(found)); }
     setPanel('none');
+  };
+
+  // Trackpad: a two-finger swipe left or right turns one page.
+  const wheel = React.useRef({ sum: 0, locked: 0 });
+  const onWheel = (event: React.WheelEvent) => {
+    if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+    const now = Date.now();
+    if (now < wheel.current.locked) return;
+    wheel.current.sum += event.deltaX;
+    if (Math.abs(wheel.current.sum) > 50) { go(page + (wheel.current.sum > 0 ? 1 : -1)); wheel.current = { sum: 0, locked: now + 450 }; }
   };
 
   React.useEffect(() => {
@@ -166,9 +237,9 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
     return () => window.removeEventListener('keydown', onKey);
   }, [go, page, panel, onClose]);
 
-  const nextChapter = chapterStarts.find((start) => start > page);
+  const nextChapter = chapterStarts.find((start) => start > page) ?? (part < parts.length - 1 && allChapters.some((c) => blocksAll.findIndex((b) => b.id === c.id) === parts[part + 1].from) ? total : undefined);
   const left = (nextChapter ?? total) - page - 1;
-  const chapterLine = chapters.length
+  const chapterLine = allChapters.length
     ? (left <= 0 ? t('folio.readerLastPageChapter') : left === 1 ? t('folio.readerOnePageLeftChapter') : t('folio.readerPagesLeftChapter', { count: left }))
     : (left <= 0 ? t('folio.readerLastPage') : left === 1 ? t('folio.readerOnePageLeft') : t('folio.readerPagesLeft', { count: left }));
   const currentBlock = firstBlockOn(page);
@@ -180,8 +251,8 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
     setMarks(next); keep(marksKey(note.id), next);
   };
   const listen = () => {
-    const from = Math.max(0, blocks.findIndex((b) => b.id === currentBlock));
-    onListen?.(blocks.slice(from).map((b) => b.text).filter(Boolean).join('\n\n'));
+    const from = Math.max(0, blocksAll.findIndex((b) => b.id === currentBlock));
+    onListen?.(blocksAll.slice(from).map((b) => b.text).filter(Boolean).join('\n\n'));
     setPanel('none');
   };
 
@@ -209,20 +280,25 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
       <button type="button" className={cn(round, 'absolute bottom-1 right-4')} aria-label={t('folio.readerClose')} onClick={onClose}><Icon name="close" className="size-6" /></button>
     </div>
 
-    <div ref={frame} className="relative min-h-0 flex-1 overflow-hidden" style={wide ? { width: 'min(1180px, calc(100% - 144px))', marginInline: 'auto' } : { marginInline: 28 }} onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
+    <div className="group/pages relative flex min-h-0 flex-1">
+    <div ref={frame} className="relative min-h-0 flex-1 overflow-hidden" style={wide ? { width: 'min(1180px, calc(100% - 144px))', marginInline: 'auto' } : { marginInline: 28 }} onPointerDown={onPointerDown} onPointerUp={onPointerUp} onWheel={onWheel}>
       <div ref={flow} className="folio-reader-flow h-full"
         style={{ width: size.width || '100%', columnWidth, columnGap: GAP, columnFill: 'auto', fontFamily, fontSize: settings.size, lineHeight: settings.spacing, transform: `translateX(${-page * step}px)` }}>
-        <h1 className="folio-reader-title">{note.title || t('folio.untitled')}</h1>
-        {blocks.map((block, i) => <BookBlock key={block.id} block={block} index={i} number={numbers[i]} />)}
-        {note.table && <p>{note.table.rows.map((r) => note.table?.columns.map((c) => r.values[c.id] ?? '').filter(Boolean).join(' · ')).join('\n')}</p>}
+        <BookPart title={part === 0 ? note.title || t('folio.untitled') : undefined} blocks={blocks} numbers={numbers} table={tableText} />
       </div>
+    </div>
+    {/* Arrows appear when the pointer rests near either side (Mac). */}
+    {wide && <>
+      <button type="button" aria-label={t('folio.readerPrevious')} disabled={page === 0 && part === 0} className="absolute inset-y-0 left-0 flex w-16 items-center justify-center text-[var(--reader-muted)] opacity-0 transition-opacity hover:opacity-100 disabled:hidden" onClick={() => go(page - 1)}><Icon name="arrow-left-s" className="size-9" /></button>
+      <button type="button" aria-label={t('folio.readerNext')} disabled={page >= total - 1 && part >= parts.length - 1} className="absolute inset-y-0 right-0 flex w-16 items-center justify-center text-[var(--reader-muted)] opacity-0 transition-opacity hover:opacity-100 disabled:hidden" onClick={() => go(page + 1)}><Icon name="arrow-right-s" className="size-9" /></button>
+    </>}
     </div>
 
     <div className={cn('relative flex h-[calc(env(safe-area-inset-bottom)+64px)] shrink-0 items-start justify-center px-5 pt-3 transition-opacity', !chrome && 'opacity-0')}>
       <button type="button" className={cn(round, 'absolute left-4 top-1')} aria-pressed={Boolean(marked)} aria-label={marked ? t('folio.readerRemoveBookmark') : t('folio.readerAddBookmark')} onClick={toggleMark}>
         {marked ? <Icon name="bookmark-fill" className="size-5 text-[var(--reader-accent)]" /> : <Icon name="bookmark" className="size-5" />}
       </button>
-      <span className="pt-2.5 text-[13px] tabular-nums text-[var(--reader-muted)]">{t('folio.readerPageOf', { page: page + 1, total })}</span>
+      <span className="pt-2.5 text-[13px] tabular-nums text-[var(--reader-muted)]">{t('folio.readerPageOf', { page: before + page + 1, total: estimated ? `~${overall}` : overall })}</span>
       <button type="button" className={cn(round, 'absolute right-4 top-1')} aria-label={t('folio.readerMenu')} aria-expanded={panel !== 'none'} onClick={() => setPanel(panel === 'none' ? 'menu' : 'none')}>
         <Icon name="list-unordered" className="size-5" />
       </button>
@@ -231,7 +307,7 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
     {panel !== 'none' && <div className="absolute bottom-[calc(env(safe-area-inset-bottom)+72px)] right-4 z-10 max-h-[70vh] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl bg-[var(--reader-sheet)] p-2 text-[var(--reader-text)] shadow-2xl"
       onPointerUp={(event) => event.stopPropagation()}>
       {panel === 'menu' && <>
-        {chapters.length > 0 && <button type="button" className={row} onClick={() => setPanel('contents')}><Icon name="list-unordered" className="size-5 text-[var(--reader-muted)]" />{t('folio.readerContents')}</button>}
+        {allChapters.length > 0 && <button type="button" className={row} onClick={() => setPanel('contents')}><Icon name="list-unordered" className="size-5 text-[var(--reader-muted)]" />{t('folio.readerContents')}</button>}
         <button type="button" className={row} onClick={() => setPanel('marks')}><Icon name="bookmark" className="size-5 text-[var(--reader-muted)]" />{t('folio.readerBookmarks')}{marks.length > 0 && <span className="ml-auto text-[var(--reader-muted)]">{marks.length}</span>}</button>
         {onListen && <button type="button" className={row} onClick={listen}><Icon name="volume-up" className="size-5 text-[var(--reader-muted)]" />{t('folio.readerListen')}</button>}
         <div className="mx-2 my-2 border-t border-[var(--reader-line)]" />
@@ -258,10 +334,10 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
       </>}
       {panel === 'contents' && <>
         <button type="button" className={cn(row, 'text-[var(--reader-muted)]')} onClick={() => setPanel('menu')}><Icon name="arrow-left-s" className="size-5" />{t('folio.readerContents')}</button>
-        {chapters.map((c, i) => <button key={c.id} type="button" className={row} onClick={() => jumpTo(c.id)}>
+        {allChapters.map((c) => { const local = chapters.indexOf(c); return <button key={c.id} type="button" className={row} onClick={() => jumpTo(c.id)}>
           <span className={cn('min-w-0 flex-1 truncate', c.kind.endsWith('2') && 'pl-3')}>{c.text}</span>
-          {chapterStarts[i] !== undefined && <span className="text-sm tabular-nums text-[var(--reader-muted)]">{chapterStarts[i] + 1}</span>}
-        </button>)}
+          {local >= 0 && chapterStarts[local] !== undefined && <span className="text-sm tabular-nums text-[var(--reader-muted)]">{before + chapterStarts[local] + 1}</span>}
+        </button>; })}
       </>}
       {panel === 'marks' && <>
         <button type="button" className={cn(row, 'text-[var(--reader-muted)]')} onClick={() => setPanel('menu')}><Icon name="arrow-left-s" className="size-5" />{t('folio.readerBookmarks')}</button>

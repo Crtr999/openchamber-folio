@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { createChatDirectory } from '@/lib/chatDirectories';
 import { useFolioStore } from '@/lib/folio/store';
 import type { FolioNote } from '@/lib/folio/schema';
+import { FolioIcon } from './FolioIcon';
 import type { Message, Part, PermissionRequest } from '@/lib/opencode/model';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -47,6 +48,35 @@ export function FolioAskPanel({ note, onClose }: { note: FolioNote; onClose: () 
   const [error, setError] = React.useState<string>();
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
   React.useEffect(() => { setError(undefined); inputRef.current?.focus(); }, [note.id]);
+  // "@" references a page, like mentions in the chats: a list narrows as you type.
+  const [mentions, setMentions] = React.useState<Array<{ id: string; title: string }>>([]);
+  const [picker, setPicker] = React.useState<{ query: string; start: number }>();
+  const [pickIndex, setPickIndex] = React.useState(0);
+  const notes = useFolioStore((s) => s.status?.notes);
+  const matches = React.useMemo(() => {
+    if (!picker) return [];
+    const q = picker.query.toLowerCase();
+    return (notes ?? []).filter((n) => !n.trashed && !n.isChat && (n.title || '').toLowerCase().includes(q))
+      .sort((a, b) => Number(!(a.title || '').toLowerCase().startsWith(q)) - Number(!(b.title || '').toLowerCase().startsWith(q)) || b.modified - a.modified)
+      .slice(0, 8);
+  }, [picker, notes]);
+  const parentTitle = (id: string | undefined) => (id ? notes?.find((n) => n.id === id)?.title : undefined);
+  const track = (value: string, caret: number) => {
+    const found = /(^|\s)@([^\s@]{0,40})$/.exec(value.slice(0, caret));
+    if (found) { setPicker({ query: found[2], start: caret - found[2].length - 1 }); setPickIndex(0); } else setPicker(undefined);
+  };
+  const pick = (target: FolioNote | undefined) => {
+    const element = inputRef.current;
+    if (!target || !picker || !element) { setPicker(undefined); return; }
+    const title = target.title || t('folio.untitled');
+    const caret = element.selectionStart ?? draft.length;
+    const next = `${draft.slice(0, picker.start)}@${title} ${draft.slice(caret)}`;
+    setDraft(next);
+    setMentions((old) => (old.some((m) => m.id === target.id) ? old : [...old, { id: target.id, title }]));
+    setPicker(undefined);
+    const at = picker.start + title.length + 2;
+    requestAnimationFrame(() => { element.focus(); element.setSelectionRange(at, at); });
+  };
 
   const remember = (next: Record<string, PageChat>) => { writeChats(next); setChats(next); };
 
@@ -76,10 +106,18 @@ export function FolioAskPanel({ note, onClose }: { note: FolioNote; onClose: () 
         const response = await useFolioStore.getState().api?.request({ command: 'markdown', noteID: page.id, flag: true });
         if (response?.ok && response.text) context += `\n\nCurrent page content:\n\n${response.text}`;
       }
+      // Pages @mentioned in the question go along in full (pages excluded from AI only by name).
+      for (const mention of mentions.filter((m) => question.includes(`@${m.title}`) && m.id !== page.id)) {
+        const target = useFolioStore.getState().status?.notes.find((n) => n.id === mention.id);
+        if (!target) continue;
+        if (target.excludedFromAI) { context += `\n\nThe user mentioned "${mention.title}", which is excluded from AI.`; continue; }
+        const response = await useFolioStore.getState().api?.request({ command: 'markdown', noteID: target.id, flag: true }).catch(() => undefined);
+        if (response?.ok && response.text) context += `\n\nMentioned page "${mention.title}" (page id ${target.id}):\n\n${response.text.slice(0, 80_000)}`;
+      }
       await useSessionUIStore.getState().sendMessage(question, providerID, modelID, config.currentAgentName, undefined, undefined,
         [{ text: context, synthetic: true }], config.currentVariant, 'normal', { sessionId: current.sessionId, directory: current.directory });
       remember({ ...readChats(), [note.id]: { ...current, sentModified: page.modified } });
-      setDraft('');
+      setDraft(''); setMentions([]);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
     } finally { setSending(false); }
@@ -109,10 +147,29 @@ export function FolioAskPanel({ note, onClose }: { note: FolioNote; onClose: () 
         </button>)}
       </div>}
     {error && <p role="alert" className="mx-3 mb-2 rounded-md bg-[color-mix(in_srgb,var(--status-error)_12%,transparent)] px-2 py-1.5 text-xs">{error}</p>}
-    <form className="m-3 mt-0 rounded-xl border border-border bg-background p-2 focus-within:border-foreground/30" onSubmit={(e) => { e.preventDefault(); void send(draft); }}>
-      <textarea ref={inputRef} rows={2} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={t('folio.askPlaceholder')} aria-label={t('folio.askPlaceholder')}
+    <form className="relative m-3 mt-0 rounded-xl border border-border bg-background p-2 focus-within:border-foreground/30" onSubmit={(e) => { e.preventDefault(); void send(draft); }}>
+      {picker && <div role="listbox" aria-label={t('folio.linkPage')} className="absolute inset-x-0 bottom-full z-20 mb-1 max-h-72 overflow-y-auto rounded-xl border border-border bg-background p-1.5 shadow-2xl" onMouseDown={(e) => e.preventDefault()}>
+        <div className="px-2 pb-1 pt-0.5 text-xs text-muted-foreground">{t('folio.linkPage')}</div>
+        {!matches.length && <div className="px-2 py-1.5 text-sm text-muted-foreground">{t('folio.noMatches')}</div>}
+        {matches.map((target, i) => <button key={target.id} type="button" role="option" aria-selected={i === pickIndex}
+          className={cn('flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-interactive-hover', i === pickIndex && 'bg-interactive-selection')}
+          onMouseMove={() => setPickIndex(i)} onClick={() => pick(target)}>
+          <FolioIcon value={target.icon} /><span className="min-w-0 flex-1 truncate">{target.title || t('folio.untitled')}</span>
+          {parentTitle(target.parentID) && <span className="max-w-[40%] truncate text-xs text-muted-foreground">{parentTitle(target.parentID)}</span>}
+        </button>)}
+      </div>}
+      <textarea ref={inputRef} rows={2} value={draft} onChange={(e) => { setDraft(e.target.value); track(e.target.value, e.target.selectionStart ?? e.target.value.length); }} placeholder={t('folio.askPlaceholder')} aria-label={t('folio.askPlaceholder')}
         className="block max-h-48 w-full resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(draft); } }} />
+        onBlur={() => setPicker(undefined)}
+        onKeyDown={(e) => {
+          if (picker && matches.length) {
+            if (e.key === 'ArrowDown') { e.preventDefault(); setPickIndex((pickIndex + 1) % matches.length); return; }
+            if (e.key === 'ArrowUp') { e.preventDefault(); setPickIndex((pickIndex - 1 + matches.length) % matches.length); return; }
+            if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pick(matches[pickIndex]); return; }
+          }
+          if (picker && e.key === 'Escape') { e.preventDefault(); setPicker(undefined); return; }
+          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(draft); }
+        }} />
       <div className="flex items-center justify-end">
         <button type="submit" disabled={!draft.trim() || sending} className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40" aria-label={t('folio.send')}><Icon name="arrow-up" className="size-4" /></button>
       </div>

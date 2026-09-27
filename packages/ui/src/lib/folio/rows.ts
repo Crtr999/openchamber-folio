@@ -34,3 +34,10 @@ export function useRowOf(note: FolioNote | undefined): { database: FolioNote; ro
   return row ? { database: parent, row } : undefined;
 }
 
+
+/** A row's page shows the row's icon: picking one for the row sets it on the page too. */
+export function setPageIcon(pageID: string | undefined, icon: string): void {
+  if (!pageID) return;
+  const page = noteByID(pageID);
+  if (page && page.icon !== icon) useFolioStore.getState().edit({ ...page, icon });
+}

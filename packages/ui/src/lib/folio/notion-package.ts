@@ -1,5 +1,6 @@
 import { makeBlock, type FolioBlock, type FolioNote, type FolioTable, type FolioView } from './schema';
-import { attachmentPrefix, importNotionExport, notionUUID, parseInline, type NotionFile } from './notion-import';
+import { z } from 'zod';
+import { attachmentPrefix, importNotionExport, notionUUID, parseInline, type InlineText, type NotionFile } from './notion-import';
 
 /**
  * Builds Folio pages from a full Notion migration package: the Markdown & CSV archives (content and
@@ -26,24 +27,32 @@ type ColorName = FolioBlock['highlight'];
 type Mark = NonNullable<FolioBlock['marks']>[number];
 
 const hexOf = (url: string): string | undefined => /([0-9a-f]{32})(?:[?#]|$)/i.exec(url.replace(/-/g, ''))?.[1]?.toLowerCase();
-const colorNames: readonly string[] = ['gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red'];
-const toColor = (value: string | undefined): ColorName => {
-  const base = (value ?? '').replace(/_background$/, '');
-  return colorNames.includes(base) ? (base as ColorName) : 'none';
-};
+const colorByName = new Map<string, ColorName>([['gray', 'gray'], ['brown', 'brown'], ['orange', 'orange'], ['yellow', 'yellow'], ['green', 'green'], ['blue', 'blue'], ['purple', 'purple'], ['pink', 'pink'], ['red', 'red']]);
+const toColor = (value: string | undefined): ColorName => colorByName.get((value ?? '').replace(/_background$/, '')) ?? 'none';
 
 // ---- Database configurations (Notion's schema and views, as saved by the export tool).
 
-interface ConfigProperty { name: string; type: string; options?: { name: string; color?: string }[]; groups?: Record<string, { name: string; color?: string }[]> }
+const optionSchema = z.object({ name: z.string(), color: z.string().optional() });
+const propertySchema = z.object({ name: z.string(), type: z.string(), options: z.array(optionSchema).optional(), groups: z.record(z.string(), z.array(optionSchema)).optional() });
+const stateSchema = z.object({ schema: z.record(z.string(), propertySchema).optional() });
+const loose = <T extends z.ZodTypeAny>(schema: T) => schema.optional().catch(undefined);
+const notionViewSchema = z.object({
+  type: loose(z.string()), name: loose(z.string()), displayProperties: loose(z.array(z.string())),
+  simpleFilters: loose(z.array(z.object({ filter: loose(z.object({ operator: loose(z.string()), property: loose(z.string()), value: loose(z.object({ type: loose(z.string()), value: loose(z.string()) })) })) }))),
+  sorts: loose(z.array(z.object({ direction: loose(z.string()), property: loose(z.string()) }))),
+  groupBy: loose(z.union([z.string().transform((property) => ({ property })), z.object({ property: z.string() })])),
+  cover: loose(z.object({ type: loose(z.string()) })), cardSize: loose(z.string()),
+  chartConfig: loose(z.object({ type: loose(z.string()), chartFormat: loose(z.object({ axisCumulative: loose(z.boolean()) })), dataConfig: loose(z.object({ groupBy: loose(z.object({ property: loose(z.string()) })) })) })),
+});
+type ConfigProperty = z.infer<typeof propertySchema>;
+type NotionViewJSON = z.infer<typeof notionViewSchema>;
 interface ConfigView { id: string; json: NotionViewJSON }
-interface NotionViewJSON {
-  type?: string; name?: string; displayProperties?: string[];
-  simpleFilters?: { filter?: { operator?: string; property?: string; value?: { type?: string; value?: unknown } } }[];
-  sorts?: { direction?: string; property?: string }[];
-  groupBy?: unknown; cover?: { type?: string }; cardSize?: string;
-  chartConfig?: { type?: string; chartFormat?: { axisCumulative?: boolean }; dataConfig?: { groupBy?: { property?: string } } };
-}
 interface DatabaseConfig { file: string; id: string; title: string; inline: boolean; dataSource?: string; schema?: Record<string, ConfigProperty>; views: ConfigView[] }
+
+/** Parses JSON text against a schema; unreadable text fails like a mismatch. */
+function parseWith<T extends z.ZodTypeAny>(schema: T, text: string): z.output<T> | undefined {
+  try { const result = schema.safeParse(JSON.parse(text)); return result.success ? result.data : undefined; } catch { return undefined; }
+}
 
 function parseConfig(file: string, text: string): DatabaseConfig | undefined {
   const id = hexOf(/Source: (\S+)/.exec(text)?.[1] ?? '');
@@ -51,14 +60,14 @@ function parseConfig(file: string, text: string): DatabaseConfig | undefined {
   const title = /The title of this Database is: (.*)/.exec(text)?.[1]?.trim() ?? '';
   const inline = /<database [^>]*inline="true"/.test(text);
   const dataSource = /data-source url="\{?\{?(collection:\/\/[0-9a-f-]+)/.exec(text)?.[1];
-  let schema: DatabaseConfig['schema'];
   const state = /<data-source-state>\s*(\{[\s\S]*?\})\s*<\/data-source-state>/.exec(text)?.[1];
-  if (state) { try { schema = (JSON.parse(state) as { schema?: Record<string, ConfigProperty> }).schema; } catch { schema = undefined; } }
+  const parsed = state ? parseWith(stateSchema, state) : undefined;
   const views: ConfigView[] = [];
   for (const match of text.matchAll(/<view url="\{?\{?view:\/\/([0-9a-f-]+)\}?\}?">\s*\n(\{.*\})\s*\n/g)) {
-    try { views.push({ id: match[1], json: JSON.parse(match[2]) as NotionViewJSON }); } catch { /* an unreadable view is reported below */ }
+    const view = parseWith(notionViewSchema, match[2]);
+    if (view) views.push({ id: match[1], json: view });
   }
-  return { file, id, title, inline, dataSource, schema, views };
+  return { file, id, title, inline, dataSource, schema: parsed?.schema, views };
 }
 
 const kindFor = (type: string): Column['kind'] => {
@@ -102,7 +111,9 @@ function applySchema(table: FolioTable, config: DatabaseConfig, report: string[]
     const all = property.type === 'status' ? Object.values(property.groups ?? {}).flat() : property.options ?? [];
     const colors = Object.fromEntries(all.map((o) => [o.name, toColor(o.color)]));
     if (['relation', 'formula', 'rollup', 'people', 'files'].includes(property.type)) report.push(`${config.title}: "${column.name}" is a Notion ${property.type} property; its values are kept as text.`);
-    return { ...column, kind, options, ...(Object.keys(colors).length ? { colors } : {}) };
+    const next: Column = { ...column, kind, options };
+    if (Object.keys(colors).length) next.colors = colors;
+    return next;
   });
   const rows = table.rows.map((row) => ({
     ...row,
@@ -133,7 +144,7 @@ function viewFrom(view: ConfigView, table: FolioTable, config: DatabaseConfig, r
     const f = item.filter;
     const column = columnID(f?.property);
     if (!f?.operator || !column) continue;
-    const value = typeof f.value?.value === 'string' ? f.value.value : undefined;
+    const value = f.value?.value;
     if (f.value?.type === 'is_group') {
       if (!value) continue; // "any group": no filter
       const property = schema.find((p) => p.name === f.property);
@@ -143,21 +154,33 @@ function viewFrom(view: ConfigView, table: FolioTable, config: DatabaseConfig, r
     }
     const op = /does_not_contain/.test(f.operator) ? 'notContains' : /contains/.test(f.operator) ? 'contains' : /is_not_empty/.test(f.operator) ? 'notEmpty' : /is_empty/.test(f.operator) ? 'empty' : /(is_not|does_not_equal)$/.test(f.operator) ? 'isNot' : /(_is|equals)$/.test(f.operator) ? 'is' : undefined;
     if (!op) { report.push(`${config.title}: a "${f.operator}" filter on "${f.property}" could not be recreated.`); continue; }
-    filter.push({ column, op, ...(value !== undefined ? { value } : {}) });
+    const entry: NonNullable<FolioView['filter']>[number] = { column, op };
+    if (value !== undefined) entry.value = value;
+    filter.push(entry);
   }
-  const sort = (json.sorts ?? []).flatMap((s) => { const column = columnID(s.property); return column ? [{ column, ...(s.direction === 'descending' ? { desc: true } : {}) }] : []; });
-  const groupName = typeof json.groupBy === 'string' ? json.groupBy : typeof json.groupBy === 'object' && json.groupBy && 'property' in json.groupBy && typeof json.groupBy.property === 'string' ? json.groupBy.property : undefined;
+  const out: FolioView = { id: view.id, name: (json.name ?? '').trim(), kind };
   const columns = json.displayProperties?.flatMap((name) => columnID(name) ?? []);
-  const chartX = columnID(json.chartConfig?.dataConfig?.groupBy?.property);
-  return {
-    id: view.id, name: (json.name ?? '').trim(), kind,
-    ...(columns?.length ? { columns } : {}),
-    ...(sort.length ? { sort } : {}),
-    ...(filter.length ? { filter } : {}),
-    ...(groupName && columnID(groupName) ? { groupBy: columnID(groupName) } : {}),
-    ...(kind === 'gallery' ? { cover: json.cover?.type && json.cover.type !== 'none' ? 'page' : 'none', cardSize: json.cardSize === 'small' || json.cardSize === 'large' ? json.cardSize : 'medium' } : {}),
-    ...(kind === 'chart' ? { chart: { ...(chartX ? { x: chartX } : {}), kind: json.chartConfig?.type === 'line' ? 'line' : 'bar', bucket: 'month', ...(json.chartConfig?.chartFormat?.axisCumulative ? { cumulative: true } : {}) } } : {}),
-  };
+  if (columns?.length) out.columns = columns;
+  const sort = (json.sorts ?? []).flatMap((s) => {
+    const column = columnID(s.property);
+    return column ? [s.direction === 'descending' ? { column, desc: true } : { column }] : [];
+  });
+  if (sort.length) out.sort = sort;
+  if (filter.length) out.filter = filter;
+  const groupBy = columnID(json.groupBy?.property);
+  if (groupBy) out.groupBy = groupBy;
+  if (kind === 'gallery') {
+    out.cover = json.cover?.type && json.cover.type !== 'none' ? 'page' : 'none';
+    out.cardSize = json.cardSize === 'small' || json.cardSize === 'large' ? json.cardSize : 'medium';
+  }
+  if (kind === 'chart') {
+    const chart: NonNullable<FolioView['chart']> = { kind: json.chartConfig?.type === 'line' ? 'line' : 'bar', bucket: 'month' };
+    const x = columnID(json.chartConfig?.dataConfig?.groupBy?.property);
+    if (x) chart.x = x;
+    if (json.chartConfig?.chartFormat?.axisCumulative) chart.cumulative = true;
+    out.chart = chart;
+  }
+  return out;
 }
 
 // ---- Notion-flavored Markdown of a top page (from the Notion connector's fetch).
@@ -170,9 +193,10 @@ interface Context {
   transcripts: Map<string, string[]>;
   report: string[];
   files: Set<string>;
+  linkFullPage?: boolean;
 }
 
-const people: Record<string, string> = { '94193414-9aec-47bd-b918-9dff72b02c30': 'Carter' };
+const people = new Map([['94193414-9aec-47bd-b918-9dff72b02c30', 'Carter']]);
 function formatDate(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number);
   if (!y || !m || !d) return iso;
@@ -180,11 +204,11 @@ function formatDate(iso: string): string {
 }
 
 /** One line of Notion-flavored text: spans, mentions and links become Folio text and marks. */
-function inline(source: string, ctx: Context): { text: string; marks: Mark[] } {
+function inline(source: string, ctx: Context): InlineText {
   const cleaned = source
     .replace(/\s*\[\^[^\]]*\]/g, '')
     .replace(/<mention-date start="([^"]+)"[^>]*\/>/g, (_, iso: string) => formatDate(iso.slice(0, 10)))
-    .replace(/<mention-user url="user:\/\/([^"]+)"\s*\/>/g, (_, id: string) => `@${people[id] ?? 'teammate'}`)
+    .replace(/<mention-user url="user:\/\/([^"]+)"\s*\/>/g, (_, id: string) => `@${people.get(id) ?? 'teammate'}`)
     .replace(/<mention-page url="([^"]+)"[^>]*>(.*?)<\/mention-page>/g, (_, url: string, title: string) => `[${title || 'page'}](${url})`)
     .replace(/<mention-page url="([^"]+)"\s*\/>/g, (_, url: string) => `[page](${url})`)
     .replace(/<br\s*\/?>/g, ' ')
@@ -290,10 +314,11 @@ function parseLines(all: readonly Line[], start: number, end: number, base: numb
       const stop = closing(all, i, 'meeting-notes', depth);
       const title = all[i + 1]?.text ?? 'Meeting';
       const date = /<mention-date start="([^"]+)"/.exec(title)?.[1]?.slice(0, 10) ?? '';
-      push('toggleHeading3', `📝 ${title}`, indent, { checked: true });
-      const section = (tag: string) => {
+      // A collapsed toggle holding the meeting (headings inside a summary stay inside it).
+      push('toggle', `📝 ${title}`, indent, { checked: true });
+      const section = (tag: string): FolioBlock[] => {
         const at = all.findIndex((l, k) => k > i && k < stop && l.text === `<${tag}>`);
-        if (at < 0) return [] as FolioBlock[];
+        if (at < 0) return [];
         const close = closing(all, at, tag, all[at].depth);
         return parseLines(all, at + 1, close, all[at].depth + 1, ctx);
       };
@@ -315,7 +340,9 @@ function parseLines(all: readonly Line[], start: number, end: number, base: numb
     const database = /^<database url="([^"]+)"[^>]*>(.*?)<\/database>?$/.exec(text);
     if (database) {
       const target = ctx.databaseFor(hexOf(database[1]) ?? '');
-      if (target) out.push({ ...makeBlock(), kind: 'database', asset: target.asset, text: target.view ?? '', indent: indent || undefined });
+      // A full-page database shows as a link to it, like in Notion; an inline one shows in place.
+      if (target && ctx.linkFullPage && /inline="false"/.test(text)) out.push({ ...makeBlock(), kind: 'page', asset: target.asset, indent: indent || undefined });
+      else if (target) out.push({ ...makeBlock(), kind: 'database', asset: target.asset, text: target.view ?? '', indent: indent || undefined });
       else push('text', `Database: ${database[2]} (not in the export)`, indent);
       continue;
     }
@@ -326,7 +353,11 @@ function parseLines(all: readonly Line[], start: number, end: number, base: numb
       else push('text', page[2], indent);
       continue;
     }
-    if (text.startsWith('<unknown') && /alt="button"/.test(text)) { out.push({ ...makeBlock(), kind: 'button', text: '', indent: indent || undefined }); continue; }
+    if (text.startsWith('<unknown')) {
+      if (/alt="button"/.test(text)) out.push({ ...makeBlock(), kind: 'button', text: '', indent: indent || undefined });
+      else ctx.report.push(`A Notion ${/alt="([^"]+)"/.exec(text)?.[1] ?? 'block'} block could not be read from Notion and was left out.`);
+      continue;
+    }
     const file = /^<file src="file:\/\/([^"]+)"/.exec(text);
     const image = /^!\[([^\]]*)\]\(([^)\s]+)/.exec(text);
     if (file || image) {
@@ -370,7 +401,6 @@ function transcriptsFrom(supplement: string | undefined): Map<string, string[]> 
 
 // ---- The package.
 
-const titleOf = (note: FolioNote) => note.title.trim().toLowerCase();
 
 export function importNotionPackage(input: PackageInput): PackageResult {
   const report: string[] = [];
@@ -401,16 +431,19 @@ export function importNotionPackage(input: PackageInput): PackageResult {
     if (!note.table) continue;
     const table = applySchema(note.table, config, report);
     const views = config.views.map((v) => viewFrom(v, table, config, report));
-    note.table = { ...table, ...(views.length ? { views, activeView: views[0].id } : {}) };
+    note.table = table;
+    if (views.length) note.table = { ...table, views, activeView: views[0].id };
     if (config.title) note.title = config.title.trim();
   }
   for (const config of configs.filter((c) => /^View of /i.test(c.title))) {
     const target = baseConfigs.find((b) => b.dataSource && b.dataSource === config.dataSource) ?? baseConfigs.find((b) => b.title.toLowerCase() === config.title.replace(/^View of /i, '').trim().toLowerCase());
     const note = target ? notes.find((n) => n.id === hexToID(target.id)) : undefined;
-    if (!target || !note?.table) { report.push(`The linked view "${config.title}" points to a database that is not in the export.`); continue; }
+    const shown = note?.table;
+    if (!target || !note || !shown) { report.push(`The linked view "${config.title}" points to a database that is not in the export.`); continue; }
     // Linked views show inside other pages; they are not tabs of the database itself.
-    const views = config.views.map((v) => ({ ...viewFrom(v, note.table as FolioTable, target, report), linked: true }));
-    note.table = { ...note.table, views: [...(note.table.views ?? []), ...views.filter((v) => !(note.table?.views ?? []).some((x) => x.id === v.id))] };
+    const views = config.views.map((v) => ({ ...viewFrom(v, shown, target, report), linked: true }));
+    const existing = shown.views ?? [];
+    note.table = { ...shown, views: [...existing, ...views.filter((v) => !existing.some((x) => x.id === v.id))] };
     linkedViews.set(config.id, { asset: note.id, view: views[0]?.id });
   }
   // A linked view's own CSV repeats its database's rows: its page goes, and links to it show the database.
@@ -431,8 +464,9 @@ export function importNotionPackage(input: PackageInput): PackageResult {
   // Row pages: a row's page is kept (and linked from the row) only when it has content of its own.
   let dropped = 0;
   const drop = new Set<string>();
-  for (const database of notes.filter((n) => n.table)) {
-    const table = database.table as FolioTable;
+  for (const database of notes) {
+    const table = database.table;
+    if (!table) continue;
     const title = table.columns.find((c) => c.kind === 'title') ?? table.columns[0];
     const children = notes.filter((n) => n.parentID === database.id && !n.table);
     const names = new Map(table.columns.map((c) => [c.name.trim().toLowerCase(), c]));
@@ -544,4 +578,29 @@ function allHexes(files: readonly NotionFile[]): Set<string> {
   const out = new Set<string>();
   for (const file of files) for (const match of file.path.matchAll(/([0-9a-f]{32})/gi)) out.add(match[1].toLowerCase());
   return out;
+}
+
+// ---- Pages read straight from Notion (the Notion connector's fetch), without an export archive.
+
+/** A page's blocks from its Notion-flavored Markdown. `known` holds Notion IDs (32 hex) of pages that exist in Folio. */
+export function notionPageBlocks(markdown: string, options: { known: ReadonlySet<string>; databases: ReadonlyMap<string, { asset: string; view?: string }>; report?: string[] }): FolioBlock[] {
+  const ctx: Context = {
+    known: new Set(options.known), databaseFor: (hex) => options.databases.get(hex), fileFor: () => undefined,
+    transcripts: new Map(), report: options.report ?? [], files: new Set(), linkFullPage: true,
+  };
+  return parseLines(lines(markdown), 0, Infinity, 0, ctx);
+}
+
+/** A database from its Notion configuration and its records (property name → displayed value). */
+export function notionTableFromConfig(configText: string, records: ReadonlyArray<Record<string, string>>, report: string[] = []): { title: string; table: FolioTable } | undefined {
+  const config = parseConfig('notion', configText);
+  if (!config?.schema) return undefined;
+  const properties = Object.values(config.schema);
+  const columns: Column[] = properties.map((p, i) => ({ id: `c${i}`, name: p.name, kind: 'text', options: [] }));
+  columns.sort((a, b) => (config.schema?.[a.name]?.type === 'title' ? -1 : config.schema?.[b.name]?.type === 'title' ? 1 : 0));
+  const base: FolioTable = { columns, rows: records.map((record, i) => ({ id: `r${i}`, values: Object.fromEntries(columns.map((c) => [c.id, record[c.name] ?? ''])) })), view: 'table' };
+  const table = applySchema(base, config, report);
+  const views = config.views.map((v) => viewFrom(v, table, config, report));
+  const out: FolioTable = views.length ? { ...table, views, activeView: views[0].id } : table;
+  return { title: config.title.replace(/^\p{Extended_Pictographic}\s*/u, '').trim(), table: out };
 }
