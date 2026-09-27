@@ -750,7 +750,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
               : block.kind === 'button' ? <FolioButton block={block} />
               : linked ? <button type="button" className="flex items-center gap-2 rounded-md px-1 py-0.5 font-medium underline decoration-border underline-offset-4 hover:bg-interactive-hover" onClick={() => call({ command: 'select', noteID: linked.id })}><FolioIcon value={linked.icon} />{linked.title || t('folio.untitled')}</button>
               : (block.kind === 'page' || block.kind === 'pageIn') && !block.text ? <select className="rounded-md bg-transparent px-1 py-0.5 text-sm text-muted-foreground hover:bg-interactive-hover" aria-label={t('folio.openPage')} value="" onChange={(e) => updateBlock({ ...block, asset: e.target.value })}><option value="">{t('folio.openPage')}…</option>{status.notes.filter((n) => !n.trashed && n.id !== note.id).map((n) => <option key={n.id} value={n.id}>{n.title || t('folio.untitled')}</option>)}</select>
-              : <FolioRichBlock block={block} commitDelay={mobile ? MOBILE_COMMIT_DELAY : 0} lazy={Boolean(mobile)}
+              : <FolioRichBlock block={block} commitDelay={mobile ? MOBILE_COMMIT_DELAY : 0} lazy
                 placeholder={block.kind === 'text' ? t('folio.slashPlaceholder') : t(`folio.block.${block.kind}`)}
                 focusAt={focus?.id === block.id ? focus.at : undefined}
                 onChange={updateBlock}

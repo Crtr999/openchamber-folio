@@ -84,3 +84,11 @@ artifacts/
 native/Folio/.build/
 packages/electron/resources/folio/
 native/Folio/dist/
+
+# Local Folio build helpers (machine-specific paths, never pushed)
+.folio-*.sh
+
+# Xcode derived data
+DerivedData/
+DerivedDataSim/
+*.xcuserdatad

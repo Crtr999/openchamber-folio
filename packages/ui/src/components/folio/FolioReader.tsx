@@ -89,10 +89,12 @@ const BookPart = React.memo(function BookPart({ title, blocks, numbers, table }:
 });
 
 /**
- * Long books are laid out one part at a time (a few hundred passages, split at chapters where
- * possible): laying out a whole book in columns at once made opening and turning pages slow.
+ * Long books are laid out one part at a time (about a hundred and fifty passages, split at
+ * chapters where possible): laying out a whole book in columns at once made opening and turning
+ * pages slow. Every change of width or text size justifies and hyphenates the whole part again,
+ * so the part is kept small enough to lay out quickly.
  */
-const PART_SIZE = 350;
+const PART_SIZE = 150;
 function splitParts(blocks: readonly FolioBlock[]): Array<{ from: number; to: number }> {
   const parts: Array<{ from: number; to: number }> = [];
   let from = 0;
@@ -108,6 +110,7 @@ function splitParts(blocks: readonly FolioBlock[]): Array<{ from: number; to: nu
   return parts.length ? parts : [{ from: 0, to: 0 }];
 }
 const textLength = (blocks: readonly FolioBlock[]) => blocks.reduce((n, b) => n + b.text.length + 40, 0);
+const sameNumbers = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((value, i) => value === b[i]);
 
 export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { note: FolioNote; onClose: () => void; onListen?: (text: string) => void; startAt?: string; onPlace?: (blockID: string) => void }) {
   const { t } = useI18n();
@@ -126,11 +129,17 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
   const counts = React.useRef(new Map<number, number>());
   const pendingEnd = React.useRef(false);
   const [chapterStarts, setChapterStarts] = React.useState<number[]>([]);
+  const storedStarts = React.useRef<number[]>([]);
   const [chrome, setChrome] = React.useState(true);
   const [panel, setPanel] = React.useState<'none' | 'menu' | 'contents' | 'marks'>('none');
   const frame = React.useRef<HTMLDivElement>(null);
   const flow = React.useRef<HTMLDivElement>(null);
-  const [size, setSize] = React.useState({ width: 0, height: 0 });
+  const probe = React.useRef<HTMLSpanElement>(null);
+  /** The frame and flow widths in pixels. The flow is capped and centred by its own CSS, so its
+      rendered width, not the frame's, is what the columns and the page step follow. */
+  const [widths, setWidths] = React.useState({ frame: 0, flow: 0 });
+  /** The reading measure in pixels: what the flow's 68ch cap comes to in the font it is set in. */
+  const [measure, setMeasure] = React.useState(0);
   const anchor = React.useRef<string | undefined>(startAt ?? (load(placeKey(note.id), placeSchema, { blockID: '', at: 0 }).blockID || undefined));
   React.useLayoutEffect(() => { setPart(partOfBlock(anchor.current)); }, [partOfBlock]);
   const drag = React.useRef<{ x: number; y: number } | undefined>(undefined);
@@ -141,22 +150,48 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
   const allChapters = React.useMemo(() => blocksAll.filter((b) => chapterKinds.has(b.kind) && b.text.trim()), [blocksAll]);
   const chapters = React.useMemo(() => blocks.filter((b) => chapterKinds.has(b.kind) && b.text.trim()), [blocks]);
   const tableText = React.useMemo(() => (part === parts.length - 1 && note.table ? note.table.rows.map((r) => note.table?.columns.map((c) => r.values[c.id] ?? '').filter(Boolean).join(' · ')).join('\n') : undefined), [note.table, part, parts.length]);
-  // Two pages side by side on a wide window, one on a phone.
   const wide = window.innerWidth >= 1100;
-  const columns = wide && size.width >= 900 ? 2 : 1;
-  const columnWidth = columns === 2 ? (size.width - GAP) / 2 : size.width;
-  const step = size.width + GAP;
+  // One page on a phone; two side by side on a wide window, but only once the frame is wide enough
+  // for each of them to hold the whole measure. Below that one page is kept, which the cap then
+  // centres, so the text never runs out to the edge of the window.
+  const columns = wide && measure > 0 && widths.frame >= 2 * measure + GAP ? 2 : 1;
+  // The columns divide the flow's own width, so a page is exactly the flow plus the gap between
+  // pages and every page boundary lands on a column boundary. The width is unknown until the
+  // observer below has measured it, and the flow carries no padding that would shift it.
+  const columnWidth = widths.flow > 0 ? (widths.flow - (columns - 1) * GAP) / columns : undefined;
+  const step = widths.flow + GAP;
 
   React.useEffect(() => keep(SETTINGS, settings), [settings]);
 
   React.useLayoutEffect(() => {
-    const element = frame.current; if (!element) return;
-    const measure = () => setSize({ width: Math.floor(element.clientWidth), height: Math.floor(element.clientHeight) });
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
+    const frameElement = frame.current, flowElement = flow.current;
+    if (!frameElement || !flowElement) return;
+    // Resize callbacks come in bursts, and a resize that moves no width changes no page, so a
+    // measurement that matches what is stored is dropped: storing it would re-run the pagination
+    // and lay the whole part out again. The height is not read at all, as no page depends on it.
+    const readWidths = () => {
+      const frameWidth = Math.floor(frameElement.clientWidth);
+      const flowWidth = Math.floor(flowElement.clientWidth);
+      setWidths((current) => current.frame === frameWidth && current.flow === flowWidth ? current : { frame: frameWidth, flow: flowWidth });
+    };
+    readWidths();
+    const observer = new ResizeObserver(readWidths);
+    observer.observe(frameElement);
+    observer.observe(flowElement);
     return () => observer.disconnect();
   }, []);
+
+  /**
+   * The measure is written in characters, and a character resolves against the font the browser
+   * actually picked, so a hidden probe set in the text's own font is measured instead of guessed.
+   * Only the font and the text size change the width of a character, so this runs for those two
+   * and never during a resize; until it has run the reader lays out one capped page, which is
+   * already centred, so nothing about the first page depends on it.
+   */
+  React.useLayoutEffect(() => {
+    const element = probe.current; if (!element) return;
+    setMeasure(element.offsetWidth);
+  }, [settings.font, settings.size]);
 
   const pageOf = React.useCallback((element: Element) => {
     const origin = flow.current?.getBoundingClientRect().left ?? 0;
@@ -165,17 +200,23 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
 
   // Re-paginate when the size, text size or font changes, staying on the same passage.
   React.useLayoutEffect(() => {
-    const element = flow.current; if (!element || !size.width) return;
+    const element = flow.current; if (!element || !widths.flow) return;
+    // The flow's width is capped in characters, so new text can move it while this part is still
+    // laid out at the previous width. Paginating that width would count pages against a step the
+    // next pass no longer uses, and the observer storing the new width runs after this effect.
+    if (Math.floor(element.clientWidth) !== widths.flow) return;
     const count = Math.max(1, Math.round((element.scrollWidth + GAP) / step));
     counts.current.set(part, count);
     setTotal(count);
-    setChapterStarts(chapters.flatMap((c) => { const found = element.querySelector(`[data-block="${c.id}"]`); return found ? [pageOf(found)] : []; }));
+    const starts = chapters.flatMap((c) => { const found = element.querySelector(`[data-block="${c.id}"]`); return found ? [pageOf(found)] : []; });
+    // A new array is a new render, and nothing moved when the chapter pages came back the same.
+    if (!sameNumbers(storedStarts.current, starts)) { storedStarts.current = starts; setChapterStarts(starts); }
     if (pendingEnd.current) { pendingEnd.current = false; setPage(count - 1); return; }
     const target = anchor.current ? element.querySelector(`[data-block="${anchor.current}"]`) : null;
     setPage(target ? Math.min(count - 1, pageOf(target)) : 0);
-  }, [size, settings.size, settings.font, settings.spacing, blocks, chapters, step, pageOf, part]);
+  }, [widths.flow, settings.size, settings.font, settings.spacing, blocks, chapters, step, pageOf, part]);
   // Sizes change page counts everywhere: measured counts of other parts are stale.
-  React.useEffect(() => { const keepPart = counts.current.get(part); counts.current.clear(); if (keepPart) counts.current.set(part, keepPart); }, [size, settings.size, settings.font, settings.spacing]); // eslint-disable-line react-hooks/exhaustive-deps -- only layout inputs invalidate
+  React.useEffect(() => { const keepPart = counts.current.get(part); counts.current.clear(); if (keepPart) counts.current.set(part, keepPart); }, [widths.flow, settings.size, settings.font, settings.spacing]); // eslint-disable-line react-hooks/exhaustive-deps -- only layout inputs invalidate
   const lengths = React.useMemo(() => parts.map((p) => textLength(blocksAll.slice(p.from, p.to))), [parts, blocksAll]);
   const pagesOf = (index: number) => counts.current.get(index) ?? Math.max(1, Math.round((lengths[index] / Math.max(1, lengths[part])) * total));
   const before = parts.slice(0, part).reduce((n, _, i) => n + pagesOf(i), 0);
@@ -183,8 +224,14 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
   const estimated = parts.some((_, i) => i !== part && !counts.current.has(i));
 
   /** The passage showing at the top of a page (the last one that starts on or before it): the saved place and the bookmark target. */
+  // Finding it measures the flow, which lays the whole part out, so the last answer is kept:
+  // turning a page asks for the same passage twice, and renders that changed no paging must not
+  // measure at all.
+  const placed = React.useRef<{ blocks: readonly FolioBlock[]; index: number; step: number; blockID: string | undefined }>({ blocks: [], index: -1, step: -1, blockID: undefined });
   const firstBlockOn = React.useCallback((index: number): string | undefined => {
     const element = flow.current; if (!element) return undefined;
+    const cache = placed.current;
+    if (cache.index === index && cache.step === step && cache.blocks === blocks) return cache.blockID;
     // Passages are in page order, so a binary search keeps long books quick.
     const children = element.querySelectorAll('[data-block]');
     let low = 0, high = children.length - 1, found: Element | undefined;
@@ -192,8 +239,10 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
       const middle = (low + high) >> 1;
       if (pageOf(children[middle]) <= index) { found = children[middle]; low = middle + 1; } else high = middle - 1;
     }
-    return found?.getAttribute('data-block') ?? undefined;
-  }, [pageOf]);
+    const blockID = found?.getAttribute('data-block') ?? undefined;
+    cache.index = index; cache.step = step; cache.blocks = blocks; cache.blockID = blockID;
+    return blockID;
+  }, [pageOf, step, blocks]);
 
   // The saved place and the other device's "continue reading" update once reading pauses, not on every page.
   const placeTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -270,6 +319,9 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
   };
 
   const fontFamily = settings.font === 'sans' ? 'var(--font-sans, system-ui)' : settings.font === 'serif' ? 'ui-serif, "New York", Georgia, serif' : '"Iowan Old Style", "Palatino", ui-serif, Georgia, serif';
+  // The text and the probe that measures the measure are set in one style, so the pixels the probe
+  // reports are the ones the text is laid out in.
+  const type: React.CSSProperties = { fontFamily, fontSize: settings.size };
   const round = 'flex size-11 items-center justify-center rounded-full bg-[var(--reader-control)] text-[var(--reader-muted)] backdrop-blur';
   const row = 'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[15px] active:bg-[var(--reader-control)]';
 
@@ -281,9 +333,10 @@ export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { not
     </div>
 
     <div className="group/pages relative flex min-h-0 flex-1">
-    <div ref={frame} className="relative min-h-0 flex-1 overflow-hidden" style={wide ? { width: 'min(1180px, calc(100% - 144px))', marginInline: 'auto' } : { marginInline: 28 }} onPointerDown={onPointerDown} onPointerUp={onPointerUp} onWheel={onWheel}>
-      <div ref={flow} className="folio-reader-flow h-full"
-        style={{ width: size.width || '100%', columnWidth, columnGap: GAP, columnFill: 'auto', fontFamily, fontSize: settings.size, lineHeight: settings.spacing, transform: `translateX(${-page * step}px)` }}>
+    <div ref={frame} className="relative min-h-0 flex-1 overflow-hidden" style={wide ? undefined : { marginInline: 28 }} onPointerDown={onPointerDown} onPointerUp={onPointerUp} onWheel={onWheel}>
+      <span ref={probe} aria-hidden className="folio-reader-probe" style={type} />
+      <div ref={flow} className="folio-reader-flow h-full" data-columns={columns}
+        style={{ ...type, columnWidth, columnGap: GAP, columnFill: 'auto', lineHeight: settings.spacing, transform: `translateX(${-page * step}px)` }}>
         <BookPart title={part === 0 ? note.title || t('folio.untitled') : undefined} blocks={blocks} numbers={numbers} table={tableText} />
       </div>
     </div>

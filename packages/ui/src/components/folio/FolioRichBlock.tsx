@@ -19,14 +19,22 @@ const markdownShortcuts = new Map<string, FolioBlock['kind']>([
   ['#', 'heading1'], ['##', 'heading2'], ['###', 'heading3'], ['####', 'heading4'], ['-', 'bullet'], ['*', 'bullet'], ['+', 'bullet'], ['1.', 'numbered'], ['[]', 'task'], ['[ ]', 'task'], ['>', 'toggle'], ['"', 'quote'], ['```', 'code'], ['$$', 'equation'], ['!', 'callout'],
 ]);
 
-const folioExtensions = () => [StarterKit.configure({ heading: false, bulletList: false, orderedList: false, listItem: false, listKeymap: false, blockquote: false, codeBlock: false, horizontalRule: false, link: { openOnClick: false, protocols: ['folio'] } }), Highlight.configure({ multicolor: true }), TextStyle, Color];
+// Every block shares one array: TipTap only reads it, and building a fresh one per editor made each
+// block pay for the whole list again for a result that never differs.
+const folioExtensions = [StarterKit.configure({ heading: false, bulletList: false, orderedList: false, listItem: false, listKeymap: false, blockquote: false, codeBlock: false, horizontalRule: false, link: { openOnClick: false, protocols: ['folio'] } }), Highlight.configure({ multicolor: true }), TextStyle, Color];
 let staticSchema: ReturnType<typeof getSchema> | undefined;
 const editorClass = 'folio-rich-text outline-none min-h-[1.65em]';
-/** The block drawn exactly as its editor would draw it, without an editor. */
-function staticHTML(block: FolioBlock): string {
-  staticSchema ??= getSchema(folioExtensions());
-  const html = getHTMLFromFragment(createDocument(blockToDocument(block), staticSchema).content, staticSchema);
-  return `<div class="${editorClass}">${html}</div>`;
+/**
+ * The block drawn exactly as its editor would draw it, without an editor. A block with an editor
+ * checks what it drew before drawing again, and a block without one had no such check: every poll
+ * replaces the page with fresh block objects, so a long page redrew all of its lines each time. The
+ * markup is what decides, not the object, because a page hands back a new block the moment legacy
+ * `**bold**` markup becomes a real mark.
+ */
+function staticHTML(element: HTMLElement, block: FolioBlock) {
+  staticSchema ??= getSchema(folioExtensions);
+  const drawn = `<div class="${editorClass}">${getHTMLFromFragment(createDocument(blockToDocument(block), staticSchema).content, staticSchema)}</div>`;
+  if (element.innerHTML !== drawn) element.innerHTML = drawn;
 }
 
 /**
@@ -76,6 +84,8 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
   const mentionOpen = React.useRef(false);
   // Typing not yet handed to onChange (only when commitDelay batches keystrokes).
   const pending = React.useRef<{ timer: ReturnType<typeof setTimeout>; unregister: () => void } | null>(null);
+  // Where the press that is now ending landed, so a drag is told apart from a click.
+  const pressedAt = React.useRef<{ x: number; y: number } | undefined>(undefined);
 
   const createEditor = React.useRef<() => Editor | null>(() => null);
   // Layout effects: a line drawn by Enter gets its editor and the caret in the same frame, before the next keystroke.
@@ -122,7 +132,7 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
     mount.current.textContent = '';
     const editor = new Editor({
       element: mount.current,
-      extensions: folioExtensions(),
+      extensions: folioExtensions,
       content: blockToDocument(current.current.block),
       editorProps: {
         handleKeyDown: (view, event) => {
@@ -209,14 +219,20 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
     if (!current.current.lazy || current.current.focusAt) {
       const editor = createEditor.current();
       if (editor && current.current.focusAt) focusNow(editor, current.current.focusAt);
-    } else mount.current.innerHTML = staticHTML(current.current.block);
+    } else if (mount.current) staticHTML(mount.current, current.current.block);
     return () => { commitNow(); const editor = editorRef.current; editorRef.current = null; editor?.destroy(); };
   }, []);
 
-  // A tap on a drawn block starts its editor right inside the tap (so iOS shows the keyboard),
-  // with the caret where the finger landed.
+  // A click or tap on a drawn block starts its editor right inside it (so iOS shows the keyboard),
+  // with the caret where the pointer landed.
   const activate = (event: React.MouseEvent) => {
     if (editorRef.current) return;
+    // A press that travelled is the user selecting text, and building the editor here would replace
+    // the block's own markup and throw that selection away. Five pixels is the same distance the
+    // block drag uses to call a press a drag. A press with no record of where it began (a click the
+    // browser sent without one) still counts as a click, so nothing stops working quietly.
+    const pressed = pressedAt.current;
+    if (pressed && Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) >= 5) return;
     const link = event.target instanceof Element ? event.target.closest('a') : null;
     const href = link?.getAttribute('href') ?? '';
     if (href.startsWith(folioNoteLinkPrefix) && current.current.onOpenNote) { event.preventDefault(); current.current.onOpenNote(href.slice(folioNoteLinkPrefix.length)); return; }
@@ -227,6 +243,10 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
     focusNow(editor, at ? at.pos : 'end');
   };
 
+  // Recorded rather than prevented, so the browser still starts its own selection when the press
+  // turns into a drag.
+  const recordPress = (event: React.PointerEvent) => { pressedAt.current = { x: event.clientX, y: event.clientY }; };
+
   React.useLayoutEffect(() => {
     if (!props.focusAt) return;
     const editor = editorRef.current ?? createEditor.current();
@@ -236,7 +256,7 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
 
   React.useEffect(() => {
     const editor = editorRef.current;
-    if (!editor) { if (mount.current && props.lazy) mount.current.innerHTML = staticHTML(props.block); return; }
+    if (!editor) { if (mount.current && props.lazy) staticHTML(mount.current, props.block); return; }
     // Typing still waiting to be handed over is newer than this block; it commits shortly.
     if (pending.current) return;
     const rendered = documentToText(editor.getJSON()), expected = documentToText(blockToDocument(props.block));
@@ -248,5 +268,5 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
     else mount.current?.style.removeProperty('--folio-placeholder');
   }, [props.placeholder]);
 
-  return <div ref={mount} className="folio-editable min-w-0 flex-1" onClick={props.lazy ? activate : undefined} />;
+  return <div ref={mount} className="folio-editable min-w-0 flex-1" onPointerDown={props.lazy ? recordPress : undefined} onClick={props.lazy ? activate : undefined} />;
 }
