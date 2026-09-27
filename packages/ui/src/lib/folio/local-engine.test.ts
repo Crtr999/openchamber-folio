@@ -97,3 +97,13 @@ test('phone attachments relink to the Mac copy, and Mac attachments download on 
   const reminders = await local.request({ command: 'calendar-reminders', flag: true });
   assert.equal(reminders.state?.reminders, true);
 });
+
+test('dragged page order sorts siblings and only rewrites pages that moved', async () => {
+  const { sortSiblings, reorderSiblings } = await import('./order');
+  const base = markdownToNote('# A', 'x', 1);
+  const [a, b, c] = ['A', 'B', 'C'].map((title, i) => ({ ...base, id: crypto.randomUUID().toUpperCase(), title, modified: i }));
+  assert.deepEqual(sortSiblings([a, b, c]).map((n) => n.title), ['A', 'B', 'C']);
+  const changed = reorderSiblings([a, b, c], c.id, a.id);
+  const next = sortSiblings([a, b, c].map((n) => changed.find((m) => m.id === n.id) ?? n));
+  assert.deepEqual(next.map((n) => n.title), ['C', 'A', 'B']);
+});

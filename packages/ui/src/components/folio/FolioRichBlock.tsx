@@ -101,6 +101,21 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
             current.current.onSplit(documentToText(view.state.doc.cut(0, from).toJSON()), documentToText(view.state.doc.cut(to).toJSON()));
             return true;
           }
+          // Tab and Shift+Tab nest and un-nest the block, like an outline.
+          if (event.key === 'Tab' && !event.isComposing && !event.metaKey && !event.ctrlKey && !event.altKey) {
+            event.preventDefault();
+            const block = current.current.block;
+            const depth = Math.max(0, Math.min(8, (block.indent ?? 0) + (event.shiftKey ? -1 : 1)));
+            current.current.onChange({ ...block, ...documentToText(view.state.doc.toJSON()), indent: depth || undefined });
+            return true;
+          }
+          // Backspace at the start of a nested block un-nests it first.
+          if (event.key === 'Backspace' && atStart && (current.current.block.indent ?? 0) > 0) {
+            event.preventDefault();
+            const block = current.current.block;
+            current.current.onChange({ ...block, ...documentToText(view.state.doc.toJSON()), indent: (block.indent ?? 1) - 1 || undefined });
+            return true;
+          }
           if (event.key === 'Backspace' && atStart) {
             if (current.current.block.kind !== 'text') { event.preventDefault(); current.current.onKind('text'); return true; }
             if (!view.state.doc.textContent) { event.preventDefault(); current.current.onRemoveEmpty(); return true; }

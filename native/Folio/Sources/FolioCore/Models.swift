@@ -38,8 +38,10 @@ public struct Block: Identifiable, Codable, Equatable, Sendable {
     public var highlight: Highlight
     public var asset: String?
     public var marks: [InlineMark]?
-    public init(id: UUID = UUID(), kind: BlockKind = .text, text: String = "", checked: Bool = false, highlight: Highlight = .none, asset: String? = nil, marks: [InlineMark]? = nil) {
-        self.id = id; self.kind = kind; self.text = text; self.checked = checked; self.highlight = highlight; self.asset = asset; self.marks = marks
+    /// Outline depth (0–8) for nested lists and notes; nil means top level.
+    public var indent: Int?
+    public init(id: UUID = UUID(), kind: BlockKind = .text, text: String = "", checked: Bool = false, highlight: Highlight = .none, asset: String? = nil, marks: [InlineMark]? = nil, indent: Int? = nil) {
+        self.id = id; self.kind = kind; self.text = text; self.checked = checked; self.highlight = highlight; self.asset = asset; self.marks = marks; self.indent = indent
     }
 }
 
@@ -96,6 +98,8 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
     public var excludedFromAI: Bool
     public var isMeeting: Bool
     public var isChat: Bool?
+    /// Position among sibling pages, set when the user drags pages into order; nil keeps the default order.
+    public var order: Double?
     public var table: NoteTable?
     public var trashed: Bool
     public var created: Date

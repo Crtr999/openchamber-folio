@@ -60,7 +60,7 @@ function Inline({ block }: { block: FolioBlock }) {
 }
 
 function BookBlock({ block, index, number }: { block: FolioBlock; index: number; number: number }) {
-  const common = { 'data-block': block.id };
+  const common = { 'data-block': block.id, style: block.indent ? { marginLeft: `${block.indent * 1.2}em` } : undefined };
   switch (block.kind) {
     case 'heading1': case 'toggleHeading1': return <h1 {...common} className={cn(index > 0 && 'folio-reader-chapter')}><Inline block={block} /></h1>;
     case 'heading2': case 'toggleHeading2': return <h2 {...common} className={cn(index > 0 && 'folio-reader-chapter')}><Inline block={block} /></h2>;

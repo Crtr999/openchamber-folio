@@ -7,7 +7,12 @@ import { findHit } from '@/lib/folio/search';
 import { useFolioStore } from '@/lib/folio/store';
 import type { FolioNote } from '@/lib/folio/schema';
 import { rankByQuery } from '@/lib/search/fuzzySearch';
+import { DndContext, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { reorderSiblings, sortSiblings } from '@/lib/folio/order';
 import { useMobileChatStore } from './chatStore';
+import { MobileChatsSection } from './FolioMobileChatsSection';
 import { useSyncStore } from './sync';
 
 /** Screens reached from the phone's home: notes, search, calendar and the assistant's conversations. */
@@ -17,6 +22,11 @@ const row = 'flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left tex
 const pill = 'flex h-12 items-center justify-center rounded-full bg-secondary text-muted-foreground active:bg-interactive-selection';
 
 const live = (notes: readonly FolioNote[] | undefined) => (notes ?? []).filter((n) => !n.trashed && !n.isChat);
+
+function useOpen(key: string): [boolean, () => void] {
+  const [open, setOpen] = React.useState(() => { try { return localStorage.getItem(key) !== '1'; } catch { return true; } });
+  return [open, () => setOpen((value) => { try { localStorage.setItem(key, value ? '1' : '0'); } catch { /* storage blocked */ } return !value; })];
+}
 
 function Section({ title, open, onToggle, action, children }: { title: string; open: boolean; onToggle: () => void; action?: React.ReactNode; children: React.ReactNode }) {
   return <section className="mb-4">
@@ -30,27 +40,31 @@ function Section({ title, open, onToggle, action, children }: { title: string; o
   </section>;
 }
 
-function Tree({ notes, parentID, depth, openNote }: { notes: readonly FolioNote[]; parentID?: string; depth: number; openNote: (id: string) => void }) {
+function TreeRow({ note, depth, notes, openNote, expanded, onToggle }: { note: FolioNote; depth: number; notes: readonly FolioNote[]; openNote: (id: string) => void; expanded: Set<string>; onToggle: (id: string) => void }) {
   const { t } = useI18n();
-  const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
-  const children = notes.filter((n) => (n.parentID ?? undefined) === parentID).sort((a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0) || b.modified - a.modified);
-  return <>{children.map((note) => {
-    const hasChildren = notes.some((n) => n.parentID === note.id);
-    const open = expanded.has(note.id);
-    return <React.Fragment key={note.id}>
-      <div className="flex items-center" style={{ paddingLeft: depth * 18 }}>
-        <button type="button" className={cn(row, 'min-w-0 flex-1')} onClick={() => openNote(note.id)}>
-          <span className="flex w-7 shrink-0 justify-center text-[20px]"><FolioIcon value={note.icon} /></span>
-          <span className="min-w-0 flex-1 truncate">{note.title || t('folio.untitled')}</span>
-        </button>
-        {hasChildren && <button type="button" className="flex size-10 shrink-0 items-center justify-center text-muted-foreground" aria-expanded={open} aria-label={open ? t('folio.collapse') : t('folio.expand')}
-          onClick={() => setExpanded((prev) => { const next = new Set(prev); if (next.has(note.id)) next.delete(note.id); else next.add(note.id); return next; })}>
-          <Icon name="arrow-right-s" className={cn('size-5 transition-transform', open && 'rotate-90')} />
-        </button>}
-      </div>
-      {open && <Tree notes={notes} parentID={note.id} depth={depth + 1} openNote={openNote} />}
-    </React.Fragment>;
-  })}</>;
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: note.id });
+  const hasChildren = notes.some((n) => n.parentID === note.id);
+  const open = expanded.has(note.id);
+  return <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} className={cn(isDragging && 'relative z-10 rounded-lg bg-secondary opacity-90')}>
+    <div className="flex items-center" style={{ paddingLeft: depth * 18 }}>
+      {/* Long-press the page to drag it among its siblings; a tap opens it. */}
+      <button type="button" ref={setActivatorNodeRef} className={cn(row, 'min-w-0 flex-1 select-none touch-manipulation')} onClick={() => openNote(note.id)} {...attributes} {...listeners}>
+        <span className="flex w-7 shrink-0 justify-center text-[20px]"><FolioIcon value={note.icon} /></span>
+        <span className="min-w-0 flex-1 truncate">{note.title || t('folio.untitled')}</span>
+      </button>
+      {hasChildren && <button type="button" className="flex size-10 shrink-0 items-center justify-center text-muted-foreground" aria-expanded={open} aria-label={open ? t('folio.collapse') : t('folio.expand')} onClick={() => onToggle(note.id)}>
+        <Icon name="arrow-right-s" className={cn('size-5 transition-transform', open && 'rotate-90')} />
+      </button>}
+    </div>
+    {open && <Tree notes={notes} parentID={note.id} depth={depth + 1} openNote={openNote} expanded={expanded} onToggle={onToggle} />}
+  </div>;
+}
+
+function Tree({ notes, parentID, depth, openNote, expanded, onToggle }: { notes: readonly FolioNote[]; parentID?: string; depth: number; openNote: (id: string) => void; expanded: Set<string>; onToggle: (id: string) => void }) {
+  const children = sortSiblings(notes.filter((n) => (n.parentID && notes.some((p) => p.id === n.parentID) ? n.parentID : undefined) === parentID));
+  return <SortableContext items={children.map((n) => n.id)} strategy={verticalListSortingStrategy}>
+    {children.map((note) => <TreeRow key={note.id} note={note} depth={depth} notes={notes} openNote={openNote} expanded={expanded} onToggle={onToggle} />)}
+  </SortableContext>;
 }
 
 /** Home, laid out like Notion on iPhone: tabs up top, recents and the page tree, search / ask / new page at the bottom. */
@@ -59,9 +73,25 @@ export function MobileHome({ onView, onOpenNote: openNote, onNewPage, onAsk }: {
   const notes = live(useFolioStore((s) => s.status?.notes));
   const pairing = useSyncStore((s) => s.pairing);
   const soon = useFolioStore((s) => s.status?.events.some((e) => e.start - Date.now() < 60 * 60_000 && e.end > Date.now()));
-  const [recentOpen, setRecentOpen] = React.useState(true);
-  const [treeOpen, setTreeOpen] = React.useState(true);
+  const [recentOpen, toggleRecent] = useOpen('folio.home.recentCollapsed');
+  const [favoritesOpen, toggleFavorites] = useOpen('folio.home.favoritesCollapsed');
+  const [treeOpen, toggleTree] = useOpen('folio.home.notesCollapsed');
   const [more, setMore] = React.useState(false);
+  const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
+  const favorites = sortSiblings(notes.filter((n) => n.favorite));
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 6 } }),
+  );
+  const toggleNode = (id: string) => setExpanded((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const parentOf = (id: string) => { const note = notes.find((n) => n.id === id); return note?.parentID && notes.some((p) => p.id === note.parentID) ? note.parentID : ''; };
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    const moved = String(active.id), target = String(over.id);
+    const key = parentOf(moved);
+    if (key !== parentOf(target)) return;
+    for (const note of reorderSiblings(notes.filter((n) => parentOf(n.id) === key), moved, target)) useFolioStore.getState().edit(note);
+  };
   const recents = [...notes].sort((a, b) => b.modified - a.modified).slice(0, 8);
   const initial = (pairing?.name.trim()[0] ?? 'F').toUpperCase();
 
@@ -77,13 +107,20 @@ export function MobileHome({ onView, onOpenNote: openNote, onNewPage, onAsk }: {
     </nav>
 
     <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-32">
-      <Section title={t('folio.recent')} open={recentOpen} onToggle={() => setRecentOpen(!recentOpen)}>
+      <Section title={t('folio.recent')} open={recentOpen} onToggle={toggleRecent}>
         {recents.map((note) => <button key={note.id} type="button" className={row} onClick={() => openNote(note.id)}>
           <span className="flex w-7 shrink-0 justify-center text-[20px]"><FolioIcon value={note.icon} /></span>
           <span className="min-w-0 flex-1 truncate">{note.title || t('folio.untitled')}</span>
         </button>)}
       </Section>
-      <Section title={t('folio.privatePages')} open={treeOpen} onToggle={() => setTreeOpen(!treeOpen)}
+      <MobileChatsSection onOpenChats={() => onView('chats')} />
+      {favorites.length > 0 && <Section title={t('folio.favorites')} open={favoritesOpen} onToggle={toggleFavorites}>
+        {favorites.map((note) => <button key={note.id} type="button" className={row} onClick={() => openNote(note.id)}>
+          <span className="flex w-7 shrink-0 justify-center text-[20px]"><FolioIcon value={note.icon} /></span>
+          <span className="min-w-0 flex-1 truncate">{note.title || t('folio.untitled')}</span>
+        </button>)}
+      </Section>}
+      <Section title={t('folio.privatePages')} open={treeOpen} onToggle={toggleTree}
         action={<div className="relative">
           <button type="button" className="flex size-9 items-center justify-center text-muted-foreground" aria-label={t('folio.more')} aria-expanded={more} onClick={() => setMore(!more)}><Icon name="more-fill" className="size-5" /></button>
           {more && <>
@@ -94,7 +131,9 @@ export function MobileHome({ onView, onOpenNote: openNote, onNewPage, onAsk }: {
             </div>
           </>}
         </div>}>
-        <Tree notes={notes} depth={0} openNote={openNote} />
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <Tree notes={notes} depth={0} openNote={openNote} expanded={expanded} onToggle={toggleNode} />
+        </DndContext>
       </Section>
     </div>
 

@@ -136,9 +136,9 @@ export function noteToMarkdown(note: FolioNote, plain = false): string {
     const heading = /eading([1-4])$/.exec(b.kind)?.[1];
     if (heading) return `${'#'.repeat(Number(heading))} ${b.kind.startsWith('toggle') ? '▸ ' : ''}${t}`;
     switch (b.kind) {
-      case 'bullet': return `- ${t}`;
-      case 'numbered': return `1. ${t}`;
-      case 'task': return `- [${b.checked ? 'x' : ' '}] ${t}`;
+      case 'bullet': return `${'    '.repeat(b.indent ?? 0)}- ${t}`;
+      case 'numbered': return `${'    '.repeat(b.indent ?? 0)}1. ${t}`;
+      case 'task': return `${'    '.repeat(b.indent ?? 0)}- [${b.checked ? 'x' : ' '}] ${t}`;
       case 'quote': case 'callout': return t.split('\n').map((line) => `> ${line}`).join('\n');
       case 'code': return `\`\`\`\n${t}\n\`\`\``;
       case 'equation': return `$$\n${t}\n$$`;

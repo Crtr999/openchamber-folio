@@ -1,17 +1,49 @@
 import React from 'react';
+import { DndContext, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { FolioIcon } from './FolioIcon';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useFolioStore } from '@/lib/folio/store';
+import { reorderSiblings, sortSiblings } from '@/lib/folio/order';
 import type { FolioNote } from '@/lib/folio/schema';
 import { useUIStore } from '@/stores/useUIStore';
 
 const rowClass = 'group/folio flex h-7 items-center gap-1 rounded-md pr-1 text-sm text-foreground/85 hover:bg-interactive-hover';
 
+/** Collapsed sections are remembered on this device. */
+function useCollapsed(key: string): [boolean, () => void] {
+  const [collapsed, setCollapsed] = React.useState(() => { try { return localStorage.getItem(key) === '1'; } catch { return false; } });
+  const toggle = () => setCollapsed((value) => { try { localStorage.setItem(key, value ? '0' : '1'); } catch { /* storage blocked */ } return !value; });
+  return [collapsed, toggle];
+}
+
+function SectionHeader({ label, collapsed, onToggle, active, onOpen, action }: { label: string; collapsed: boolean; onToggle: () => void; active?: boolean; onOpen?: () => void; action?: React.ReactNode }) {
+  return <div className={cn(rowClass, 'mt-1 pl-1', active && 'bg-interactive-selection')}>
+    <button type="button" className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-interactive-hover" aria-expanded={!collapsed} aria-label={label} onClick={onToggle}>
+      <Icon name="arrow-right-s" className={cn('size-4 transition-transform', !collapsed && 'rotate-90')} />
+    </button>
+    <button type="button" className="min-w-0 flex-1 truncate text-left text-xs font-medium text-muted-foreground hover:text-foreground" onClick={onOpen ?? onToggle}>{label}</button>
+    {action}
+  </div>;
+}
+
+/** A page row that can be dragged among its siblings (drag on a Mac, long-press on touch). */
+function SortableRow({ id, line, children }: { id: string; line: React.ReactNode; children?: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
+  // Only the page's own line starts a drag, so nested pages drag on their own.
+  return <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} className={cn(isDragging && 'relative z-10 opacity-70')}>
+    <div ref={setActivatorNodeRef} className="select-none" {...attributes} {...listeners}>{line}</div>
+    {children}
+  </div>;
+}
+
 /**
  * Notes live in the same scroll list as project chats, directly under the project folders,
- * styled like Notion's sidebar: favorites first, then a nested page tree, then Trash.
+ * styled like Notion's sidebar: favorites, then the page tree, then Trash. Favorites and Notes
+ * collapse, and pages can be dragged into order among their siblings.
  */
 export function FolioSidebar() {
   const { t } = useI18n();
@@ -21,6 +53,12 @@ export function FolioSidebar() {
   const homeOpen = useFolioStore((s) => s.open && s.home);
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
   const [showTrash, setShowTrash] = React.useState(false);
+  const [favoritesCollapsed, toggleFavorites] = useCollapsed('folio.sidebar.favoritesCollapsed');
+  const [notesCollapsed, toggleNotes] = useCollapsed('folio.sidebar.notesCollapsed');
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 6 } }),
+  );
   if (!api) return null;
 
   const live = (notes ?? []).filter((note) => !note.trashed && !note.isChat);
@@ -39,45 +77,60 @@ export function FolioSidebar() {
     void useFolioStore.getState().run({ command: 'create', parentID });
   };
   const toggle = (id: string) => setExpanded((old) => { const next = new Set(old); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const parentKey = (id: string) => { const note = live.find((n) => n.id === id); return note?.parentID && live.some((p) => p.id === note.parentID) ? note.parentID : ''; };
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    const moved = String(active.id), target = String(over.id);
+    const key = parentKey(moved);
+    if (key !== parentKey(target)) return; // pages move among their own siblings
+    for (const note of reorderSiblings(byParent.get(key) ?? [], moved, target)) useFolioStore.getState().edit(note);
+  };
 
   const row = (note: FolioNote, depth: number, allowChildren: boolean): React.ReactNode => {
-    const children = allowChildren ? byParent.get(note.id) ?? [] : [];
+    const children = allowChildren ? sortSiblings(byParent.get(note.id) ?? []) : [];
     const isOpen = expanded.has(note.id);
-    return <React.Fragment key={`${allowChildren ? 't' : 'f'}-${note.id}`}>
-      <div className={cn(rowClass, selectedID === note.id && 'bg-interactive-selection text-foreground')} style={{ paddingLeft: 4 + depth * 14 }}>
-        <button type="button" className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-interactive-hover" aria-label={note.title || t('folio.untitled')} aria-expanded={allowChildren ? isOpen : undefined} onClick={() => allowChildren ? toggle(note.id) : open(note)}>
-          <span className={cn(allowChildren && 'group-hover/folio:hidden')}><FolioIcon value={note.icon} /></span>
-          {allowChildren && <Icon name="arrow-right-s" className={cn('hidden size-4 group-hover/folio:block transition-transform', isOpen && 'rotate-90')} />}
-        </button>
-        <button type="button" className="min-w-0 flex-1 truncate text-left" onClick={() => open(note)}>{note.title || t('folio.untitled')}</button>
-        {allowChildren && <button type="button" className="hidden size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-interactive-hover group-hover/folio:flex" aria-label={t('folio.addInside')} title={t('folio.addInside')} onClick={() => create(note.id)}>
-          <Icon name="add" className="size-3.5" />
-        </button>}
-      </div>
-      {allowChildren && isOpen && (children.length
-        ? children.map((child) => row(child, depth + 1, true))
+    const line = <div className={cn(rowClass, selectedID === note.id && 'bg-interactive-selection text-foreground')} style={{ paddingLeft: 4 + depth * 14 }}>
+      <button type="button" className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-interactive-hover" aria-label={note.title || t('folio.untitled')} aria-expanded={allowChildren ? isOpen : undefined} onClick={() => allowChildren ? toggle(note.id) : open(note)}>
+        <span className={cn(allowChildren && 'group-hover/folio:hidden')}><FolioIcon value={note.icon} /></span>
+        {allowChildren && <Icon name="arrow-right-s" className={cn('hidden size-4 group-hover/folio:block transition-transform', isOpen && 'rotate-90')} />}
+      </button>
+      <button type="button" className="min-w-0 flex-1 truncate text-left" onClick={() => open(note)}>{note.title || t('folio.untitled')}</button>
+      {allowChildren && <button type="button" className="hidden size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-interactive-hover group-hover/folio:flex" aria-label={t('folio.addInside')} title={t('folio.addInside')} onClick={() => create(note.id)}>
+        <Icon name="add" className="size-3.5" />
+      </button>}
+    </div>;
+    if (!allowChildren) return <React.Fragment key={`f-${note.id}`}>{line}</React.Fragment>;
+    return <SortableRow key={note.id} id={note.id} line={line}>
+      {isOpen && (children.length
+        ? <SortableContext items={children.map((c) => c.id)} strategy={verticalListSortingStrategy}>{children.map((child) => row(child, depth + 1, true))}</SortableContext>
         : <div className="h-6 text-xs text-muted-foreground/70" style={{ paddingLeft: 30 + (depth + 1) * 14 }}>{t('folio.empty')}</div>)}
-    </React.Fragment>;
+    </SortableRow>;
   };
+  const roots = sortSiblings(byParent.get('') ?? []);
 
   return <section className="mt-3 pb-2" aria-label={t('folio.notes')}>
     {favorites.length > 0 && <>
-      <div className="px-1.5 pb-0.5 pt-1 text-xs font-medium text-muted-foreground">{t('folio.favorites')}</div>
-      {favorites.map((note) => row(note, 0, false))}
+      <SectionHeader label={t('folio.favorites')} collapsed={favoritesCollapsed} onToggle={toggleFavorites} />
+      {!favoritesCollapsed && favorites.map((note) => row(note, 0, false))}
     </>}
-    <div className={cn(rowClass, 'mt-1 pl-1', homeOpen && 'bg-interactive-selection')}>
-      <button type="button" className="min-w-0 flex-1 truncate px-0.5 text-left text-xs font-medium text-muted-foreground hover:text-foreground" onClick={() => { leave(); void useFolioStore.getState().openHome(); }}>{t('folio.notes')}</button>
-      <button type="button" className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-interactive-hover" aria-label={t('folio.newPage')} title={t('folio.newPage')} onClick={() => create()}>
+    <SectionHeader label={t('folio.notes')} collapsed={notesCollapsed} onToggle={toggleNotes} active={homeOpen}
+      onOpen={() => { leave(); void useFolioStore.getState().openHome(); }}
+      action={<button type="button" className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-interactive-hover" aria-label={t('folio.newPage')} title={t('folio.newPage')} onClick={() => create()}>
         <Icon name="add" className="size-3.5" />
-      </button>
-    </div>
-    {(byParent.get('') ?? []).map((note) => row(note, 0, true))}
-    {live.length === 0 && <button type="button" className={cn(rowClass, 'w-full pl-2 text-muted-foreground')} onClick={() => create()}>+ {t('folio.newPage')}</button>}
-    {trashed.length > 0 && <>
-      <button type="button" className={cn(rowClass, 'mt-1 w-full pl-2 text-muted-foreground')} aria-expanded={showTrash} onClick={() => setShowTrash(!showTrash)}>
-        <Icon name="delete-bin" className="size-3.5" /><span>{t('folio.trash')}</span><span className="ml-auto text-xs">{trashed.length}</span>
-      </button>
-      {showTrash && trashed.map((note) => row(note, 1, false))}
+      </button>} />
+    {!notesCollapsed && <>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <SortableContext items={roots.map((n) => n.id)} strategy={verticalListSortingStrategy}>
+          {roots.map((note) => row(note, 0, true))}
+        </SortableContext>
+      </DndContext>
+      {live.length === 0 && <button type="button" className={cn(rowClass, 'w-full pl-2 text-muted-foreground')} onClick={() => create()}>+ {t('folio.newPage')}</button>}
+      {trashed.length > 0 && <>
+        <button type="button" className={cn(rowClass, 'mt-1 w-full pl-2 text-muted-foreground')} aria-expanded={showTrash} onClick={() => setShowTrash(!showTrash)}>
+          <Icon name="delete-bin" className="size-3.5" /><span>{t('folio.trash')}</span><span className="ml-auto text-xs">{trashed.length}</span>
+        </button>
+        {showTrash && trashed.map((note) => row(note, 1, false))}
+      </>}
     </>}
   </section>;
 }

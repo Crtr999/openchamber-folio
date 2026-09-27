@@ -474,7 +474,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
           const toggled = block.checked, isToggle = block.kind.startsWith('toggle');
           const linked = (block.kind === 'page' || block.kind === 'pageIn') && block.asset ? status.notes.find((n) => n.id === block.asset) : undefined;
           return <div key={block.id} data-block-id={block.id} className="folio-block group/block relative flex items-start gap-1.5 rounded-sm" data-kind={block.kind} data-checked={block.checked}
-            style={{ backgroundColor: block.highlight === 'none' ? undefined : `color-mix(in srgb, ${folioColors[block.highlight]} ${status.highlightStrength * 100}%, transparent)` }}>
+            style={{ marginLeft: block.indent ? `${block.indent * 1.5}em` : undefined, backgroundColor: block.highlight === 'none' ? undefined : `color-mix(in srgb, ${folioColors[block.highlight]} ${status.highlightStrength * 100}%, transparent)` }}>
             {/* Handles only appear on hover, in the left margin, like Notion. */}
             <div className={cn('absolute top-0.5 flex opacity-0 transition-opacity group-hover/block:opacity-100', mobile ? '-left-7 group-focus-within/block:opacity-70' : '-left-12', blockMenuID === block.id && 'opacity-100')}>
               {!mobile && <button type="button" className="rounded p-0.5 text-muted-foreground hover:bg-interactive-hover" aria-label={t('folio.newBlock')} title={t('folio.newBlock')} onClick={() => insertAfter(block.id, makeBlock())}><Icon name="add" className="size-4" /></button>}
@@ -490,6 +490,8 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
                 <div className="flex border-t border-border pt-1">
                   <button type="button" className={cn(menuItem, 'justify-center')} aria-label={t('folio.up')} onClick={() => move(block.id, -1)}>↑</button>
                   <button type="button" className={cn(menuItem, 'justify-center')} aria-label={t('folio.down')} onClick={() => move(block.id, 1)}>↓</button>
+                  <button type="button" className={cn(menuItem, 'justify-center')} aria-label={t('folio.outdent')} disabled={!block.indent} onClick={() => updateBlock({ ...block, indent: (block.indent ?? 1) - 1 || undefined })}>⇤</button>
+                  <button type="button" className={cn(menuItem, 'justify-center')} aria-label={t('folio.indent')} disabled={(block.indent ?? 0) >= 8} onClick={() => updateBlock({ ...block, indent: (block.indent ?? 0) + 1 })}>⇥</button>
                   <button type="button" className={cn(menuItem, 'justify-center text-destructive')} aria-label={t('folio.remove')} onClick={() => { const current = latestNote(); if (current) edit({ ...current, blocks: current.blocks.filter((b) => b.id !== block.id) }); setBlockMenuID(undefined); }}><Icon name="delete-bin" className="size-4" /></button>
                 </div>
               </div>
@@ -520,7 +522,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
                   const position = current.blocks.findIndex((b) => b.id === block.id); if (position < 0) return;
                   const original = current.blocks[position];
                   const carry: BlockKind = ['bullet', 'numbered', 'task'].includes(original.kind) ? original.kind : 'text';
-                  const next: FolioBlock = { ...makeBlock(), ...after, kind: carry };
+                  const next: FolioBlock = { ...makeBlock(), ...after, kind: carry, indent: original.indent };
                   const blocks = [...current.blocks]; blocks.splice(position, 1, { ...original, ...before }, next);
                   edit({ ...current, blocks }); focusBlock(next.id, 'start');
                 }} />}
