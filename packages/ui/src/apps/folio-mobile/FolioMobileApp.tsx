@@ -263,6 +263,8 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
     ];
     return () => { for (const handle of handles) void handle.then((h) => h.remove()); };
   }, [closeNative]);
+  // The classic editor is a one-time choice for that visit to the page.
+  React.useEffect(() => { if (view !== 'notes') setClassicFor(undefined); }, [view]);
   // Leaving the page by any other route (a notification, a pairing link) closes the native editor too.
   React.useEffect(() => { if (view !== 'notes' && nativeFor.current) { afterClose.current = view; void nativeEditor.close(); } }, [view]);
 

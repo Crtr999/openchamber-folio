@@ -600,7 +600,6 @@ final class FolioNoteEditorController: UIViewController, UITextViewDelegate, UIT
             item("italic", "Italic") { [weak self] in self?.toggleTrait(.traitItalic) },
             item("decrease.indent", "Outdent") { [weak self] in self?.indent(-1) },
             item("increase.indent", "Indent") { [weak self] in self?.indent(1) },
-            item("arrow.uturn.backward", "Undo") { [weak self] in self?.textView.undoManager?.undo() },
             .flexibleSpace(),
             item("keyboard.chevron.compact.down", "Hide keyboard") { [weak self] in self?.view.endEditing(true) },
         ]
