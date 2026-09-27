@@ -101,7 +101,7 @@ export function MobileChatsSection({ onOpenChats, onOpenSessions }: { onOpenChat
   const newChat = (folder: Folder) => {
     const project = projects.find((p) => p.id === folder.id);
     if (project) openNewSessionDraft({ selectedProjectId: project.id, directoryOverride: project.path });
-    else openNewSessionDraft();
+    else openNewSessionDraft({ target: 'chat', directoryOverride: null });
     onOpenChats();
   };
   const onDragEnd = ({ active, over }: DragEndEvent) => {

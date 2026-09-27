@@ -1,5 +1,6 @@
 import React from 'react';
-import { Editor } from '@tiptap/core';
+import { flushSync } from 'react-dom';
+import { Editor, createDocument, getHTMLFromFragment, getSchema } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Highlight from '@tiptap/extension-highlight';
 import { TextStyle, Color } from '@tiptap/extension-text-style';
@@ -18,12 +19,40 @@ const markdownShortcuts = new Map<string, FolioBlock['kind']>([
   ['#', 'heading1'], ['##', 'heading2'], ['###', 'heading3'], ['####', 'heading4'], ['-', 'bullet'], ['*', 'bullet'], ['+', 'bullet'], ['1.', 'numbered'], ['[]', 'task'], ['[ ]', 'task'], ['>', 'toggle'], ['"', 'quote'], ['```', 'code'], ['$$', 'equation'], ['!', 'callout'],
 ]);
 
+const folioExtensions = () => [StarterKit.configure({ heading: false, bulletList: false, orderedList: false, listItem: false, listKeymap: false, blockquote: false, codeBlock: false, horizontalRule: false, link: { openOnClick: false, protocols: ['folio'] } }), Highlight.configure({ multicolor: true }), TextStyle, Color];
+let staticSchema: ReturnType<typeof getSchema> | undefined;
+const editorClass = 'folio-rich-text outline-none min-h-[1.65em]';
+/** The block drawn exactly as its editor would draw it, without an editor. */
+function staticHTML(block: FolioBlock): string {
+  staticSchema ??= getSchema(folioExtensions());
+  const html = getHTMLFromFragment(createDocument(blockToDocument(block), staticSchema).content, staticSchema);
+  return `<div class="${editorClass}">${html}</div>`;
+}
+
+/**
+ * Puts the caret in the block right now. TipTap's own focus waits a frame, and keys typed in that
+ * frame (fast typing straight after Enter) would still land in the previous line.
+ */
+function focusNow(editor: Editor, at: FocusAt | number) {
+  const size = editor.state.doc.content.size;
+  const pos = typeof at === 'number' ? at : at === 'start' ? 1 : Math.max(1, size - 1);
+  editor.commands.setTextSelection(Math.min(Math.max(1, pos), Math.max(1, size - 1)));
+  editor.view.focus();
+  editor.commands.scrollIntoView();
+}
+
 interface FolioRichBlockProps {
   block: FolioBlock;
   placeholder?: string;
   focusAt?: FocusAt;
   /** Milliseconds to batch typing before `onChange` (0: every keystroke). Pending typing is flushed by `flushPendingEdits`. */
   commitDelay?: number;
+  /**
+   * Draw the block as plain HTML and start its editor only when it is tapped or focused. Every
+   * editor listens to every selection change on the page, so a long page full of editors makes
+   * each keystroke do work for all of them; this keeps it to the few blocks actually being edited.
+   */
+  lazy?: boolean;
   onChange: (block: FolioBlock) => void;
   onFocus: (editor: Editor) => void;
   onBlur: (editor: Editor) => void;
@@ -37,7 +66,7 @@ interface FolioRichBlockProps {
 }
 
 // Callbacks are read through a ref and must look up the latest page themselves, so a block re-renders only when its own content changes.
-export const FolioRichBlock = React.memo(FolioRichBlockInner, (previous, next) => previous.block === next.block && previous.focusAt === next.focusAt && previous.placeholder === next.placeholder && previous.commitDelay === next.commitDelay);
+export const FolioRichBlock = React.memo(FolioRichBlockInner, (previous, next) => previous.block === next.block && previous.focusAt === next.focusAt && previous.placeholder === next.placeholder && previous.commitDelay === next.commitDelay && previous.lazy === next.lazy);
 
 function FolioRichBlockInner(props: FolioRichBlockProps) {
   const mount = React.useRef<HTMLDivElement>(null);
@@ -48,7 +77,9 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
   // Typing not yet handed to onChange (only when commitDelay batches keystrokes).
   const pending = React.useRef<{ timer: ReturnType<typeof setTimeout>; unregister: () => void } | null>(null);
 
-  React.useEffect(() => {
+  const createEditor = React.useRef<() => Editor | null>(() => null);
+  // Layout effects: a line drawn by Enter gets its editor and the caret in the same frame, before the next keystroke.
+  React.useLayoutEffect(() => {
     if (!mount.current) return;
     const commitNow = () => {
       const waiting = pending.current;
@@ -85,9 +116,13 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
         current.current.onMention?.(null);
       }
     };
+    createEditor.current = () => {
+    if (editorRef.current) return editorRef.current;
+    if (!mount.current) return null;
+    mount.current.textContent = '';
     const editor = new Editor({
       element: mount.current,
-      extensions: [StarterKit.configure({ heading: false, bulletList: false, orderedList: false, listItem: false, listKeymap: false, blockquote: false, codeBlock: false, horizontalRule: false, link: { openOnClick: false, protocols: ['folio'] } }), Highlight.configure({ multicolor: true }), TextStyle, Color],
+      extensions: folioExtensions(),
       content: blockToDocument(current.current.block),
       editorProps: {
         handleKeyDown: (view, event) => {
@@ -112,7 +147,10 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
             if (view.state.doc.textContent === '---') { editorRef.current?.commands.clearContent(true); current.current.onKind('divider'); return true; }
             // Enter on an empty list item ends the list, like Notion.
             if (!view.state.doc.textContent && current.current.block.kind !== 'text') { current.current.onKind('text'); return true; }
-            current.current.onSplit(documentToText(view.state.doc.cut(0, from).toJSON()), documentToText(view.state.doc.cut(to).toJSON()));
+            // ProseMirror's keydown is not a React event, so React would draw the new line (and move the
+            // caret into it) a moment later, and fast typing would land in this line. Draw it now.
+            const before = documentToText(view.state.doc.cut(0, from).toJSON()), after = documentToText(view.state.doc.cut(to).toJSON());
+            flushSync(() => current.current.onSplit(before, after));
             return true;
           }
           // Tab and Shift+Tab nest and un-nest the block, like an outline.
@@ -132,7 +170,7 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
           }
           if (event.key === 'Backspace' && atStart) {
             if (current.current.block.kind !== 'text') { event.preventDefault(); current.current.onKind('text'); return true; }
-            if (!view.state.doc.textContent) { event.preventDefault(); current.current.onRemoveEmpty(); return true; }
+            if (!view.state.doc.textContent) { event.preventDefault(); flushSync(() => current.current.onRemoveEmpty()); return true; }
           }
           return false;
         },
@@ -145,7 +183,7 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
           current.current.onOpenNote(href.slice(folioNoteLinkPrefix.length));
           return true;
         },
-        attributes: { class: 'folio-rich-text outline-none min-h-[1.65em]', role: 'textbox', 'aria-multiline': 'true' },
+        attributes: { class: editorClass, role: 'textbox', 'aria-multiline': 'true' },
       },
       onFocus: ({ editor }) => current.current.onFocus(editor),
       onSelectionUpdate: ({ editor }) => current.current.onFocus(editor),
@@ -166,18 +204,39 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
       },
     });
     editorRef.current = editor;
-    if (current.current.focusAt) editor.commands.focus(current.current.focusAt);
-    return () => { commitNow(); editorRef.current = null; editor.destroy(); };
+    return editor;
+    };
+    if (!current.current.lazy || current.current.focusAt) {
+      const editor = createEditor.current();
+      if (editor && current.current.focusAt) focusNow(editor, current.current.focusAt);
+    } else mount.current.innerHTML = staticHTML(current.current.block);
+    return () => { commitNow(); const editor = editorRef.current; editorRef.current = null; editor?.destroy(); };
   }, []);
 
-  React.useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor || !props.focusAt || editor.isFocused) return;
-    editor.commands.focus(props.focusAt);
+  // A tap on a drawn block starts its editor right inside the tap (so iOS shows the keyboard),
+  // with the caret where the finger landed.
+  const activate = (event: React.MouseEvent) => {
+    if (editorRef.current) return;
+    const link = event.target instanceof Element ? event.target.closest('a') : null;
+    const href = link?.getAttribute('href') ?? '';
+    if (href.startsWith(folioNoteLinkPrefix) && current.current.onOpenNote) { event.preventDefault(); current.current.onOpenNote(href.slice(folioNoteLinkPrefix.length)); return; }
+    if (link) return;
+    const editor = createEditor.current();
+    if (!editor) return;
+    const at = editor.view.posAtCoords({ left: event.clientX, top: event.clientY });
+    focusNow(editor, at ? at.pos : 'end');
+  };
+
+  React.useLayoutEffect(() => {
+    if (!props.focusAt) return;
+    const editor = editorRef.current ?? createEditor.current();
+    if (!editor || editor.isFocused) return;
+    focusNow(editor, props.focusAt);
   }, [props.focusAt]);
 
   React.useEffect(() => {
-    const editor = editorRef.current; if (!editor) return;
+    const editor = editorRef.current;
+    if (!editor) { if (mount.current && props.lazy) mount.current.innerHTML = staticHTML(props.block); return; }
     // Typing still waiting to be handed over is newer than this block; it commits shortly.
     if (pending.current) return;
     const rendered = documentToText(editor.getJSON()), expected = documentToText(blockToDocument(props.block));
@@ -189,5 +248,5 @@ function FolioRichBlockInner(props: FolioRichBlockProps) {
     else mount.current?.style.removeProperty('--folio-placeholder');
   }, [props.placeholder]);
 
-  return <div ref={mount} className="folio-editable min-w-0 flex-1" />;
+  return <div ref={mount} className="folio-editable min-w-0 flex-1" onClick={props.lazy ? activate : undefined} />;
 }

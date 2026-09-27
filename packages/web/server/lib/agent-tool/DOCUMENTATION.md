@@ -17,6 +17,16 @@ the user can want independently:
   `agentNotifyToolEnabled` is `true`, and the control service refuses the
   action when the setting is off, so a stale plugin cannot keep paging.
 
+- `folio` — the user's Folio notebook (read, search, create and edit pages
+  and database rows). Present only where the macOS desktop app hosts the
+  notebook: Electron passes `folioAgentHandler` to the server, and the action
+  runs in `packages/electron/folio-agent.mjs` through the live notebook engine
+  (the same writer the notebook UI uses, with the page revision checked on
+  every save). It never opens the library file, so the app never needs to be
+  closed. Pages excluded from AI are listed by title only. Open windows get a
+  `folio:changed` event and refresh; an unsaved edit on the same page is merged
+  on top (`packages/ui/src/lib/folio/merge.ts`).
+
 Both default to on, are toggled in Settings → General → OpenCode CLI, and take
 effect in the running OpenCode within a couple of seconds — OpenChamber rewrites
 the managed config file OpenCode watches (see

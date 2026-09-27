@@ -41,3 +41,14 @@ test('typing an editor still holds is handed over before the page is saved',asyn
  await useFolioStore.getState().flush();
  assert.deepEqual(saved,['Typed on the phone']);assert.deepEqual(useFolioStore.getState().drafts,{});
 });
+test('an edit saved after the AI changed the page keeps both changes',async()=>{
+ const other=makeBlock();const page={...note,blocks:[{...note.blocks[0],text:'mine'},{...other,text:'old'}]};
+ const aiVersion={...page,blocks:[page.blocks[0],{...other,text:'from the AI'},{...makeBlock(),text:'AI line'}],modified:page.modified+10};
+ useFolioStore.setState({drafts:{},status:{...state,notes:[page]},open:true});const saves:FolioNote[]=[];let first=true;
+ useFolioStore.getState().bind({request:async input=>{
+  if(input.command==='state')return {id:'t',ok:true,state:{...state,notes:[aiVersion]}};
+  if(first){first=false;return {id:'t',ok:false,error:'This page changed in another view.'};}
+  saves.push(input.note!);return {id:'t',ok:true,state:{...state,notes:[{...input.note!,modified:aiVersion.modified+1}]}};}});
+ useFolioStore.getState().edit({...page,blocks:[{...page.blocks[0],text:'mine, edited'},page.blocks[1]]});await useFolioStore.getState().flush();
+ assert.deepEqual(saves[0].blocks.map(b=>b.text),['mine, edited','from the AI','AI line']);
+});

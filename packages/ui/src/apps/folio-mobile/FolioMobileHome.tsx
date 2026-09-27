@@ -122,6 +122,7 @@ export function MobileHome({ onView, onOpenNote: openNote, onNewPage, onAsk, onO
     for (const note of reorderSiblings(notes.filter((n) => parentOf(n.id) === key), moved, target)) useFolioStore.getState().edit(note);
   };
   const recents = [...notes].sort((a, b) => b.modified - a.modified).slice(0, 5);
+  const hasPhoneChats = useMobileChatStore((s) => s.chats.length > 0);
   const initial = (pairing?.name.trim()[0] ?? 'F').toUpperCase();
   const now = new Date();
 
@@ -154,10 +155,11 @@ export function MobileHome({ onView, onOpenNote: openNote, onNewPage, onAsk, onO
         </button>)}
       </Section>
       <MobileChatsSection onOpenChats={() => onView('chats')} onOpenSessions={onOpenSessions} />
-      <button type="button" className={cn(row, '-mt-3 mb-4 text-[16px]')} onClick={() => onView('assistant')}>
+      {/* The phone's own assistant (works with no Mac); listed once it has conversations. */}
+      {hasPhoneChats && <button type="button" className={cn(row, '-mt-3 mb-4 text-[16px]')} onClick={() => onView('assistant')}>
         <Icon name="sparkling" className="size-5 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{t('folio.offlineChat')}</span>
         <Icon name="arrow-right-s" className="size-5 shrink-0 text-muted-foreground" />
-      </button>
+      </button>}
       {favorites.length > 0 && <Section title={t('folio.favorites')} open={favoritesOpen} onToggle={toggleFavorites} count={favorites.length}>
         {favorites.map((note) => <button key={note.id} type="button" className={row} onClick={() => openNote(note.id)}>
           <span className="flex w-7 shrink-0 justify-center text-[20px]"><FolioIcon value={note.icon} /></span>

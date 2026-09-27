@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import type { FolioAPI, FolioNote, FolioRequest, FolioResponse, FolioStatus } from './schema';
+import { mergeNote } from './merge';
 
-interface Draft { note: FolioNote; base: number; version: number }
+/** `origin` is the saved page the edit started from, used to merge when another writer saved meanwhile. */
+interface Draft { note: FolioNote; base: number; version: number; origin?: FolioNote }
 interface FolioStore {
   api?: FolioAPI;
   status?: FolioStatus;
@@ -74,12 +76,14 @@ export const useFolioStore = create<FolioStore>((set, get) => {
         try {
           response = await request({ command: 'save', note: draft.note, expectedModified: draft.base });
         } catch (error) {
-          // The page moved on underneath the edit (sync, another view, a stale base). Keep the edit and
-          // save it on top of the latest version once, instead of leaving every later save stuck behind it.
+          // The page moved on underneath the edit (the AI, a sync, another view). Merge the edit into the
+          // latest version — what this edit changed wins, everything else stays as the other writer left
+          // it — and save once, instead of blocking every later save or overwriting their change.
           const latest = (await request({ command: 'state' })).state?.notes.find((note) => note.id === draft.note.id);
           if (!latest || latest.modified === draft.base) throw error;
-          set((state) => ({ drafts: { ...state.drafts, [draft.note.id]: { ...draft, base: latest.modified } } }));
-          response = await request({ command: 'save', note: { ...draft.note, modified: latest.modified }, expectedModified: latest.modified });
+          const merged = draft.origin ? mergeNote(draft.origin, draft.note, latest) : draft.note;
+          set((state) => ({ drafts: { ...state.drafts, [draft.note.id]: { ...draft, note: merged, base: latest.modified, origin: latest } } }));
+          response = await request({ command: 'save', note: { ...merged, modified: latest.modified }, expectedModified: latest.modified });
         }
         const saved = response.state?.notes.find(note => note.id === draft.note.id);
         if (!saved) throw new Error('Folio did not confirm the saved page. Your edit is still open.');
@@ -109,6 +113,7 @@ export const useFolioStore = create<FolioStore>((set, get) => {
       set(state => ({ drafts: { ...state.drafts, [note.id]: {
         note, base: state.drafts[note.id]?.base ?? note.modified,
         version: (state.drafts[note.id]?.version ?? 0) + 1,
+        origin: state.drafts[note.id]?.origin ?? state.status?.notes.find((saved) => saved.id === note.id),
       } } }));
       clearTimeout(timer);
       timer = setTimeout(() => { void get().flush().catch(() => undefined); }, 350);

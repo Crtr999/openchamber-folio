@@ -89,6 +89,35 @@ export const OPENCHAMBER_NOTIFY_ACTIONS = Object.freeze(
 );
 
 /**
+ * Folio is the user's own notebook in the macOS desktop app. It is its own tool
+ * because reading and editing notes is a distinct intent from controlling
+ * sessions, and because it exists only where the desktop app hosts the
+ * notebook: everywhere else it is absent, parameters included.
+ *
+ * Pages are named by `page`: an id from a result, or a title. Every write goes
+ * through the running notebook, the same writer the user types into, so the
+ * app never has to be closed and nothing edits its database file directly.
+ */
+export const OPENCHAMBER_FOLIO_ACTION_DEFINITIONS = Object.freeze([
+  { action: 'folio.search', title: 'Search notes', description: 'Find pages whose title or text matches query; returns ids, titles and the matching line' },
+  { action: 'folio.list', title: 'List notes', description: 'List pages (id, title, parent, whether it is a database); optional parent to list the pages inside one page' },
+  { action: 'folio.read', title: 'Read a note', description: 'Read page as Markdown, with block ids for editing and, for a database, its columns and rows with row ids. When the user mentions a page (for example @Title), read it with this' },
+  { action: 'folio.create', title: 'Create a note', description: 'Create a page; requires title; optional markdown body and parent page' },
+  { action: 'folio.append', title: 'Add to a note', description: 'Append markdown to the end of page' },
+  { action: 'folio.insert', title: 'Insert into a note', description: 'Insert markdown after afterBlockId in page (at the top when afterBlockId is omitted)' },
+  { action: 'folio.update_block', title: 'Edit a note line', description: 'Replace the block blockId in page with markdown (one or more lines)' },
+  { action: 'folio.delete_block', title: 'Remove a note line', description: 'Delete the block blockId from page' },
+  { action: 'folio.rename', title: 'Rename a note', description: 'Set the title of page' },
+  { action: 'folio.add_row', title: 'Add a database row', description: 'Add a row to the database page; values maps column names to text' },
+  { action: 'folio.update_row', title: 'Edit a database row', description: 'Change cells of rowId in the database page; values maps column names to text' },
+  { action: 'folio.delete_row', title: 'Delete a database row', description: 'Delete rowId from the database page' },
+]);
+
+export const OPENCHAMBER_FOLIO_ACTIONS = Object.freeze(
+  OPENCHAMBER_FOLIO_ACTION_DEFINITIONS.map(({ action }) => action),
+);
+
+/**
  * Which actions each managed tool may ask for.
  *
  * The callback needs this because models routinely drop the namespace: asked
@@ -103,6 +132,7 @@ const ACTIONS_BY_TOOL = Object.freeze({
   openchamber_web: OPENCHAMBER_WEB_ACTIONS,
   openchamber_memory: OPENCHAMBER_MEMORY_ACTIONS,
   openchamber_notify: OPENCHAMBER_NOTIFY_ACTIONS,
+  folio: OPENCHAMBER_FOLIO_ACTIONS,
 });
 
 const bareName = (action) => {
@@ -150,4 +180,5 @@ export const OPENCHAMBER_ALL_ACTIONS = Object.freeze([
   ...OPENCHAMBER_WEB_ACTIONS,
   ...OPENCHAMBER_MEMORY_ACTIONS,
   ...OPENCHAMBER_NOTIFY_ACTIONS,
+  ...OPENCHAMBER_FOLIO_ACTIONS,
 ]);

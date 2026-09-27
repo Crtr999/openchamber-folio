@@ -1,6 +1,7 @@
 import { attachToBackgroundOpenCodeService } from './opencode-service.mjs';
 import { createFolioEngine } from './folio-engine.mjs';
 import { createFolioSync } from './folio-sync.mjs';
+import { createFolioAgent } from './folio-agent.mjs';
 import { createOpenRouterCredits } from './openrouter-credits.mjs';
 import { canReuseManagedOpenCodePreflight } from './opencode-readiness.mjs';
 import { app, BrowserWindow, dialog, ipcMain, Menu, MessageChannelMain, nativeImage, nativeTheme, net as electronNet, Notification, powerMonitor, powerSaveBlocker, protocol, safeStorage, session, shell, Tray, webContents } from 'electron';
@@ -336,6 +337,8 @@ const quitConfirmationMessage = () => {
 
 const folioEngine = createFolioEngine({ resourcesPath: process.resourcesPath, developmentRoot: path.dirname(fileURLToPath(import.meta.url)), libraryPath: process.env.OPENCHAMBER_FOLIO_LIBRARY_DIR || path.join(app.getPath('appData'), 'Folio-OpenChamber') });
 // iPhone sync stays off until the user pairs a phone from the notebook's ⋯ menu.
+// The `folio` agent tool edits the notebook through the same engine; open windows refresh right away.
+const folioAgent = createFolioAgent({ engine: folioEngine, onChanged: (noteIDs) => emitToAllWindows('folio:changed', { noteIDs }) });
 const folioSync = createFolioSync({ engine: folioEngine, configPath: path.join(app.getPath('userData'), 'folio-sync.json'), getLocalOrigin: () => state.localOrigin || state.sidecarUrl || '', log: (message) => log.info(message) });
 // OpenRouter balance in the menu bar, off until the user adds a key in Folio. Its own title-only status item.
 const openRouterCredits = createOpenRouterCredits({
@@ -1344,6 +1347,8 @@ const spawnLocalServer = async () => {
     onDesktopNotification: (payload) => maybeShowNativeNotification(payload),
     // Folio iPhone sync through any paired-device route (Wi-Fi or the private relay).
     folioSyncHandler: (body) => folioSync.handleEncrypted(body),
+    // `folio` tool calls from this Mac's OpenCode sessions (loopback callback with a per-process token).
+    folioAgentHandler: process.platform === 'darwin' ? (action, parameters) => folioAgent.execute(action, parameters) : undefined,
     getIsWindowFocused: isAnyWindowFocused,
     getDesktopRuntimeConfig: () => ({
       apiBaseUrl: state.apiBaseUrl || '',

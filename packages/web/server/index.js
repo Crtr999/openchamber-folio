@@ -1690,6 +1690,13 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
 
 const gracefulShutdown = (...args) => gracefulShutdownRuntime.gracefulShutdown(...args);
 
+/** Runs a `folio` tool action in the desktop app that hosts the notebook. */
+const runFolioAgentAction = async (options, action, input) => {
+  if (typeof options.folioAgentHandler !== 'function') throw new Error('The Folio notebook is available only in the OpenChamber desktop app on a Mac.');
+  const { action: _action, ...parameters } = input ?? {};
+  return options.folioAgentHandler(action, parameters);
+};
+
 async function main(options = {}) {
   beginGuestServiceHost();
   const port = Number.isFinite(options.port) && options.port >= 0 ? Math.trunc(options.port) : DEFAULT_PORT;
@@ -1704,7 +1711,10 @@ async function main(options = {}) {
     path,
     dataDir: OPENCHAMBER_DATA_DIR,
     env: process.env,
-    executeAction: (...args) => openChamberControlService.execute(...args),
+    // Folio notebook actions go to the desktop app, which owns the notebook; everything else to the control service.
+    executeAction: (action, input, ...rest) => (action.startsWith('folio.')
+      ? runFolioAgentAction(options, action, input)
+      : openChamberControlService.execute(action, input, ...rest)),
     // A v2 tool call carries no directory, only the session it runs in.
     resolveSessionDirectory: (sessionID) => openChamberControlService.resolveSessionDirectory(sessionID),
     getActivePort: () => {
@@ -1722,6 +1732,7 @@ async function main(options = {}) {
     agentToolRuntime,
     readSettings: () => readSettingsFromDiskMigrated(),
     isAgentMemoryAvailable: isAgentMemoryFeatureAvailable,
+    isFolioAvailable: () => typeof options.folioAgentHandler === 'function',
   });
 
   // Pairing transports advertised to the create-device dialog. LAN reachability is

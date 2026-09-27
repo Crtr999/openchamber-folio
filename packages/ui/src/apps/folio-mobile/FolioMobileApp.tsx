@@ -26,6 +26,8 @@ import { FolioMobileSettings } from './FolioMobileSettings';
 import { MobileAssistantList, MobileCalendar, MobileHome, MobileSearch, type MobileView } from './FolioMobileHome';
 import { useBalanceStore } from './balance';
 import { SwipeBackPane } from './SwipeBack';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useSessionUIStore } from '@/sync/session-ui-store';
 import './folio-mobile.css';
 
 /** The chats UI does not re-render when the notes around it change (typing in its forms stays smooth). */
@@ -201,6 +203,14 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
     },
   }), [engine, host, t]);
 
+  // Ask AI is a new chat on the Mac (your models and tools, no key on the phone) whenever the Mac is
+  // reachable; the phone's own assistant is the fallback for when it is not.
+  const askAI = () => {
+    if (useProjectsStore.getState().projects.length > 0) {
+      useSessionUIStore.getState().openNewSessionDraft({ target: 'chat', directoryOverride: null });
+      setView('chats');
+    } else openChat(undefined, 'home');
+  };
   const pane = (content: React.ReactNode) => <SwipeBackPane onBack={goHome} onPeek={setPeek}>{content}</SwipeBackPane>;
 
   return <div className="folio-mobile flex h-full flex-col bg-background pt-[env(safe-area-inset-top)]">
@@ -213,7 +223,7 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
     <div className="relative min-h-0 flex-1 overflow-hidden">
       {/* Home is the root of every screen. Covered, it stops re-rendering (typing in a page never redraws it). */}
       <React.Activity mode={view === 'home' || peek ? 'visible' : 'hidden'}>
-        <MobileHome onView={setView} onOpenNote={openNote} onNewPage={newPage} onAsk={() => openChat(undefined, 'home')}
+        <MobileHome onView={setView} onOpenNote={openNote} onNewPage={newPage} onAsk={askAI}
           onOpenSessions={() => { setView('chats'); setSessionsRequest((n) => n + 1); }} />
       </React.Activity>
       {view === 'notes' && pane(<FolioWorkspace mobile={mobile} />)}

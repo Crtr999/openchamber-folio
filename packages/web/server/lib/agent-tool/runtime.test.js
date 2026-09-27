@@ -264,6 +264,20 @@ describe('managed agent tool runtime', () => {
     expect(Object.keys(await loadTools(plainDir, 'nonotify'))).toEqual(['openchamber']);
   });
 
+  it('exposes the notebook as its own folio tool, resolving bare action names inside it', async () => {
+    const { runtime, dataDir } = await createRuntime();
+    await prepareManagedEnv(runtime, { includeControl: false, includeWeb: false, includeMemory: false, includeFolio: true });
+    const tool = await loadTools(dataDir, 'folio');
+
+    expect(Object.keys(tool)).toEqual(['folio']);
+    expect(Object.keys(tool.folio.input.properties.parameters.properties)).toContain('page');
+    const executeAction = vi.fn(async () => ({ id: 'page-1' }));
+    const { runtime: callback } = await createRuntime({ executeAction });
+    const result = await callback.execute({ input: { action: 'read', page: 'Welcome' }, tool: 'folio' });
+    expect(result).toMatchObject({ ok: true, action: 'folio.read' });
+    expect(executeAction.mock.calls[0][0]).toBe('folio.read');
+  });
+
   it('refuses to inject a plugin with no tools in it', async () => {
     const { runtime } = await createRuntime();
     let failed = false;

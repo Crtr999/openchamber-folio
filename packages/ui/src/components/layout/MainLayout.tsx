@@ -62,6 +62,9 @@ export const MainLayout: React.FC = () => {
         timer = setTimeout(tick, 2500);
         const onVisible = () => { if (document.visibilityState === 'visible') void useFolioStore.getState().refresh(); };
         document.addEventListener('visibilitychange', onVisible);
+        // The AI changed a page: save any open edit first (merged on top of the change), then show it.
+        const onChanged = () => { const store = useFolioStore.getState(); void store.flush().catch(() => undefined).then(() => store.refresh()); };
+        window.addEventListener('folio:changed', onChanged);
         const guardUnsavedChanges = (event: BeforeUnloadEvent) => {
             const store = useFolioStore.getState();
             if (store.saving || Object.keys(store.drafts).length) {
@@ -70,7 +73,7 @@ export const MainLayout: React.FC = () => {
             }
         };
         window.addEventListener('beforeunload', guardUnsavedChanges);
-        return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('beforeunload', guardUnsavedChanges); };
+        return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('folio:changed', onChanged); window.removeEventListener('beforeunload', guardUnsavedChanges); };
     }, [folio]);
     useSessionListSync({ isVSCode: false });
     useTerminalSessionKeepalive();

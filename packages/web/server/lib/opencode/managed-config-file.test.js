@@ -11,7 +11,7 @@ afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => fs.rm(directory, { recursive: true, force: true })));
 });
 
-const createHarness = async ({ settings = {}, env = {}, memoryAvailable = true } = {}) => {
+const createHarness = async ({ settings = {}, env = {}, memoryAvailable = true, folioAvailable = false } = {}) => {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'openchamber-managed-config-'));
   temporaryDirectories.push(dataDir);
   const agentToolRuntime = {
@@ -35,6 +35,7 @@ const createHarness = async ({ settings = {}, env = {}, memoryAvailable = true }
     agentToolRuntime,
     readSettings: () => current.settings,
     isAgentMemoryAvailable: () => memoryAvailable,
+    isFolioAvailable: () => folioAvailable,
   });
   const readConfigFile = async () => JSON.parse(await fs.readFile(path.join(dataDir, MANAGED_CONFIG_FILE_NAME), 'utf8'));
   return { dataDir, runtime, agentToolRuntime, current, readConfigFile };
@@ -108,6 +109,7 @@ describe('managed OpenCode config file', () => {
       includeWeb: true,
       includeMemory: false,
       includeNotify: false,
+      includeFolio: false,
     });
   });
 
@@ -123,6 +125,24 @@ describe('managed OpenCode config file', () => {
       includeWeb: false,
       includeMemory: false,
       includeNotify: true,
+      includeFolio: false,
+    });
+  });
+
+  it('adds the notebook tool where the desktop app hosts Folio, even with every other tool off', async () => {
+    const { runtime, agentToolRuntime } = await createHarness({
+      settings: { agentControlToolEnabled: false, agentWebToolEnabled: false },
+      folioAvailable: true,
+    });
+
+    await runtime.buildManagedChildEnv();
+
+    expect(agentToolRuntime.materializePlugin).toHaveBeenCalledWith({
+      includeControl: false,
+      includeWeb: false,
+      includeMemory: false,
+      includeNotify: false,
+      includeFolio: true,
     });
   });
 

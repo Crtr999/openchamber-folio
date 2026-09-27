@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { DndContext, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -145,7 +146,8 @@ export function FolioSidebar() {
         {showTrash && trashed.map((note) => row(note, 1, false))}
       </>}
     </>}
-    {menu && <>
+    {/* In a portal: the sidebar clips and transforms its content, which cut the menu off at its edge. */}
+    {menu && createPortal(<>
       <div className="fixed inset-0 z-50" onClick={() => setMenu(undefined)} onContextMenu={(e) => { e.preventDefault(); setMenu(undefined); }} />
       <div role="menu" className="fixed z-50 w-52 rounded-xl border border-border bg-background p-1.5 text-sm shadow-2xl" style={{ left: Math.min(menu.x, window.innerWidth - 220), top: Math.min(menu.y, window.innerHeight - 220) }}>
         {([
@@ -162,6 +164,6 @@ export function FolioSidebar() {
           <Icon name="delete-bin" className="size-4" />{menu.note.trashed ? t('folio.restore') : t('folio.moveToTrash')}
         </button>
       </div>
-    </>}
+    </>, document.body)}
   </section>;
 }

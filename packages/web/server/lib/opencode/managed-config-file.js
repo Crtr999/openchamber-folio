@@ -41,6 +41,7 @@ const DISABLED_BUILTIN_PLUGINS = ['-opencode.browser'];
  * @param {object|null} [dependencies.agentToolRuntime]
  * @param {() => Promise<object|null>} dependencies.readSettings
  * @param {() => boolean} dependencies.isAgentMemoryAvailable
+ * @param {() => boolean} [dependencies.isFolioAvailable] true where the desktop app hosts the Folio notebook
  */
 export const createManagedConfigRuntime = ({
   fsPromises,
@@ -50,6 +51,7 @@ export const createManagedConfigRuntime = ({
   agentToolRuntime = null,
   readSettings,
   isAgentMemoryAvailable,
+  isFolioAvailable = () => false,
 }) => {
   const filePath = path.join(dataDir, MANAGED_CONFIG_FILE_NAME);
 
@@ -82,10 +84,12 @@ export const createManagedConfigRuntime = ({
     const includeWeb = settings?.agentWebToolEnabled !== false;
     const includeMemory = isAgentMemoryAvailable() && settings?.agentMemoryToolEnabled === true;
     const includeNotify = settings?.agentNotifyToolEnabled === true;
+    // The notebook tool exists only where the desktop app hosts the notebook.
+    const includeFolio = isFolioAvailable();
 
     const directories = [];
-    if (agentToolRuntime && (includeControl || includeWeb || includeMemory || includeNotify)) {
-      directories.push(await agentToolRuntime.materializePlugin({ includeControl, includeWeb, includeMemory, includeNotify }));
+    if (agentToolRuntime && (includeControl || includeWeb || includeMemory || includeNotify || includeFolio)) {
+      directories.push(await agentToolRuntime.materializePlugin({ includeControl, includeWeb, includeMemory, includeNotify, includeFolio }));
     }
     return directories;
   };

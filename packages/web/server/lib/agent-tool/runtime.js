@@ -5,6 +5,8 @@ import {
   OPENCHAMBER_MEMORY_ACTIONS,
   OPENCHAMBER_NOTIFY_ACTION_DEFINITIONS,
   OPENCHAMBER_NOTIFY_ACTIONS,
+  OPENCHAMBER_FOLIO_ACTION_DEFINITIONS,
+  OPENCHAMBER_FOLIO_ACTIONS,
   resolveAgentToolAction,
   OPENCHAMBER_WEB_ACTION_DEFINITIONS,
   OPENCHAMBER_WEB_ACTIONS,
@@ -19,6 +21,7 @@ const ACTIONS = new Set([
   ...OPENCHAMBER_WEB_ACTIONS,
   ...OPENCHAMBER_MEMORY_ACTIONS,
   ...OPENCHAMBER_NOTIFY_ACTIONS,
+  ...OPENCHAMBER_FOLIO_ACTIONS,
 ]);
 const AGENT_TOOL_ACTION_TITLES = Object.fromEntries(
   [
@@ -26,6 +29,7 @@ const AGENT_TOOL_ACTION_TITLES = Object.fromEntries(
     ...OPENCHAMBER_WEB_ACTION_DEFINITIONS,
     ...OPENCHAMBER_MEMORY_ACTION_DEFINITIONS,
     ...OPENCHAMBER_NOTIFY_ACTION_DEFINITIONS,
+    ...OPENCHAMBER_FOLIO_ACTION_DEFINITIONS,
   ].map(({ action, title }) => [action, title]),
 );
 
@@ -124,6 +128,21 @@ const NOTIFY_PARAMETER_PROPERTIES = {
   body: { type: 'string', description: 'One or two sentences of detail, up to 500 characters' },
   showWhenFocused: { type: 'boolean', description: 'Show it even while the user is looking at OpenChamber. Only for something that cannot wait' },
 };
+
+// Its own names: `page` and `values` mean nothing to the other tools.
+const FOLIO_PARAMETER_PROPERTIES = {
+  page: { type: 'string', description: 'Page id from a result, or the page title' },
+  query: { type: 'string' },
+  title: { type: 'string', description: 'Page title' },
+  markdown: { type: 'string', description: 'Content as Markdown: # headings, - bullets, 1. numbered, - [ ] tasks, > quotes, --- dividers, paragraphs' },
+  parent: { type: 'string', description: 'Parent page id or title' },
+  blockId: { type: 'string', description: 'Block id from folio.read' },
+  afterBlockId: { type: 'string', description: 'Block id from folio.read' },
+  rowId: { type: 'string', description: 'Row id from folio.read' },
+  values: { type: 'object', additionalProperties: { type: 'string' }, description: 'Column name to cell text' },
+};
+
+const FOLIO_TOOL_DESCRIPTION = "Read and edit the user's Folio notebook: their notes, class pages, and databases, in the OpenChamber desktop app. Use one action per call. When the user refers to a note or page (by name or as @Title), read it with folio.read instead of searching files or the disk: the notebook is not in the project folder, and its database file must never be opened or modified directly. Edits go through the running app and appear on the user's screen right away; the app does not need to be closed. Read a page before editing it, and use the block and row ids that read returns. Pages the user excluded from AI cannot be read or changed.";
 
 const CONTROL_TOOL_DESCRIPTION = "Control OpenChamber projects, sessions, and scheduled tasks on the user's behalf. Sessions and scheduled tasks you create are for the user to follow and interact with. Do not decide on your own to hand parts of your current task to another session; when the user asks you to create a session, send a prompt to one, or schedule a task, do it, including when the work relates to your current task. Use one action per call. Scope with projectId or directory; omit both to use the current session directory. Session dispatches return immediately by default and you receive no notification when a dispatched session finishes, so never promise to report back on it; the user follows it in OpenChamber; a dispatched session needs no follow-up from you. If the user later asks how it went, use session.messages (add wait to block until it is idle, lastAssistant for just the final answer) — session.send always sends a NEW prompt and never just waits. Set wait only when the user asks or the next step requires the completed result. Session and worktree deletion are unavailable.";
 
@@ -259,7 +278,7 @@ const createToolEntry = ({ name, description, definitions, parameters }) => Stri
     })
 `;
 
-const createPluginSource = ({ includeControl, includeWeb, includeMemory, includeNotify }) => {
+const createPluginSource = ({ includeControl, includeWeb, includeMemory, includeNotify, includeFolio }) => {
   const entries = [];
   if (includeControl) {
     entries.push(createToolEntry({
@@ -291,6 +310,14 @@ const createPluginSource = ({ includeControl, includeWeb, includeMemory, include
       description: NOTIFY_TOOL_DESCRIPTION,
       definitions: OPENCHAMBER_NOTIFY_ACTION_DEFINITIONS,
       parameters: NOTIFY_PARAMETER_PROPERTIES,
+    }));
+  }
+  if (includeFolio) {
+    entries.push(createToolEntry({
+      name: 'folio',
+      description: FOLIO_TOOL_DESCRIPTION,
+      definitions: OPENCHAMBER_FOLIO_ACTION_DEFINITIONS,
+      parameters: FOLIO_PARAMETER_PROPERTIES,
     }));
   }
 
@@ -356,13 +383,13 @@ export const createAgentToolRuntime = (dependencies) => {
    * change while it runs, so the source on disk always matches the settings —
    * the running OpenCode reloads the directory it already has configured.
    */
-  const materializePlugin = async ({ includeControl = true, includeWeb = true, includeMemory = true, includeNotify = false } = {}) => {
-    if (!includeControl && !includeWeb && !includeMemory && !includeNotify) {
+  const materializePlugin = async ({ includeControl = true, includeWeb = true, includeMemory = true, includeNotify = false, includeFolio = false } = {}) => {
+    if (!includeControl && !includeWeb && !includeMemory && !includeNotify && !includeFolio) {
       throw new Error('At least one OpenChamber managed tool must be enabled to inject the plugin');
     }
     await fsPromises.mkdir(pluginDirectory, { recursive: true });
     await fsPromises.writeFile(pluginManifestPath, PLUGIN_PACKAGE_JSON, { mode: 0o600 });
-    await fsPromises.writeFile(pluginPath, createPluginSource({ includeControl, includeWeb, includeMemory, includeNotify }), { mode: 0o600 });
+    await fsPromises.writeFile(pluginPath, createPluginSource({ includeControl, includeWeb, includeMemory, includeNotify, includeFolio }), { mode: 0o600 });
     return pluginDirectory;
   };
 
