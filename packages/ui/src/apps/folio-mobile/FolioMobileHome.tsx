@@ -13,6 +13,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { reorderSiblings, sortSiblings } from '@/lib/folio/order';
 import { useMobileChatStore } from './chatStore';
 import { MobileChatsSection } from './FolioMobileChatsSection';
+import { FolioHabits } from '@/components/folio/FolioHabits';
+import { useHandoffStore } from '@/lib/folio/handoff';
 import { useSyncStore } from './sync';
 
 /** Screens reached from the phone's home: notes, search, calendar and the assistant's conversations. */
@@ -28,11 +30,13 @@ function useOpen(key: string): [boolean, () => void] {
   return [open, () => setOpen((value) => { try { localStorage.setItem(key, value ? '1' : '0'); } catch { /* storage blocked */ } return !value; })];
 }
 
-function Section({ title, open, onToggle, action, children }: { title: string; open: boolean; onToggle: () => void; action?: React.ReactNode; children: React.ReactNode }) {
+function Section({ title, open, onToggle, action, count, children }: { title: string; open: boolean; onToggle: () => void; action?: React.ReactNode; count?: number; children: React.ReactNode }) {
   return <section className="mb-4">
     <div className="flex items-center px-2 pb-1 pt-2">
       <button type="button" className="flex items-center gap-1 text-[15px] font-medium text-muted-foreground" aria-expanded={open} onClick={onToggle}>
         {title}<Icon name="arrow-down-s" className={cn('size-4 transition-transform', !open && '-rotate-90')} />
+        {/* A closed section still says how much is inside, so it never looks empty. */}
+        {!open && count !== undefined && <span className="ml-1 rounded-full bg-secondary px-2 text-xs tabular-nums">{count}</span>}
       </button>
       <div className="flex-1" />{action}
     </div>
@@ -67,15 +71,33 @@ function Tree({ notes, parentID, depth, openNote, expanded, onToggle }: { notes:
   </SortableContext>;
 }
 
+/** The page the Mac had open at the last sync (and the passage, when reading): one tap to continue on the phone. */
+function ContinueFromMac({ openNote }: { openNote: (id: string) => void }) {
+  const { t } = useI18n();
+  const focus = useSyncStore((s) => s.macFocus);
+  const local = useHandoffStore((s) => s.local);
+  const notes = useFolioStore((s) => s.status?.notes);
+  const note = focus ? notes?.find((n) => n.id.toUpperCase() === focus.noteID.toUpperCase() && !n.trashed) : undefined;
+  // Only when the Mac moved on more recently than this phone, and not days ago.
+  if (!focus || !note || (local && local.at >= focus.at) || Date.now() - focus.at > 3 * 86_400_000) return null;
+  return <button type="button" className="mb-3 flex w-full items-center gap-3 rounded-2xl bg-secondary px-4 py-3 text-left active:bg-interactive-selection"
+    onClick={() => { openNote(note.id); if (focus.reading) useHandoffStore.getState().openReader(note.id, focus.blockID); }}>
+    <Icon name="macbook" className="size-6 shrink-0 text-muted-foreground" />
+    <span className="min-w-0 flex-1"><span className="block text-xs text-muted-foreground">{focus.reading ? t('folio.continueReadingFromMac') : t('folio.continueFromMac')}</span><span className="block truncate text-[16px] font-medium">{note.title || t('folio.untitled')}</span></span>
+    <Icon name="arrow-right-s" className="size-5 text-muted-foreground" />
+  </button>;
+}
+
 /** Home, laid out like Notion on iPhone: tabs up top, recents and the page tree, search / ask / new page at the bottom. */
 export function MobileHome({ onView, onOpenNote: openNote, onNewPage, onAsk }: { onView: (view: MobileView) => void; onOpenNote: (id: string) => void; onNewPage: () => void; onAsk: () => void }) {
   const { t } = useI18n();
   const notes = live(useFolioStore((s) => s.status?.notes));
   const pairing = useSyncStore((s) => s.pairing);
   const soon = useFolioStore((s) => s.status?.events.some((e) => e.start - Date.now() < 60 * 60_000 && e.end > Date.now()));
-  const [recentOpen, toggleRecent] = useOpen('folio.home.recentCollapsed');
-  const [favoritesOpen, toggleFavorites] = useOpen('folio.home.favoritesCollapsed');
-  const [treeOpen, toggleTree] = useOpen('folio.home.notesCollapsed');
+  const [todayOpen, toggleToday] = useOpen('folio.home.v2.todayCollapsed');
+  const [recentOpen, toggleRecent] = useOpen('folio.home.v2.recentCollapsed');
+  const [favoritesOpen, toggleFavorites] = useOpen('folio.home.v2.favoritesCollapsed');
+  const [treeOpen, toggleTree] = useOpen('folio.home.v2.notesCollapsed');
   const [more, setMore] = React.useState(false);
   const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
   const favorites = sortSiblings(notes.filter((n) => n.favorite));
@@ -107,20 +129,24 @@ export function MobileHome({ onView, onOpenNote: openNote, onNewPage, onAsk }: {
     </nav>
 
     <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-32">
-      <Section title={t('folio.recent')} open={recentOpen} onToggle={toggleRecent}>
+      <ContinueFromMac openNote={openNote} />
+      <Section title={t('folio.today')} open={todayOpen} onToggle={toggleToday}>
+        <div className="px-2 pb-1"><FolioHabits compact /></div>
+      </Section>
+      <Section title={t('folio.recent')} open={recentOpen} onToggle={toggleRecent} count={recents.length}>
         {recents.map((note) => <button key={note.id} type="button" className={row} onClick={() => openNote(note.id)}>
           <span className="flex w-7 shrink-0 justify-center text-[20px]"><FolioIcon value={note.icon} /></span>
           <span className="min-w-0 flex-1 truncate">{note.title || t('folio.untitled')}</span>
         </button>)}
       </Section>
       <MobileChatsSection onOpenChats={() => onView('chats')} />
-      {favorites.length > 0 && <Section title={t('folio.favorites')} open={favoritesOpen} onToggle={toggleFavorites}>
+      {favorites.length > 0 && <Section title={t('folio.favorites')} open={favoritesOpen} onToggle={toggleFavorites} count={favorites.length}>
         {favorites.map((note) => <button key={note.id} type="button" className={row} onClick={() => openNote(note.id)}>
           <span className="flex w-7 shrink-0 justify-center text-[20px]"><FolioIcon value={note.icon} /></span>
           <span className="min-w-0 flex-1 truncate">{note.title || t('folio.untitled')}</span>
         </button>)}
       </Section>}
-      <Section title={t('folio.privatePages')} open={treeOpen} onToggle={toggleTree}
+      <Section title={t('folio.privatePages')} open={treeOpen} onToggle={toggleTree} count={notes.filter((n) => !n.parentID || !notes.some((p) => p.id === n.parentID)).length}
         action={<div className="relative">
           <button type="button" className="flex size-9 items-center justify-center text-muted-foreground" aria-label={t('folio.more')} aria-expanded={more} onClick={() => setMore(!more)}><Icon name="more-fill" className="size-5" /></button>
           {more && <>

@@ -30,6 +30,11 @@ const chatSchema = z.object({
   model: z.object({ name: z.string() }).passthrough(),
   messages: z.array(z.object({ role: z.enum(['system', 'user', 'assistant']), content: z.string() })),
 });
+const focusSchema = z.object({ noteID: z.string().uuid(), blockID: z.string().max(100).optional(), reading: z.boolean().default(false), at: z.number() });
+const pairingResultSchema = z.object({
+  pairing: z.object({ id: z.string(), secret: z.string(), fingerprint: z.string().nullish(), expiresAt: z.string().nullish() }).passthrough(),
+  server: z.object({ label: z.string().nullish(), candidates: z.array(z.object({ type: z.string() }).passthrough()) }).passthrough(),
+});
 const assistantMessageSchema = z.object({ id: z.string().uuid(), role: z.enum(['user', 'assistant']), content: z.string().max(400_000), sourceIDs: z.array(z.string().uuid()).max(200) });
 const assistantChatSchema = z.object({ noteID: z.string().uuid(), title: z.string().max(1000), created: z.number(), modified: z.number(), messages: z.array(assistantMessageSchema).max(5000) });
 const requestSchema = z.discriminatedUnion('op', [
@@ -39,7 +44,10 @@ const requestSchema = z.discriminatedUnion('op', [
     chats: z.array(chatSchema).default([]),
     assistant: z.array(assistantChatSchema).default([]),
     assistantHashes: z.record(z.string(), z.string()).default({}),
+    // What the phone had open, so the Mac can offer "continue from iPhone".
+    focus: focusSchema.optional(),
   }),
+  z.object({ op: z.literal('connect'), t: z.number() }),
   z.object({ op: z.literal('chat'), t: z.number(), sessionID: z.string().min(1).max(200) }),
   z.object({ op: z.literal('asset-get'), t: z.number(), path: z.string().regex(/^assets\/[A-Za-z0-9._-]{1,200}$/) }),
   z.object({ op: z.literal('asset-put'), t: z.number(), name: z.string().max(300), data: z.string().max(56_000_000) }),
@@ -118,6 +126,9 @@ export function createFolioSync({ engine, configPath, getLocalOrigin, log = () =
   let server = null;
   let config = null;
   let lastSync = 0;
+  // Where each device last was (a page, and the place in it when reading), for picking up on the other one.
+  let macFocus = null;
+  let phoneFocus = null;
   try { config = configSchema.parse(JSON.parse(readFileSync(configPath, 'utf8'))); } catch { config = null; }
 
   const keyBytes = () => Buffer.from(config.key, 'base64url');
@@ -175,6 +186,27 @@ export function createFolioSync({ engine, configPath, getLocalOrigin, log = () =
       }
     }
     return messages;
+  }
+
+  /**
+   * A one-time OpenChamber pairing link for the already-paired phone, so its chats connect to this Mac
+   * (on Wi-Fi or through the private relay) without scanning a second code. Created by this Mac's own
+   * server over loopback; the link only travels inside the encrypted sync reply.
+   */
+  async function connectLink() {
+    const origin = getLocalOrigin();
+    if (!origin) throw new Error('OpenChamber is not ready.');
+    const response = await fetch(`${origin}/api/client-auth/pairing/sessions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(10_000),
+      body: JSON.stringify({ label: 'iPhone (Folio)', allowedClientKinds: ['mobile'], includeRelay: true, includeDirect: true }),
+    });
+    if (!response.ok) throw new Error(`Could not create a chats link (${response.status}).`);
+    const { pairing, server } = pairingResultSchema.parse(await response.json());
+    const payload = { v: 2, pairingId: pairing.id, secret: pairing.secret, candidates: server.candidates };
+    if (server.label) payload.label = server.label;
+    if (pairing.fingerprint) payload.fingerprint = pairing.fingerprint;
+    if (pairing.expiresAt) payload.expiresAt = pairing.expiresAt;
+    return `openchamber://connect?${new URLSearchParams({ v: '2', p: Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url') }).toString()}`;
   }
 
   async function handleSync(request) {
@@ -242,7 +274,8 @@ export function createFolioSync({ engine, configPath, getLocalOrigin, log = () =
       .filter((n) => !n.isChat && !phoneChatPages.has(n.id) && toPhoneTime(n.modified) > request.since)
       .map((n) => ({ ...n, created: toPhoneTime(n.created), modified: toPhoneTime(n.modified) }));
     lastSync = cursor;
-    return { t: cursor, cursor, notes: changed, assistant: assistantOut, macChats: await macChats(), applied };
+    if (request.focus && (!phoneFocus || request.focus.at > phoneFocus.at)) phoneFocus = { ...request.focus, noteID: request.focus.noteID.toUpperCase() };
+    return { t: cursor, cursor, notes: changed, assistant: assistantOut, macChats: await macChats(), macFocus, applied };
   }
 
   async function handle(body) {
@@ -251,6 +284,7 @@ export function createFolioSync({ engine, configPath, getLocalOrigin, log = () =
     if (request.op === 'chat') return { t: Date.now(), messages: await chatMessages(request.sessionID) };
     if (request.op === 'asset-get') return { t: Date.now(), data: await internal({ command: 'asset-read', text: request.path }) };
     if (request.op === 'asset-put') return { t: Date.now(), path: await internal({ command: 'asset-write', kind: request.name, text: request.data }) };
+    if (request.op === 'connect') return { t: Date.now(), link: await connectLink() };
     if (request.op === 'bella') return { t: Date.now(), audio: await internal({ command: 'bella', text: request.text }) };
     return handleSync(request);
   }
@@ -292,13 +326,17 @@ export function createFolioSync({ engine, configPath, getLocalOrigin, log = () =
     if (!config) return { enabled: false };
     const hosts = [bonjourName(), ...lanAddresses()];
     const params = new URLSearchParams({ h: hosts.join(','), p: String(config.port), k: config.key, n: os.hostname().replace(/\.local$/, '') });
-    return { enabled: true, listening: Boolean(server), port: config.port, hosts, lastSync, pairingURL: `folio-sync://pair?${params.toString()}` };
+    const result = { enabled: true, listening: Boolean(server), port: config.port, hosts, lastSync, pairingURL: `folio-sync://pair?${params.toString()}` };
+    if (phoneFocus) result.phoneFocus = phoneFocus;
+    return result;
   }
 
   return {
     start: () => listen(),
     handleEncrypted,
     status,
+    /** The Mac notebook reports the page (and reading place) in front, for the phone's "continue" card. */
+    setFocus(focus) { const parsed = focusSchema.safeParse(focus); if (parsed.success) macFocus = { ...parsed.data, noteID: parsed.data.noteID.toUpperCase() }; return status(); },
     enable() {
       if (!config) {
         config = { key: randomBytes(32).toString('base64url'), port: defaultPort };

@@ -35,3 +35,25 @@ test('CSV and inline parsing handle quotes, marks and links', () => {
   assert.deepEqual(inline.marks.map((m) => m.style), ['bold', 'italic', 'link']);
   assert.match(notionUUID(HOME), /^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/);
 });
+
+test('tidying merges views and wrapper pages, lists databases on their page, and detects toggles', async () => {
+  const { tidyNotionImport } = await import('./notion-import');
+  const W = 'cf9b9562a5a6460ab93daf153f1300e4', V = 'ea30f40f9af04417a58bb582ca4fc091';
+  const files = [
+    { path: `Home ${HOME}.md`, text: `# Home\n\n[Full](Home/Full%20${W}.md)\n\n[View](Home/Untitled%20${V}.csv)` },
+    { path: `Home/Untitled ${V}.csv`, text: 'Name\nAccounting\n' },
+    { path: `Home/Full ${W}.md`, text: `# Full\n\n[Subjects](Full/Subjects%20${DB}.csv)` },
+    { path: `Home/Full/Subjects ${DB}.csv`, text: 'Name\nAccounting\n' },
+    { path: `Home/Full/Subjects/Accounting ${ROW}.md`, text: '# Accounting\n\n- Chapter 1\n    \n    Body paragraph\n- Plain bullet\n    - child bullet' },
+  ];
+  const raw = importNotionExport(files, 1);
+  const row = raw.notes.find((n) => n.title === 'Accounting');
+  assert.deepEqual(row?.blocks.map((b) => b.kind), ['toggle', 'text', 'bullet', 'bullet']);
+  const { notes, removed } = tidyNotionImport(raw.notes, { rootTitle: 'Villanova Law' });
+  assert.deepEqual(removed.sort(), [notionUUID(V), notionUUID(W)].sort());
+  const home = notes.find((n) => !n.parentID);
+  assert.equal(home?.title, 'Villanova Law');
+  assert.equal(notes.find((n) => n.id === notionUUID(DB))?.parentID, home?.id);
+  const links = home?.blocks.filter((b) => b.kind === 'page').map((b) => [b.asset, b.indent ?? 0]);
+  assert.deepEqual(links, [[notionUUID(DB), 0], [notionUUID(ROW), 1]]);
+});

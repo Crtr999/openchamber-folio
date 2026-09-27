@@ -35,7 +35,9 @@ type ChatOrigin = 'home' | 'assistant';
  */
 export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
   const { t } = useI18n();
-  const [view, setView] = React.useState<MobileView>('home');
+  const [view, setView] = React.useState<MobileView>(() => {
+    try { const last = localStorage.getItem('folio.lastView'); return last === 'notes' || last === 'chat' ? last : 'home'; } catch { return 'home'; }
+  });
   const [chatOrigin, setChatOrigin] = React.useState<ChatOrigin>('home');
   // The chat UI mounts on first use and then stays mounted, so its connection and scroll position survive switching.
   const [chatsMounted, setChatsMounted] = React.useState(false);
@@ -114,6 +116,17 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
   }, [selectedID]);
   const openNote = (id: string) => { void useFolioStore.getState().run({ command: 'select', noteID: id }); setView('notes'); };
 
+  // The Mac sent a one-time chats link over the paired sync: connect the chats in the background.
+  const macConnectLink = useSyncStore((s) => s.connectLink);
+  React.useEffect(() => {
+    if (!macConnectLink) return;
+    setChatsMounted(true);
+    setConnectLink(macConnectLink);
+    useSyncStore.setState({ connectLink: undefined });
+  }, [macConnectLink]);
+
+  // Reopen where the app was left: the same page or conversation.
+  React.useEffect(() => { try { localStorage.setItem('folio.lastView', view); } catch { /* storage blocked */ } }, [view]);
   const calendarConnected = useFolioStore((s) => s.status?.calendarConnected);
   React.useEffect(() => { if (calendarConnected) { try { localStorage.setItem('folio.calendar', '1'); } catch { /* storage blocked */ } } }, [calendarConnected]);
 

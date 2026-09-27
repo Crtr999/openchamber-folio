@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
+import http from 'node:http';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -87,4 +88,30 @@ test('assistant chats, attachments and Bella travel through the encrypted route'
   assert.equal((await call({ op: 'bella', text: 'Hello' })).audio, 'UklGRg==');
   await assert.rejects(call({ op: 'asset-get', path: '../secret' }));
   sync.disable();
+});
+
+test('focus travels both ways and the phone gets a one-time chats link from the Mac', async () => {
+  const origin = http.createServer((req, res) => {
+    if (req.method === 'POST' && req.url === '/api/client-auth/pairing/sessions') {
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ pairing: { id: 'p1', secret: 's1', fingerprint: 'f1', expiresAt: '2099-01-01T00:00:00.000Z' }, server: { label: 'Mac', candidates: [{ type: 'relay', url: 'x' }] } }));
+      return;
+    }
+    res.writeHead(404); res.end();
+  });
+  await new Promise((resolve) => origin.listen(0, '127.0.0.1', resolve));
+  const engine = { request: async () => ({ ok: true, state: { notes: [] } }), syncRequest: async () => ({ ok: true, text: '{}' }) };
+  const sync = createFolioSync({ engine, configPath: path.join(mkdtempSync(path.join(tmpdir(), 'folio-sync-')), 'c.json'), getLocalOrigin: () => `http://127.0.0.1:${origin.address().port}` });
+  const status = sync.enable(); sync.stop();
+  const key = Buffer.from(new URLSearchParams(status.pairingURL.split('?')[1]).get('k'), 'base64url');
+  const call = async (value) => decrypt(key, await sync.handleEncrypted(encrypt(key, { t: Date.now(), ...value })));
+  sync.setFocus({ noteID: A, blockID: 'b1', reading: true, at: 5 });
+  const reply = await call({ op: 'sync', since: 0, notes: [], focus: { noteID: B.toLowerCase(), reading: false, at: 6 } });
+  assert.deepEqual(reply.macFocus, { noteID: A, blockID: 'b1', reading: true, at: 5 });
+  assert.equal(sync.status().phoneFocus.noteID, B);
+  const { link } = await call({ op: 'connect' });
+  const payload = JSON.parse(Buffer.from(new URL(link.replace('openchamber://', 'https://x/')).searchParams.get('p'), 'base64url').toString());
+  assert.equal(payload.pairingId, 'p1');
+  assert.equal(payload.v, 2);
+  origin.close(); sync.disable();
 });

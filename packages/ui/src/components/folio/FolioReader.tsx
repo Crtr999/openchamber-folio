@@ -78,7 +78,7 @@ function BookBlock({ block, index, number }: { block: FolioBlock; index: number;
   }
 }
 
-export function FolioReader({ note, onClose, onListen }: { note: FolioNote; onClose: () => void; onListen?: (text: string) => void }) {
+export function FolioReader({ note, onClose, onListen, startAt, onPlace }: { note: FolioNote; onClose: () => void; onListen?: (text: string) => void; startAt?: string; onPlace?: (blockID: string) => void }) {
   const { t } = useI18n();
   const [settings, setSettings] = React.useState<ReaderSettings>(() => load(SETTINGS, settingsSchema, { page: 'auto', font: 'original', size: window.innerWidth < 700 ? 20 : 21, spacing: 1.5 }));
   const [marks, setMarks] = React.useState<Bookmark[]>(() => load(marksKey(note.id), marksSchema, []));
@@ -90,7 +90,7 @@ export function FolioReader({ note, onClose, onListen }: { note: FolioNote; onCl
   const frame = React.useRef<HTMLDivElement>(null);
   const flow = React.useRef<HTMLDivElement>(null);
   const [size, setSize] = React.useState({ width: 0, height: 0 });
-  const anchor = React.useRef<string | undefined>(load(placeKey(note.id), placeSchema, { blockID: '', at: 0 }).blockID || undefined);
+  const anchor = React.useRef<string | undefined>(startAt ?? (load(placeKey(note.id), placeSchema, { blockID: '', at: 0 }).blockID || undefined));
   const drag = React.useRef<{ x: number; y: number } | undefined>(undefined);
 
   const blocks = note.blocks;
@@ -146,8 +146,8 @@ export function FolioReader({ note, onClose, onListen }: { note: FolioNote; onCl
     setPage(clamped);
     const blockID = firstBlockOn(clamped);
     anchor.current = blockID;
-    if (blockID) keep(placeKey(note.id), { blockID, at: Date.now() });
-  }, [total, firstBlockOn, note.id]);
+    if (blockID) { keep(placeKey(note.id), { blockID, at: Date.now() }); onPlace?.(blockID); }
+  }, [total, firstBlockOn, note.id, onPlace]);
 
   const jumpTo = (blockID: string) => {
     const found = flow.current?.querySelector(`[data-block="${blockID}"]`);

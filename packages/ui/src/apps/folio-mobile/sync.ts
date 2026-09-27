@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import type { LocalEngine } from '@/lib/folio/local-engine';
 import type { FolioNote } from '@/lib/folio/schema';
 import { useFolioStore } from '@/lib/folio/store';
+import { useHandoffStore, type FolioFocus } from '@/lib/folio/handoff';
 import { isCapacitorApp } from '@/lib/platform';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeApiBaseUrl, getRuntimeKey, MOBILE_DISCONNECTED_RUNTIME_KEY } from '@/lib/runtime-switch';
@@ -22,7 +23,10 @@ export type MacChat = z.infer<typeof macChatSchema>;
 const assistantMessageSchema = z.object({ id: z.string(), role: z.enum(['user', 'assistant']), content: z.string(), sourceIDs: z.array(z.string()) });
 const assistantChatSchema = z.object({ noteID: z.string(), title: z.string(), isChat: z.boolean(), created: z.number(), modified: z.number(), messages: z.array(assistantMessageSchema) });
 type AssistantChat = { noteID: string; title: string; created: number; modified: number; messages: z.infer<typeof assistantMessageSchema>[] };
-const syncReplySchema = z.object({ cursor: z.number(), notes: z.array(z.unknown()), macChats: z.array(macChatSchema), assistant: z.array(assistantChatSchema).default([]) });
+const focusSchema = z.object({ noteID: z.string(), blockID: z.string().optional(), reading: z.boolean(), at: z.number() });
+export type MacFocus = z.infer<typeof focusSchema>;
+const syncReplySchema = z.object({ cursor: z.number(), notes: z.array(z.unknown()), macChats: z.array(macChatSchema), assistant: z.array(assistantChatSchema).default([]), macFocus: focusSchema.nullish() });
+const connectReplySchema = z.object({ link: z.string() });
 const assetReplySchema = z.object({ data: z.string() });
 const uploadReplySchema = z.object({ path: z.string() });
 const bellaReplySchema = z.object({ audio: z.string() });
@@ -47,7 +51,8 @@ const toB64 = (bytes: Uint8Array) => btoa(Array.from(bytes, (b) => String.fromCh
 async function cryptoKey(key: string) { return crypto.subtle.importKey('raw', fromB64(key), 'AES-GCM', false, ['encrypt', 'decrypt']); }
 
 type SyncRequest =
-  | { op: 'sync'; t: number; since: number; notes: FolioNote[]; chats: MobileChat[]; assistant: AssistantChat[]; assistantHashes: Record<string, string> }
+  | { op: 'sync'; t: number; since: number; notes: FolioNote[]; chats: MobileChat[]; assistant: AssistantChat[]; assistantHashes: Record<string, string>; focus?: FolioFocus }
+  | { op: 'connect'; t: number }
   | { op: 'asset-get'; t: number; path: string }
   | { op: 'asset-put'; t: number; name: string; data: string }
   | { op: 'bella'; t: number; text: string };
@@ -119,6 +124,10 @@ interface SyncState {
   syncing: boolean;
   error?: string;
   macChats: MacChat[];
+  /** What the Mac had open at the last sync, for the "continue from your Mac" card. */
+  macFocus?: MacFocus;
+  /** A one-time link that connects the chats to the Mac; the app redeems it, then it is cleared. */
+  connectLink?: string;
   load: () => void;
   pair: (link: string, engine: LocalEngine) => Promise<boolean>;
   unpair: () => Promise<void>;
@@ -186,6 +195,7 @@ async function applyAssistant(incoming: z.infer<typeof assistantChatSchema>[], s
 }
 
 let running: Promise<void> | undefined;
+let lastConnectAsk = 0;
 
 async function request<T>(pairing: Pairing, value: SyncRequest, schema: z.ZodType<T>): Promise<T> {
   const key = await readSecret(KEY_NAME);
@@ -253,13 +263,20 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         const hashes: [string, string][] = [];
         for (const chat of chats) hashes.push([(chat.pageID ?? chat.id).toUpperCase(), await chatHash(syncable(chat))]);
         const assistantHashes = Object.fromEntries(hashes);
-        const reply = await request(pairing, { op: 'sync', t: Date.now(), since: state.cursor, notes: engine.changedSince(state.localSince), chats: [], assistant, assistantHashes }, syncReplySchema);
+        const focus = useHandoffStore.getState().local;
+        const reply = await request(pairing, { op: 'sync', t: Date.now(), since: state.cursor, notes: engine.changedSince(state.localSince), chats: [], assistant, assistantHashes, focus }, syncReplySchema);
         const drafts = useFolioStore.getState().drafts;
         await engine.mergeRemote(reply.notes, (id) => Boolean(drafts[id]));
         await applyAssistant(reply.assistant, started);
         await downloadAssets(pairing, engine);
         const next = { ...state, cursor: reply.cursor, localSince: started, lastSync: Date.now(), macChats: reply.macChats };
         writeLocal(STATE, { ...(readLocal(STATE, stateSchema) ?? {}), ...next });
+        if (reply.macFocus) set({ macFocus: reply.macFocus });
+        // Chats not connected yet: this pairing already trusts the Mac, so ask it for a chats link once in a while.
+        if (getRuntimeKey() === MOBILE_DISCONNECTED_RUNTIME_KEY && Date.now() - lastConnectAsk > 10 * 60_000) {
+          lastConnectAsk = Date.now();
+          try { set({ connectLink: (await request(pairing, { op: 'connect', t: Date.now() }, connectReplySchema)).link }); } catch { /* older Mac app, or OpenChamber not ready */ }
+        }
         set({ lastSync: next.lastSync, macChats: reply.macChats, error: uploadFailures ? `${uploadFailures} attachment${uploadFailures === 1 ? '' : 's'} could not be copied to your Mac yet. Folio will try again.` : undefined });
         await useFolioStore.getState().refresh();
       } catch (error) {

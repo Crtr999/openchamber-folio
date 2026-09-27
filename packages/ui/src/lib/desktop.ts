@@ -869,6 +869,7 @@ const folioSyncStatusSchema = z.object({
   hosts: z.array(z.string()).optional(),
   lastSync: z.number().optional(),
   pairingURL: z.string().optional(),
+  phoneFocus: z.object({ noteID: z.string(), blockID: z.string().optional(), reading: z.boolean(), at: z.number() }).optional(),
 });
 export type FolioSyncStatus = z.infer<typeof folioSyncStatusSchema>;
 
@@ -876,6 +877,12 @@ export type FolioSyncStatus = z.infer<typeof folioSyncStatusSchema>;
 export const folioSyncCommand = async (action: 'status' | 'enable' | 'disable'): Promise<FolioSyncStatus | undefined> => {
   if (!canUseElectronDesktopIPC() || getElectronPlatform() !== 'darwin') return undefined;
   return folioSyncStatusSchema.parse(await invokeDesktop('desktop_folio_sync', { action }));
+};
+
+/** Tells the Mac's sync service which page (and reading place) is in front, for the phone's "continue" card. */
+export const reportFolioFocus = async (focus: { noteID: string; blockID?: string; reading: boolean; at: number }): Promise<void> => {
+  if (!canUseElectronDesktopIPC() || getElectronPlatform() !== 'darwin') return;
+  await invokeDesktop('desktop_folio_sync', { action: 'focus', focus });
 };
 
 const openRouterCreditsSchema = z.object({

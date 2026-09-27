@@ -3516,6 +3516,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       const action = args?.action;
       if (action === 'enable') return folioSync.enable();
       if (action === 'disable') return folioSync.disable();
+      if (action === 'focus') return folioSync.setFocus(args?.focus);
       return folioSync.status();
     }
     case 'desktop_openrouter_credits': {

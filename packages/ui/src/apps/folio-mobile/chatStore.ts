@@ -89,9 +89,12 @@ export const useMobileChatStore = create<ChatState>((set, get) => ({
       await promised((await objects('chats', 'readwrite')).put(chat));
     }
     const saved = modelSchema.safeParse(await promised((await objects('meta', 'readonly')).get('model')));
-    set({ loaded: true, chats, model: saved.success ? saved.data : get().model });
+    let lastOpen: string | undefined;
+    try { lastOpen = localStorage.getItem('folio.chat.active') ?? undefined; } catch { lastOpen = undefined; }
+    // Reopen the conversation that was open last time.
+    set({ loaded: true, chats, model: saved.success ? saved.data : get().model, activeID: get().activeID ?? (chats.some((c) => c.id === lastOpen) ? lastOpen : undefined) });
   },
-  open: (activeID) => set({ activeID }),
+  open: (activeID) => { set({ activeID }); try { if (activeID) localStorage.setItem('folio.chat.active', activeID); else localStorage.removeItem('folio.chat.active'); } catch { /* storage blocked */ } },
   save: async (chat) => {
     set((state) => ({ chats: [chat, ...state.chats.filter((c) => c.id !== chat.id)] }));
     await promised((await objects('chats', 'readwrite')).put(chat));

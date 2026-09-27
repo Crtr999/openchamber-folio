@@ -11,6 +11,7 @@ import { makeBlock, type FolioBlock, type FolioNote, type FolioTable } from './s
  */
 
 export interface NotionFile { path: string; text?: string }
+export interface TidiedImport { notes: FolioNote[]; removed: string[] }
 export interface NotionImport { notes: FolioNote[]; attachments: { notePath: string; file: string }[]; removedSecrets: number }
 
 type Mark = NonNullable<FolioBlock['marks']>[number];
@@ -180,6 +181,20 @@ function tableFrom(rows: string[][]): FolioTable {
   };
 }
 
+function looksLikeToggle(lines: readonly string[], at: number, depth: number): boolean {
+  const childPrefix = ' '.repeat((depth + 1) * 4);
+  for (let j = at + 1; j < lines.length; j += 1) {
+    const raw = lines[j].replace(/\t/g, '    ');
+    if (!raw.trim()) { if (raw.startsWith(childPrefix)) return true; continue; }
+    if (!raw.startsWith(childPrefix)) return false;
+    const text = raw.trim();
+    const own = raw.slice(childPrefix.length);
+    // A direct child that is not a list item (a paragraph, bold label, quote or table) means a toggle body.
+    if (!own.startsWith(' ') && !/^([-*+] |\d+[.)] )/.test(text)) return true;
+  }
+  return false;
+}
+
 function blocksFrom(markdown: string, dir: string, resolve: (target: string) => string | undefined, byFile: Map<string, Entry>, attach: (file: string) => void): ParsedPage {
   const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
   const blocks: FolioBlock[] = [];
@@ -266,7 +281,8 @@ function blocksFrom(markdown: string, dir: string, resolve: (target: string) => 
     const task = /^[-*+] \[( |x|X)\] (.*)$/.exec(line);
     if (task) { push('task', task[2], indent, { checked: task[1] !== ' ' }); continue; }
     const bullet = /^[-*+] (.*)$/.exec(line);
-    if (bullet) { push('bullet', bullet[1], indent); continue; }
+    // Notion exports toggle lists as bullets; a bullet holding paragraphs (or an empty indented body) was a toggle.
+    if (bullet) { if (looksLikeToggle(lines, i, indent)) push('toggle', bullet[1], indent, { checked: true }); else push('bullet', bullet[1], indent); continue; }
     const numbered = /^\d+[.)] (.*)$/.exec(line);
     if (numbered) { push('numbered', numbered[1], indent); continue; }
     if (line.startsWith('>')) {
@@ -279,4 +295,79 @@ function blocksFrom(markdown: string, dir: string, resolve: (target: string) => 
     push('text', line, indent);
   }
   return { title, blocks };
+}
+
+/**
+ * Tidies an imported tree the way the Notion page looked rather than how Notion stores it:
+ * database views that repeat another database are merged into it, wrapper pages that only hold one
+ * database (or only links) are removed, and a link to a database lists its pages under it, like an
+ * inline database. Returns the pages to keep and the IDs of pages that should go (for re-imports).
+ */
+export function tidyNotionImport(notes: readonly FolioNote[], options: { rootTitle?: string; rootIcon?: string } = {}): TidiedImport {
+  const list = notes.map((n) => ({ ...n, blocks: n.blocks.slice() }));
+  const alias = new Map<string, string>();
+  const resolve = (id: string): string => { let current = id; for (let guard = 0; alias.has(current) && guard < 20; guard += 1) current = alias.get(current) ?? current; return current; };
+  const children = (id: string) => list.filter((n) => n.parentID === id && !alias.has(n.id));
+  const content = (n: FolioNote) => n.blocks.filter((b) => b.kind !== 'divider' && (b.text.trim() || b.kind === 'page' || b.kind === 'attachment'));
+
+  // 1. A table whose rows are all rows of another, larger-or-equal table is a view of it.
+  const tables = list.filter((n) => n.table);
+  const names = (n: FolioNote) => (n.table?.rows ?? []).map((r) => r.values[n.table?.columns[0]?.id ?? ''] ?? '').filter(Boolean);
+  for (const view of tables) {
+    if (children(view.id).length || !names(view).length) continue;
+    const key = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const overlap = (other: FolioNote) => names(view).filter((name) => names(other).some((o) => key(o) === key(name))).length / names(view).length;
+    const source = tables.find((other) => other.id !== view.id && !alias.has(other.id) && names(other).length >= names(view).length && overlap(other) >= 0.8 && children(other.id).length > 0);
+    if (source) alias.set(view.id, source.id);
+  }
+  // 2. A page that only holds a same-named database becomes that database.
+  for (const page of list.filter((n) => !n.table && !alias.has(n.id))) {
+    const inner = children(page.id).find((c) => c.table && c.title.trim().toLowerCase() === page.title.trim().toLowerCase());
+    if (!inner || content(page).some((b) => !(b.kind === 'page' && resolve(b.asset ?? '') === inner.id))) continue;
+    alias.set(page.id, inner.id);
+    inner.parentID = page.parentID;
+    for (const child of children(page.id)) if (child.id !== inner.id) child.parentID = inner.id;
+  }
+  // 3. A page that is only links to its own sub-pages is a folder: its pages move up, links to it list them.
+  for (const page of list.filter((n) => !n.table && !alias.has(n.id) && n.parentID)) {
+    const blocks = content(page);
+    if (!blocks.length || blocks.some((b) => b.kind !== 'page')) continue;
+    for (const child of children(page.id)) child.parentID = page.parentID;
+    for (const other of list) {
+      const at = other.blocks.findIndex((b) => b.kind === 'page' && b.asset === page.id);
+      if (at >= 0) other.blocks.splice(at, 1, ...blocks.map((b) => ({ ...b, id: `${b.id.slice(0, 24)}${other.id.slice(24)}`.toUpperCase(), indent: other.blocks[at].indent })));
+    }
+    alias.set(page.id, page.parentID ?? '');
+  }
+  const kept = list.filter((n) => !alias.has(n.id));
+  for (const note of kept) {
+    if (note.parentID) note.parentID = resolve(note.parentID) || undefined;
+    note.blocks = note.blocks.map((b) => ({
+      ...b,
+      asset: b.kind === 'page' && b.asset ? resolve(b.asset) : b.asset,
+      marks: b.marks?.map((m) => (m.style === 'link' && m.value?.startsWith('folio://note/') ? { ...m, value: `folio://note/${resolve(m.value.slice(13))}` } : m)),
+    }));
+  }
+  // 4. A link to a database lists the database's pages under it, in the database's own order.
+  const keptByID = new Map(kept.map((n) => [n.id, n]));
+  for (const note of kept) {
+    const expanded: FolioBlock[] = [];
+    const listed = new Set<string>();
+    for (const block of note.blocks) {
+      if (block.kind === 'page' && block.asset && listed.has(block.asset)) continue; // a merged view would repeat its database
+      if (block.kind === 'page' && block.asset) listed.add(block.asset);
+      expanded.push(block);
+      const table = block.kind === 'page' && block.asset ? keptByID.get(block.asset) : undefined;
+      // Only databases shown on their own page (or on the top page) list their pages; elsewhere a link is enough.
+      if (!table?.table || !(table.parentID === note.id || !note.parentID)) continue;
+      const rows = names(table);
+      const pages = kept.filter((n) => n.parentID === table.id).sort((a, b) => (rows.indexOf(a.title) + 1 || 999) - (rows.indexOf(b.title) + 1 || 999)).slice(0, 60);
+      pages.forEach((child, index) => expanded.push({ ...makeBlock(), id: `${child.id.slice(0, 28)}${String(index).padStart(4, '0')}${note.id.slice(32)}`.toUpperCase(), kind: 'page', text: '', asset: child.id, indent: (block.indent ?? 0) + 1 }));
+    }
+    note.blocks = expanded;
+  }
+  const root = kept.find((n) => !n.parentID);
+  if (root && options.rootTitle) root.title = options.rootTitle;
+  if (root && options.rootIcon) root.icon = options.rootIcon;
+  return { notes: kept, removed: [...alias.keys()] };
 }

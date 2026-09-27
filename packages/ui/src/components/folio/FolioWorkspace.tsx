@@ -16,6 +16,9 @@ import { FolioRichBlock, folioNoteLinkPrefix, type FocusAt, type MentionState, t
 import './folio.css';
 import { FolioReader } from './FolioReader';
 import { FolioCreditsBadge } from './FolioCreditsBadge';
+import { FolioHabits } from './FolioHabits';
+import { useHandoffStore } from '@/lib/folio/handoff';
+import { folioSyncCommand, reportFolioFocus } from '@/lib/desktop';
 
 type ColorName = typeof colorNames[number];
 type Paint = 'textColor' | 'highlight';
@@ -73,6 +76,20 @@ export interface FolioMobileHooks {
 /** The Mac engine writes seconds since 2001; the iPhone engine writes milliseconds since 1970. */
 const folioDate = (value: number) => new Date(value > 1e11 ? value : (value + 978_307_200) * 1000);
 
+/** On the Mac home: the page the iPhone last had open (and the passage, if reading), one click to continue. */
+function ContinueFromPhone({ notes, onOpen }: { notes: readonly FolioNote[]; onOpen: (id: string, blockID: string | undefined, reading: boolean) => void }) {
+  const { t } = useI18n();
+  const [focus, setFocus] = React.useState<{ noteID: string; blockID?: string; reading: boolean; at: number }>();
+  React.useEffect(() => { void folioSyncCommand('status').then((status) => setFocus(status?.phoneFocus)).catch(() => undefined); }, []);
+  const note = focus ? notes.find((n) => n.id.toUpperCase() === focus.noteID && !n.trashed) : undefined;
+  if (!focus || !note || Date.now() - focus.at > 3 * 86_400_000) return null;
+  return <button type="button" className="mb-8 flex w-full items-center gap-3 rounded-xl border border-border px-4 py-3 text-left hover:bg-interactive-hover" onClick={() => onOpen(note.id, focus.blockID, focus.reading)}>
+    <Icon name="smartphone" className="size-5 shrink-0 text-muted-foreground" />
+    <span className="min-w-0 flex-1"><span className="block text-xs text-muted-foreground">{focus.reading ? t('folio.continueReadingFromPhone') : t('folio.continueFromPhone')}</span><span className="block truncate text-sm font-medium">{note.title || t('folio.untitled')}</span></span>
+    <Icon name="arrow-right-s" className="size-4 text-muted-foreground" />
+  </button>;
+}
+
 export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   const { t } = useI18n();
   const status = useFolioStore((s) => s.status);
@@ -88,6 +105,19 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   const [focus, setFocus] = React.useState<{ id: string; at: FocusAt; n: number }>();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [reading, setReading] = React.useState(false);
+  const [readStart, setReadStart] = React.useState<string>();
+  // A "continue reading" card (from the other device) opens this page in reading mode at that passage.
+  const readRequest = useHandoffStore((s) => s.readRequest);
+  const currentID = status?.selectedID;
+  React.useEffect(() => {
+    if (!readRequest || readRequest.noteID !== currentID) return;
+    setReadStart(readRequest.blockID); setReading(true);
+    useHandoffStore.getState().clearReadRequest();
+  }, [readRequest, currentID]);
+  // Report the page in front so the other device can offer to continue here; the Mac forwards it to sync.
+  const localFocus = useHandoffStore((s) => s.local);
+  React.useEffect(() => { if (currentID && !home) useHandoffStore.getState().report({ noteID: currentID, reading: false }); }, [currentID, home]);
+  React.useEffect(() => { if (localFocus && !mobile) void reportFolioFocus(localFocus).catch(() => undefined); }, [localFocus, mobile]);
   const [syncOpen, setSyncOpen] = React.useState(false);
   const [recordConfirm, setRecordConfirm] = React.useState(false);
   const [iconOpen, setIconOpen] = React.useState(false);
@@ -313,14 +343,20 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   if (!status) return <div className="p-8 text-muted-foreground">{error || t('common.loading')}</div>;
 
   // Collapsed toggles hide what follows them.
-  const hidden = new Set<string>(); let hiddenLevel: number | undefined; let hiddenToggle = false;
-  for (const block of note?.blocks ?? []) {
+  // A closed toggle hides what is nested under it (deeper blocks), or, when nothing is nested, the blocks up to the next toggle or heading.
+  const hidden = new Set<string>(); let hiddenLevel: number | undefined; let hiddenToggle = false; let hideDeeperThan: number | undefined;
+  const pageBlocks = note?.blocks ?? [];
+  pageBlocks.forEach((block, index) => {
     const level = Number(block.kind.match(/(?:h|H)eading([1-4])/)?.[1] || 0);
-    if (hiddenLevel !== undefined) { if (level > 0 && level <= hiddenLevel) hiddenLevel = undefined; else { hidden.add(block.id); continue; } }
-    if (hiddenToggle) { if (block.kind === 'toggle' || level > 0) hiddenToggle = false; else { hidden.add(block.id); continue; } }
+    const depth = block.indent ?? 0;
+    if (hideDeeperThan !== undefined) { if (depth > hideDeeperThan) { hidden.add(block.id); return; } hideDeeperThan = undefined; }
+    if (hiddenLevel !== undefined) { if (level > 0 && level <= hiddenLevel) hiddenLevel = undefined; else { hidden.add(block.id); return; } }
+    if (hiddenToggle) { if (block.kind === 'toggle' || level > 0) hiddenToggle = false; else { hidden.add(block.id); return; } }
     if (block.kind.startsWith('toggleHeading') && block.checked) hiddenLevel = level;
-    if (block.kind === 'toggle' && block.checked) hiddenToggle = true;
-  }
+    if (block.kind === 'toggle' && block.checked) {
+      if ((pageBlocks[index + 1]?.indent ?? 0) > depth) hideDeeperThan = depth; else hiddenToggle = true;
+    }
+  });
   const crumbs: FolioNote[] = [];
   for (let cursor = note && status.notes.find((n) => n.id === note.parentID), guard = 0; cursor && guard < 20; cursor = status.notes.find((n) => n.id === cursor?.parentID), guard += 1) crumbs.unshift(cursor);
   const isDescendant = (candidate: string): boolean => {
@@ -338,7 +374,8 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   let numbered = 0;
 
   return <div className="folio-workspace flex h-full flex-col bg-background text-foreground">
-    {reading && note && <FolioReader note={note} onClose={() => setReading(false)} onListen={(text) => call({ command: 'read', text })} />}
+    {reading && note && <FolioReader note={note} startAt={readStart} onClose={() => { setReading(false); setReadStart(undefined); useHandoffStore.getState().report({ noteID: note.id, reading: false }); }} onListen={(text) => call({ command: 'read', text })}
+      onPlace={(blockID) => useHandoffStore.getState().report({ noteID: note.id, blockID, reading: true })} />}
     {/* One slim bar replaces the old stacked toolbars; everything else lives in the ⋯ menu. */}
     <header className="flex h-11 shrink-0 items-center gap-1 px-3">
       {mobile
@@ -431,6 +468,9 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
         <div className="mb-10 grid grid-cols-3 gap-2">
           {createKinds.map(([kind, icon, label]) => <button key={kind} type="button" className="flex items-center gap-2 rounded-lg border border-border px-3 py-3 text-left text-sm hover:bg-interactive-hover" onClick={() => void createFromMenu(kind)}><Icon name={icon} className="size-4 text-muted-foreground" />{t(label)}</button>)}
         </div>
+        {!mobile && <ContinueFromPhone notes={status.notes} onOpen={(id, blockID, isReading) => { void run({ command: 'select', noteID: id }).then(() => { if (isReading) useHandoffStore.getState().openReader(id, blockID); }); }} />}
+        <div className="mb-2 text-xs font-medium text-muted-foreground">{t('folio.today')}</div>
+        <div className="mb-8"><FolioHabits compact={Boolean(mobile)} /></div>
         {status.events.length > 0 && <>
           <div className="mb-2 text-xs font-medium text-muted-foreground">{t('folio.upcoming')}</div>
           <div className="mb-8">{status.events.slice(0, 8).map((event) => <button key={event.id} type="button" className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left text-sm hover:bg-interactive-hover" onClick={() => call({ command: 'calendar-prepare', eventID: event.id })}>
