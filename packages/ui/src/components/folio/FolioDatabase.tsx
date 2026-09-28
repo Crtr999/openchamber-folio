@@ -8,6 +8,7 @@ import { folioColors } from '@/lib/folio/rich-text';
 import { isImageName, useFolioAssetURL } from '@/lib/folio/assets';
 import { FolioIcon } from './FolioIcon';
 import { FolioIconPicker } from './FolioIconPicker';
+import { FolioConfirm } from './FolioConfirm';
 import { setPageIcon } from '@/lib/folio/rows';
 import { chartPoints, defaultView, displayColumns, groupsFor, splitValues, viewRows, type FilterOp } from '@/lib/folio/database';
 
@@ -294,17 +295,8 @@ export function FolioDatabase({ table, onChange, viewID, pageOf, onOpenRow, mobi
       <Chart points={chartPoints(table, view, rows)} kind={view.chart?.kind ?? (table.columns.find((c) => c.id === view.chart?.x)?.kind === 'date' ? 'line' : 'bar')} />
     </div>}
 
-    {mobile && removing && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setRemovingRow(undefined)}>
-      <div role="dialog" aria-label={t('folio.remove')} className="w-full max-w-xs rounded-lg border border-border bg-background p-3 text-sm shadow-lg"
-        onKeyDown={(e) => { if (e.key === 'Escape') setRemovingRow(undefined); }} onClick={(e) => e.stopPropagation()}>
-        <p className="mb-1 font-medium">{t('folio.remove')}</p>
-        <p className="mb-3 text-xs text-muted-foreground">{t('folio.db.deleteRowWarning')}</p>
-        <div className="flex gap-2">
-          <button type="button" className="flex-1 rounded-md bg-destructive px-3 py-2 text-destructive-foreground" onClick={() => { removeRow(removing.id); setRemovingRow(undefined); }}>{t('folio.remove')}</button>
-          <button type="button" autoFocus className="rounded-md bg-secondary px-3 py-2" onClick={() => setRemovingRow(undefined)}>{t('folio.cancel')}</button>
-        </div>
-      </div>
-    </div>}
+    {mobile && removing && <FolioConfirm label={t('folio.remove')} body={t('folio.db.deleteRowWarning')} confirmLabel={t('folio.remove')}
+      onConfirm={() => { removeRow(removing.id); setRemovingRow(undefined); }} onCancel={() => setRemovingRow(undefined)} />}
   </section>;
 }
 

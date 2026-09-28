@@ -9,6 +9,7 @@ import { blockKinds, colorNames, makeBlock, type FolioBlock, type FolioNote, typ
 import { folioColors } from '@/lib/folio/rich-text';
 import { useInputStore } from '@/sync/input-store';
 import { FolioDatabase } from './FolioDatabase';
+import { FolioConfirm } from './FolioConfirm';
 import { FolioIcon } from './FolioIcon';
 import { FolioIconPicker } from './FolioIconPicker';
 import { FolioSyncDialog } from './FolioSyncDialog';
@@ -197,6 +198,8 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
   const askOpen = useFolioAskStore((s) => s.open);
   const setAskOpen = useFolioAskStore((s) => s.setOpen);
   const [recordConfirm, setRecordConfirm] = React.useState(false);
+  /** The page a confirmation stands open for, so a shortcut that opens another page cannot move it. */
+  const [trashConfirm, setTrashConfirm] = React.useState<string>();
   const [iconOpen, setIconOpen] = React.useState(false);
   const [linkOpen, setLinkOpen] = React.useState(false);
   const [link, setLink] = React.useState('');
@@ -626,7 +629,12 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
               utility(kind);
             }}><Icon name={kind === 'calendar' ? 'calendar' : kind === 'assistant' ? 'sparkling' : 'settings-3'} className="size-4 text-muted-foreground" />{t(`folio.${kind}`)}</button>)}
             {!mobile && <button type="button" className={menuItem} onClick={() => { setMenuOpen(false); setSyncOpen(true); }}><Icon name="smartphone" className="size-4 text-muted-foreground" />{t('folio.syncTitle')}</button>}
-            {note && <><div className="my-1 border-t border-border" /><button type="button" className={cn(menuItem, 'text-destructive')} onClick={() => call({ command: 'trash', flag: note.trashed })}><Icon name="delete-bin" className="size-4" />{t(note.trashed ? 'folio.restore' : 'folio.trash')}</button></>}
+            {note && <><div className="my-1 border-t border-border" /><button type="button" className={cn(menuItem, 'text-destructive')} onClick={() => {
+              // A page going to the Trash leaves the tree and the recent list, so it asks first. Bringing it
+              // back is the way out of the Trash, so that direction never sits behind a dialog.
+              if (note.trashed) { call({ command: 'trash', flag: true }); return; }
+              setMenuOpen(false); setTrashConfirm(note.id);
+            }}><Icon name="delete-bin" className="size-4" />{t(note.trashed ? 'folio.restore' : 'folio.trash')}</button></>}
           </div>
         </>}
       </div>
@@ -864,6 +872,9 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
       <div className="flex items-center gap-2"><span className="w-16 text-[11px] text-muted-foreground">{t('folio.textColor')}</span><Swatches compact kind="textColor" label={colorLabel('textColor')} onPick={(color) => paint('textColor', color)} /></div>
       <div className="flex items-center gap-2"><span className="w-16 text-[11px] text-muted-foreground">{t('folio.highlight')}</span><Swatches compact kind="highlight" label={colorLabel('highlight')} onPick={(color) => paint('highlight', color)} /></div>
     </div>}
+
+    {trashConfirm && <FolioConfirm label={t('folio.moveToTrash')} body={t('folio.trashConfirm')} confirmLabel={t('folio.remove')}
+      onConfirm={() => { const noteID = trashConfirm; setTrashConfirm(undefined); call({ command: 'trash', noteID, flag: false }); }} onCancel={() => setTrashConfirm(undefined)} />}
   </div>
   {!mobile && askOpen && note && <FolioAskPanel note={note} onClose={() => setAskOpen(false)} />}
   </div>;

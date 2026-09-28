@@ -78,6 +78,70 @@ class FolioViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(FolioRecorderPlugin())
         bridge?.registerPluginInstance(FolioNotificationsPlugin())
         bridge?.registerPluginInstance(FolioEditorPlugin())
+        bridge?.registerPluginInstance(FolioSurfacePlugin())
+    }
+}
+
+extension Notification.Name {
+    static let folioSurfaceColorDidChange = Notification.Name("com.carterlaborde.folio.surfaceColor")
+}
+
+/// The app's own background colour, pushed from the web layer (FolioSurfacePlugin.setBackground).
+///
+/// The window, the web view and the native page editor all fall back to `systemBackground`, which is
+/// pure black in dark mode. Those are the pixels the user sees wherever the page does not paint one
+/// of its own — the strip above the status bar, and the window before the first frame — so they carry
+/// the theme's colour and change with it.
+enum FolioSurfaceColor {
+    private static var current = UIColor.systemBackground
+
+    static var background: UIColor { current }
+
+    static func set(_ color: UIColor) {
+        current = color
+        NotificationCenter.default.post(name: .folioSurfaceColorDidChange, object: nil)
+    }
+}
+
+/// Tells the native shell which colour the app's background is. The value is resolved at runtime
+/// rather than baked in, because the theme system picks it per theme and per light/dark mode, and the
+/// shell has to follow rather than only be right at launch.
+@objc(FolioSurfacePlugin)
+public class FolioSurfacePlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "FolioSurfacePlugin"
+    public let jsName = "FolioSurface"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "setBackground", returnType: CAPPluginReturnPromise),
+    ]
+
+    @objc func setBackground(_ call: CAPPluginCall) {
+        guard let hex = call.getString("color"), let color = FolioSurfaceColor.fromHexString(hex) else {
+            call.reject("setBackground needs a #rrggbb color")
+            return
+        }
+        DispatchQueue.main.async {
+            FolioSurfaceColor.set(color)
+            // The web view IS the bridge view controller's view, so the window entry is what covers
+            // the region UIKit has not handed to the controller yet, and the other three are the
+            // surfaces that actually show through an unpainted pixel.
+            self.bridge?.viewController?.view.window?.backgroundColor = color
+            self.bridge?.viewController?.view.backgroundColor = color
+            self.bridge?.webView?.backgroundColor = color
+            self.bridge?.webView?.scrollView.backgroundColor = color
+            call.resolve()
+        }
+    }
+}
+
+extension FolioSurfaceColor {
+    /// Accepts the #rgb and #rrggbb the web theme system emits, ignoring anything else.
+    static func fromHexString(_ value: String) -> UIColor? {
+        var hex = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if hex.hasPrefix("#") { hex.removeFirst() }
+        guard hex.allSatisfy({ $0.isHexDigit }) else { return nil }
+        if hex.count == 3 { hex = hex.map { "\($0)\($0)" }.joined() }
+        guard hex.count == 6, let number = UInt32(hex, radix: 16) else { return nil }
+        return UIColor(red: CGFloat((number >> 16) & 0xff) / 255, green: CGFloat((number >> 8) & 0xff) / 255, blue: CGFloat(number & 0xff) / 255, alpha: 1)
     }
 }
 

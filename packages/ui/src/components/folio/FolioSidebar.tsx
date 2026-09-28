@@ -1,19 +1,23 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { DndContext, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { DndContext, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent, type DragMoveEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { FolioIcon } from './FolioIcon';
+import { FolioConfirm } from './FolioConfirm';
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useFolioStore } from '@/lib/folio/store';
-import { reorderSiblings, sortSiblings } from '@/lib/folio/order';
+import { dropPages, dropZoneAt, sortSiblings, type DropZone } from '@/lib/folio/order';
 import type { FolioNote } from '@/lib/folio/schema';
 import { useUIStore } from '@/stores/useUIStore';
 
 const rowClass = 'group/folio flex h-7 items-center gap-1 rounded-md pr-1 text-sm text-foreground/85 hover:bg-interactive-hover';
+
+/** The page under the pointer, where on it the pointer is, and what dropping there would write. */
+interface Drop { movedID: string; targetID: string; zone: DropZone; pages: FolioNote[] }
 
 /** Collapsed sections are remembered on this device. */
 function useCollapsed(key: string): [boolean, () => void] {
@@ -33,10 +37,13 @@ function SectionHeader({ label, collapsed, onToggle, active, onOpen, action }: {
 }
 
 /** A page row that can be dragged among its siblings (drag on a Mac, long-press on touch). */
-function SortableRow({ id, line, children }: { id: string; line: React.ReactNode; children?: React.ReactNode }) {
+function SortableRow({ id, line, nesting, children }: { id: string; line: React.ReactNode; nesting: boolean; children?: React.ReactNode }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   // Only the page's own line starts a drag, so nested pages drag on their own.
-  return <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} className={cn(isDragging && 'relative z-10 opacity-70')}>
+  // A drop inside a page moves no rows, so for it the gap the sortable opens is held back and the page
+  // carries the outline instead. The dragged row keeps its own transform, or it would stop following
+  // the pointer the moment it reaches the middle of another page.
+  return <div ref={setNodeRef} style={{ transform: isDragging || !nesting ? CSS.Translate.toString(transform) : undefined, transition }} className={cn(isDragging && 'relative z-10 opacity-70')}>
     <div ref={setActivatorNodeRef} className="select-none" {...attributes} {...listeners}>{line}</div>
     {children}
   </div>;
@@ -45,7 +52,7 @@ function SortableRow({ id, line, children }: { id: string; line: React.ReactNode
 /**
  * Notes live in the same scroll list as project chats, directly under the project folders,
  * styled like Notion's sidebar: favorites, then the page tree, then Trash. Favorites and Notes
- * collapse, and pages can be dragged into order among their siblings.
+ * collapse, and a page is dragged into order among its siblings, or into another page.
  */
 export function FolioSidebar() {
   const { t } = useI18n();
@@ -56,12 +63,26 @@ export function FolioSidebar() {
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
   const [showTrash, setShowTrash] = React.useState(false);
   const [menu, setMenu] = React.useState<{ note: FolioNote; x: number; y: number }>();
+  const [trashing, setTrashing] = React.useState<FolioNote>();
+  const [drop, setDrop] = React.useState<Drop>();
+  const [dragging, setDragging] = React.useState(false);
+  const pointerY = React.useRef(0);
+  const intent = React.useRef('');
   const [favoritesCollapsed, toggleFavorites] = useCollapsed('folio.sidebar.favoritesCollapsed');
   const [notesCollapsed, toggleNotes] = useCollapsed('folio.sidebar.notesCollapsed');
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 6 } }),
   );
+  // dnd-kit reports the row the pointer is on, not where on it the pointer is, and it hangs its own move
+  // listener on the dragged row. A capture listener on the window runs before that one, so the pointer's
+  // Y is in hand by the time dnd-kit calls back about the row it landed on.
+  React.useEffect(() => {
+    if (!dragging) return;
+    const track = (event: PointerEvent) => { pointerY.current = event.clientY; };
+    window.addEventListener('pointermove', track, true);
+    return () => window.removeEventListener('pointermove', track, true);
+  }, [dragging]);
   // Opening a page inside other pages unfolds the tree down to it.
   React.useEffect(() => {
     if (!selectedID) return;
@@ -92,20 +113,41 @@ export function FolioSidebar() {
     void useFolioStore.getState().run({ command: 'create', parentID });
   };
   const toggle = (id: string) => setExpanded((old) => { const next = new Set(old); if (next.has(id)) next.delete(id); else next.add(id); return next; });
-  const parentKey = (id: string) => { const note = live.find((n) => n.id === id); return note?.parentID && live.some((p) => p.id === note.parentID) ? note.parentID : ''; };
+  const stopDragging = () => { setDragging(false); setDrop(undefined); intent.current = ''; };
+  const onDragStart = () => { setDragging(true); setDrop(undefined); intent.current = ''; };
+  const onDragMove = ({ active, over }: DragMoveEvent) => {
+    if (!over) { intent.current = ''; setDrop(undefined); return; }
+    const movedID = String(active.id), targetID = String(over.id);
+    const zone = dropZoneAt(pointerY.current - over.rect.top, over.rect.height);
+    // The tree only has to redraw when the page or the zone under the pointer changes, so a long drag
+    // across a page costs one render rather than one per pixel of travel.
+    if (`${targetID}:${zone}` !== intent.current) {
+      intent.current = `${targetID}:${zone}`;
+      const pages = dropPages(live, movedID, targetID, zone);
+      setDrop({ movedID, targetID, zone, pages });
+      // Opening the page under the pointer while it rests there shows the page arriving somewhere real.
+      if (zone === 'inside' && pages.length > 0) setExpanded((old) => (old.has(targetID) ? old : new Set(old).add(targetID)));
+    }
+  };
   const onDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!over || active.id === over.id) return;
-    const moved = String(active.id), target = String(over.id);
-    const key = parentKey(moved);
-    if (key !== parentKey(target)) return; // pages move among their own siblings
-    for (const note of reorderSiblings(byParent.get(key) ?? [], moved, target)) useFolioStore.getState().edit(note);
+    stopDragging();
+    if (!over) return;
+    const zone = dropZoneAt(pointerY.current - over.rect.top, over.rect.height);
+    for (const note of dropPages(live, String(active.id), String(over.id), zone)) useFolioStore.getState().edit(note);
   };
 
   const row = (note: FolioNote, depth: number, allowChildren: boolean): React.ReactNode => {
     const children = allowChildren ? sortSiblings(byParent.get(note.id) ?? []) : [];
     const isOpen = expanded.has(note.id);
     const hasChildren = allowChildren && children.length > 0;
-    const line = <div className={cn(rowClass, selectedID === note.id && 'bg-interactive-selection text-foreground')} style={{ paddingLeft: 4 + depth * 14 }}
+    // Only a row in the tree can be dropped on, so a page that also sits in Favorites does not light up
+    // there. The page being dragged is never its own target, and it sits under the pointer at the moment
+    // the drag starts, which would only flash a refusal at it for the first few pixels.
+    const under = allowChildren && drop && drop.targetID === note.id && drop.movedID !== note.id ? drop : undefined;
+    const nests = under?.zone === 'inside' && under.pages.length > 0;
+    const blocked = under?.zone === 'inside' && under.pages.length === 0;
+    const line = <div className={cn(rowClass, selectedID === note.id && 'bg-interactive-selection text-foreground',
+      nests && 'cursor-copy bg-primary/10 ring-2 ring-inset ring-primary', blocked && 'cursor-not-allowed')} style={{ paddingLeft: 4 + depth * 14 }}
       onDoubleClick={(event) => { event.preventDefault(); setMenu({ note, x: event.clientX, y: event.clientY }); }}
       onContextMenu={(event) => { event.preventDefault(); setMenu({ note, x: event.clientX, y: event.clientY }); }}>
       {/* Pages with pages inside always show their arrow, like Notion's tree. */}
@@ -119,7 +161,7 @@ export function FolioSidebar() {
       </button>}
     </div>;
     if (!allowChildren) return <React.Fragment key={`f-${note.id}`}>{line}</React.Fragment>;
-    return <SortableRow key={note.id} id={note.id} line={line}>
+    return <SortableRow key={note.id} id={note.id} line={line} nesting={drop?.zone === 'inside'}>
       {isOpen && (children.length
         ? <SortableContext items={children.map((c) => c.id)} strategy={verticalListSortingStrategy}>{children.map((child) => row(child, depth + 1, true))}</SortableContext>
         : <div className="h-6 text-xs text-muted-foreground/70" style={{ paddingLeft: 30 + (depth + 1) * 14 }}>{t('folio.empty')}</div>)}
@@ -138,7 +180,7 @@ export function FolioSidebar() {
         <Icon name="add" className="size-3.5" />
       </button>} />
     {!notesCollapsed && <>
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={stopDragging}>
         <SortableContext items={roots.map((n) => n.id)} strategy={verticalListSortingStrategy}>
           {roots.map((note) => row(note, 0, true))}
         </SortableContext>
@@ -165,10 +207,20 @@ export function FolioSidebar() {
         </button>)}
         <div className="my-1 border-t border-border" />
         <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-destructive hover:bg-interactive-hover"
-          onClick={() => { const target = menu.note; setMenu(undefined); void useFolioStore.getState().run({ command: 'trash', noteID: target.id, flag: target.trashed }); }}>
+          onClick={() => {
+            const target = menu.note; setMenu(undefined);
+            // Putting a page away is one tap away from opening it, and it moves the page out of the tree
+            // under the pointer, so it asks first. Restoring is the way back out of the Trash, so it does not.
+            if (target.trashed) void useFolioStore.getState().run({ command: 'trash', noteID: target.id, flag: true });
+            else setTrashing(target);
+          }}>
           <Icon name="delete-bin" className="size-4" />{menu.note.trashed ? t('folio.restore') : t('folio.moveToTrash')}
         </button>
       </div>
     </>, document.body)}
+    {/* Also in a portal, for the same reason as the menu above it. */}
+    {trashing && createPortal(<FolioConfirm label={t('folio.moveToTrash')} body={t('folio.trashConfirm')} confirmLabel={t('folio.remove')}
+      onConfirm={() => { const target = trashing; setTrashing(undefined); void useFolioStore.getState().run({ command: 'trash', noteID: target.id, flag: false }); }}
+      onCancel={() => setTrashing(undefined)} />, document.body)}
   </section>;
 }

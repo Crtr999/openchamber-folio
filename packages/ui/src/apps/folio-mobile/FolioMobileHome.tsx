@@ -7,10 +7,10 @@ import { findHit } from '@/lib/folio/search';
 import { useFolioStore } from '@/lib/folio/store';
 import type { FolioNote } from '@/lib/folio/schema';
 import { rankByQuery } from '@/lib/search/fuzzySearch';
-import { DndContext, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { DndContext, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent, type DragMoveEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { reorderSiblings, sortSiblings } from '@/lib/folio/order';
+import { dropPages, dropZoneAt, sortSiblings, type DropZone } from '@/lib/folio/order';
 import { useMobileChatStore } from './chatStore';
 import { MobileChatsSection } from './FolioMobileChatsSection';
 import { FolioHabits } from '@/components/folio/FolioHabits';
@@ -21,6 +21,9 @@ import { useSyncStore } from './sync';
 export type MobileView = 'home' | 'notes' | 'search' | 'calendar' | 'assistant' | 'chat' | 'chats' | 'settings';
 
 const row = 'flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left text-[17px] active:bg-interactive-selection';
+
+/** The page under the finger, where on it the finger is, and what dropping there would write. */
+interface Drop { movedID: string; targetID: string; zone: DropZone; pages: FolioNote[] }
 
 const live = (notes: readonly FolioNote[] | undefined) => (notes ?? []).filter((n) => !n.trashed && !n.isChat);
 
@@ -43,14 +46,24 @@ function Section({ title, open, onToggle, action, count, children }: { title: st
   </section>;
 }
 
-function TreeRow({ note, depth, notes, openNote, expanded, onToggle }: { note: FolioNote; depth: number; notes: readonly FolioNote[]; openNote: (id: string) => void; expanded: Set<string>; onToggle: (id: string) => void }) {
+function TreeRow({ note, depth, notes, openNote, expanded, onToggle, drop }: { note: FolioNote; depth: number; notes: readonly FolioNote[]; openNote: (id: string) => void; expanded: Set<string>; onToggle: (id: string) => void; drop?: Drop }) {
   const { t } = useI18n();
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: note.id });
   const hasChildren = notes.some((n) => n.parentID === note.id) && !(note.table && note.table.rows.length && notes.every((n) => n.parentID !== note.id || note.table?.rows.some((r) => r.page === n.id)));
   const open = expanded.has(note.id);
-  return <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} className={cn(isDragging && 'relative z-10 rounded-lg bg-secondary opacity-90')}>
+  // The page being dragged is never its own target, and it sits under the finger at the moment the drag
+  // starts, which would only flash a refusal at it for the first few pixels.
+  const under = drop && drop.targetID === note.id && drop.movedID !== note.id ? drop : undefined;
+  const nests = under?.zone === 'inside' && under.pages.length > 0;
+  const blocked = under?.zone === 'inside' && under.pages.length === 0;
+  // A drop inside a page moves no rows, so for it the gap the sortable opens is held back and the page
+  // carries the outline instead. The dragged row keeps its own transform, or it would stop following the
+  // finger the moment it reaches the middle of another page.
+  return <div ref={setNodeRef} style={{ transform: isDragging || drop?.zone !== 'inside' ? CSS.Translate.toString(transform) : undefined, transition }}
+    className={cn('rounded-lg', isDragging && 'relative z-10 bg-secondary opacity-90',
+      nests && 'bg-primary/10 ring-2 ring-inset ring-primary', blocked && 'opacity-60')}>
     <div className="flex items-center" style={{ paddingLeft: depth * 18 }}>
-      {/* Long-press the page to drag it among its siblings; a tap opens it. */}
+      {/* Long-press the page to drag it among its siblings or into another page; a tap opens it. */}
       <button type="button" ref={setActivatorNodeRef} className={cn(row, 'min-w-0 flex-1 select-none touch-manipulation')} onClick={() => openNote(note.id)} {...attributes} {...listeners}>
         <span className="flex w-7 shrink-0 justify-center text-[20px]"><FolioIcon value={note.icon} /></span>
         <span className="min-w-0 flex-1 truncate">{note.title || t('folio.untitled')}</span>
@@ -59,17 +72,17 @@ function TreeRow({ note, depth, notes, openNote, expanded, onToggle }: { note: F
         <Icon name="arrow-right-s" className={cn('size-5 transition-transform', open && 'rotate-90')} />
       </button>}
     </div>
-    {open && <Tree notes={notes} parentID={note.id} depth={depth + 1} openNote={openNote} expanded={expanded} onToggle={onToggle} />}
+    {open && <Tree notes={notes} parentID={note.id} depth={depth + 1} openNote={openNote} expanded={expanded} onToggle={onToggle} drop={drop} />}
   </div>;
 }
 
-function Tree({ notes, parentID, depth, openNote, expanded, onToggle }: { notes: readonly FolioNote[]; parentID?: string; depth: number; openNote: (id: string) => void; expanded: Set<string>; onToggle: (id: string) => void }) {
+function Tree({ notes, parentID, depth, openNote, expanded, onToggle, drop }: { notes: readonly FolioNote[]; parentID?: string; depth: number; openNote: (id: string) => void; expanded: Set<string>; onToggle: (id: string) => void; drop?: Drop }) {
   const ids = React.useMemo(() => new Set(notes.map((n) => n.id)), [notes]);
   // A database's row pages open from its rows, not from the page tree.
   const rowPages = React.useMemo(() => new Set(notes.flatMap((n) => n.table?.rows.flatMap((r) => (r.page ? [r.page] : [])) ?? [])), [notes]);
   const children = sortSiblings(notes.filter((n) => !rowPages.has(n.id) && (n.parentID && ids.has(n.parentID) ? n.parentID : undefined) === parentID));
   return <SortableContext items={children.map((n) => n.id)} strategy={verticalListSortingStrategy}>
-    {children.map((note) => <TreeRow key={note.id} note={note} depth={depth} notes={notes} openNote={openNote} expanded={expanded} onToggle={onToggle} />)}
+    {children.map((note) => <TreeRow key={note.id} note={note} depth={depth} notes={notes} openNote={openNote} expanded={expanded} onToggle={onToggle} drop={drop} />)}
   </SortableContext>;
 }
 
@@ -110,19 +123,46 @@ export function MobileHome({ onView, onOpenNote: openNote, onNewPage, onAsk, onO
   const [treeOpen, toggleTree] = useOpen('folio.home.v2.notesCollapsed');
   const [more, setMore] = React.useState(false);
   const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
+  const [drop, setDrop] = React.useState<Drop>();
+  const [dragging, setDragging] = React.useState(false);
+  const pointerY = React.useRef(0);
+  const intent = React.useRef('');
   const favorites = sortSiblings(notes.filter((n) => n.favorite));
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 6 } }),
   );
+  // dnd-kit reports the row the finger is on, not where on it the finger is, and it hangs its own move
+  // listener on the dragged row. A capture listener on the window runs before that one, so the finger's Y
+  // is in hand by the time dnd-kit calls back about the row it landed on.
+  React.useEffect(() => {
+    if (!dragging) return;
+    const track = (event: PointerEvent) => { pointerY.current = event.clientY; };
+    window.addEventListener('pointermove', track, true);
+    return () => window.removeEventListener('pointermove', track, true);
+  }, [dragging]);
   const toggleNode = (id: string) => setExpanded((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
-  const parentOf = (id: string) => { const note = notes.find((n) => n.id === id); return note?.parentID && notes.some((p) => p.id === note.parentID) ? note.parentID : ''; };
+  const stopDragging = () => { setDragging(false); setDrop(undefined); intent.current = ''; };
+  const onDragStart = () => { setDragging(true); setDrop(undefined); intent.current = ''; };
+  const onDragMove = ({ active, over }: DragMoveEvent) => {
+    if (!over) { intent.current = ''; setDrop(undefined); return; }
+    const movedID = String(active.id), targetID = String(over.id);
+    const zone = dropZoneAt(pointerY.current - over.rect.top, over.rect.height);
+    // The tree only has to redraw when the page or the zone under the finger changes, so a long drag
+    // across a page costs one render rather than one per pixel of travel.
+    if (`${targetID}:${zone}` !== intent.current) {
+      intent.current = `${targetID}:${zone}`;
+      const pages = dropPages(notes, movedID, targetID, zone);
+      setDrop({ movedID, targetID, zone, pages });
+      // Opening the page under the finger while it rests there shows the page arriving somewhere real.
+      if (zone === 'inside' && pages.length > 0) setExpanded((prev) => (prev.has(targetID) ? prev : new Set(prev).add(targetID)));
+    }
+  };
   const onDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!over || active.id === over.id) return;
-    const moved = String(active.id), target = String(over.id);
-    const key = parentOf(moved);
-    if (key !== parentOf(target)) return;
-    for (const note of reorderSiblings(notes.filter((n) => parentOf(n.id) === key), moved, target)) useFolioStore.getState().edit(note);
+    stopDragging();
+    if (!over) return;
+    const zone = dropZoneAt(pointerY.current - over.rect.top, over.rect.height);
+    for (const note of dropPages(notes, String(active.id), String(over.id), zone)) useFolioStore.getState().edit(note);
   };
   const recents = [...notes].sort((a, b) => b.modified - a.modified).slice(0, 5);
   const hasPhoneChats = useMobileChatStore((s) => s.chats.length > 0);
@@ -180,8 +220,8 @@ export function MobileHome({ onView, onOpenNote: openNote, onNewPage, onAsk, onO
             </div>
           </>}
         </div>}>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <Tree notes={notes} depth={0} openNote={openNote} expanded={expanded} onToggle={toggleNode} />
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={stopDragging}>
+          <Tree notes={notes} depth={0} openNote={openNote} expanded={expanded} onToggle={toggleNode} drop={drop} />
         </DndContext>
       </Section>
     </div>

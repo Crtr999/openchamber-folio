@@ -1,6 +1,7 @@
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { FolioWorkspace, type FolioMobileHooks } from '@/components/folio/FolioWorkspace';
+import { FolioConfirm } from '@/components/folio/FolioConfirm';
 import { setFolioAssetReader } from '@/lib/folio/assets';
 import { useHandoffStore } from '@/lib/folio/handoff';
 import { useI18n } from '@/lib/i18n';
@@ -22,7 +23,7 @@ import { sendChat } from '@/lib/folio/mobile-chat';
 import { makeBlock } from '@/lib/folio/schema';
 import { readKey, useMobileChatStore } from './chatStore';
 import { askForChatsLink, hasLocalChanges, macAsset, macBella, useSyncStore } from './sync';
-import { createPhoneHost, nativeEditor, nativeNotifications, nativePost } from './host';
+import { createPhoneHost, nativeEditor, nativeNotifications, nativePost, useNativeSurfaceBackground } from './host';
 import { noteSchema } from '@/lib/folio/schema';
 import { FolioMobileChat } from './FolioMobileChat';
 import { FolioMobileSettings } from './FolioMobileSettings';
@@ -46,6 +47,7 @@ type ChatOrigin = 'home' | 'assistant';
  */
 export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
   const { t } = useI18n();
+  useNativeSurfaceBackground();
   const [view, setView] = React.useState<MobileView>(() => {
     try { const last = localStorage.getItem('folio.lastView'); return last === 'notes' || last === 'chat' ? last : 'home'; } catch { return 'home'; }
   });
@@ -237,6 +239,7 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
     void nativeEditor.open({ note: latest, titles }).catch(() => { nativeFor.current = undefined; setClassicFor(selectedNote.id); });
   }, [useNative, selectedNote, t, nativeEpoch]);
   const closeNative = React.useCallback((next: MobileView) => { afterClose.current = next; void nativeEditor.close(); }, []);
+  const [trashing, setTrashing] = React.useState<string>();
   React.useEffect(() => {
     if (!isCapacitorApp()) return;
     const handles: Array<Promise<{ remove: () => Promise<void> }>> = [
@@ -273,7 +276,12 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
         else if (kind === 'reader') { setClassicFor(noteID); useHandoffStore.getState().openReader(noteID); closeNative('notes'); }
         else if (kind === 'read') void store.run({ command: 'read', noteID });
         else if (kind === 'share') mobileRef.current.onExport(note, 'md');
-        else if (kind === 'trash') { closeNative('home'); void store.flush().then(() => store.run({ command: 'trash', noteID })); }
+        else if (kind === 'trash') {
+          // The native editor covers the web view it is opened over, so a confirmation rendered underneath it
+          // would never be seen. Stepping out to Home first is what brings the dialog in front of the user,
+          // the same reason the missing-database toast above closes the editor.
+          closeNative('home'); setTrashing(noteID);
+        }
         else if (kind === 'classic') { setClassicFor(noteID); closeNative('notes'); }
       }),
     ];
@@ -293,7 +301,7 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
 
   return <div className="folio-mobile flex h-full flex-col bg-background pt-[env(safe-area-inset-top)]">
     <SyncScheduler engine={engine} />
-    {chatsMounted && <div className={cn('fixed inset-0 z-40', view !== 'chats' && 'hidden')}>
+    {chatsMounted && <div className={cn('fixed inset-0 z-40 bg-background', view !== 'chats' && 'hidden')}>
       <SwipeBackPane onBack={goHome} onPeek={setPeek}>
         <FolioShellContext.Provider value={shell}><StableMobileApp apis={apis} /></FolioShellContext.Provider>
       </SwipeBackPane>
@@ -312,6 +320,13 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
       {view === 'settings' && pane(<FolioMobileSettings engine={engine} onMenu={goHome} onExportBackup={() => { void host.share(engine.backupFile()); }} />)}
     </div>
     {view !== 'chats' && <Toaster position="top-center" offset="calc(env(safe-area-inset-top) + 16px)" />}
+    {trashing && <FolioConfirm label={t('folio.moveToTrash')} body={t('folio.trashConfirm')} confirmLabel={t('folio.remove')}
+      onConfirm={() => {
+        const noteID = trashing; setTrashing(undefined);
+        // The page's own edits are saved before it is put away, so the Trash holds what the user last saw.
+        void useFolioStore.getState().flush().then(() => useFolioStore.getState().run({ command: 'trash', noteID }));
+      }}
+      onCancel={() => setTrashing(undefined)} />}
     {sheetFile && <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3 shadow-2xl" role="dialog" aria-label={sheetFile.name}>
       <div className="mb-3 flex items-center gap-2 text-sm"><Icon name="attachment-2" className="size-4 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{sheetFile.name}</span></div>
       <div className="flex gap-2">

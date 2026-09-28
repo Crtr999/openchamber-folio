@@ -99,5 +99,10 @@ export function SwipeBackPane({ onBack, onPeek, hidden, className, children }: {
     };
   }, [hidden]);
 
-  return <div ref={ref} className={cn('absolute inset-0 flex flex-col bg-background will-change-transform', hidden && 'hidden', className)}>{children}</div>;
+  // No will-change-transform: it promoted the pane to its own compositing layer for as long as it
+  // was mounted, and iOS clips composited layers to the safe-area viewport. Every other pane sits
+  // inside a container already inset by the top safe area, so only the chats pane — the one that
+  // spans the full screen — could have the strip above it left unpainted. The drag sets translate3d
+  // inline, so the pane still gets its layer while the gesture is actually running.
+  return <div ref={ref} className={cn('absolute inset-0 flex flex-col bg-background', hidden && 'hidden', className)}>{children}</div>;
 }

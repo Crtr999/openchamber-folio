@@ -87,6 +87,7 @@ native/Folio/dist/
 
 # Local Folio build helpers (machine-specific paths, never pushed)
 .folio-*.sh
+.folio-*.ts
 
 # Xcode derived data
 DerivedData/

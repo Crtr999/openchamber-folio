@@ -16,6 +16,18 @@ export const isCapacitorMobileApp = (): boolean => {
 /** Set on <html> by the Folio iPhone app while its chats are mounted but not on screen. */
 export const FOLIO_CHATS_OFFSTAGE_CLASS = 'folio-chats-offstage';
 
+/**
+ * The app's own background for the theme in effect. The theme system persists the resolved surface
+ * colour as the splash colours, so this is the same value the pre-paint script and the Android status
+ * bar use. Falls back to the default theme's background, which is what the app renders on a fresh
+ * install before the theme has been persisted once.
+ */
+export const nativeThemeBackground = (): string => {
+  const isDark = document.documentElement.classList.contains('dark');
+  return (isDark ? localStorage.getItem('splashBgDark') : localStorage.getItem('splashBgLight'))
+    || (isDark ? '#171515' : '#fffdf4');
+};
+
 export const useNativeMobileChrome = (): void => {
   React.useEffect(() => {
     if (!isCapacitorMobileApp()) return;
@@ -55,9 +67,7 @@ export const useNativeMobileChrome = (): void => {
           // enforced and both calls are no-ops — there the app pads itself via the
           // Capacitor-injected --safe-area-inset-* CSS vars (see mobile.css, oc-platform-android).
           const isDark = document.documentElement.classList.contains('dark');
-          const themeBg =
-            (isDark ? localStorage.getItem('splashBgDark') : localStorage.getItem('splashBgLight')) ||
-            (isDark ? '#171515' : '#fffdf4');
+          const themeBg = nativeThemeBackground();
           await StatusBar.setOverlaysWebView({ overlay: false }).catch(() => undefined);
           await StatusBar.setBackgroundColor({ color: themeBg }).catch(() => undefined);
           // Capacitor Style is named for the CONTENT: Style.Light = dark text (light bg),

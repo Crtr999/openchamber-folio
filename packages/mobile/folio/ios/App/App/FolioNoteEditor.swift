@@ -350,7 +350,11 @@ final class FolioNoteEditorController: UIViewController, UITextViewDelegate, UIT
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        // The page covers the whole screen, the status bar strip included, so it paints the app's own
+        // background rather than the system one (pure black in dark mode, a different colour from the
+        // rest of the app) and follows the theme for as long as it is open.
+        let background = FolioSurfaceColor.background
+        view.backgroundColor = background
         view.layer.shadowColor = UIColor.black.cgColor
         view.layer.shadowOpacity = 0.25
         view.layer.shadowRadius = 12
@@ -391,7 +395,7 @@ final class FolioNoteEditorController: UIViewController, UITextViewDelegate, UIT
         view.addSubview(header)
 
         textView.translatesAutoresizingMaskIntoConstraints = false
-        textView.backgroundColor = .systemBackground
+        textView.backgroundColor = background
         textView.alwaysBounceVertical = true
         textView.keyboardDismissMode = .interactive
         textView.textContainerInset = UIEdgeInsets(top: 8, left: 14, bottom: 160, right: 14)
@@ -420,6 +424,19 @@ final class FolioNoteEditorController: UIViewController, UITextViewDelegate, UIT
         edge.edges = .left
         view.addGestureRecognizer(edge)
         NotificationCenter.default.addObserver(self, selector: #selector(appWillResign), name: UIApplication.willResignActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(surfaceColorChanged), name: .folioSurfaceColorDidChange, object: nil)
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    /// The theme can change while the page is open — a synced setting, or the system flipping while
+    /// the app follows the system — and the page is what covers the status bar strip, so it repaints.
+    @objc private func surfaceColorChanged() {
+        let background = FolioSurfaceColor.background
+        view.backgroundColor = background
+        textView.backgroundColor = background
     }
 
     // MARK: Saving

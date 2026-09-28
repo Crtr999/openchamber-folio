@@ -1,8 +1,10 @@
+import React from 'react';
 import { z } from 'zod';
 import { registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import type { FolioNote } from '@/lib/folio/schema';
 import type { FolioHost } from '@/lib/folio/local-engine';
 import { isCapacitorApp } from '@/lib/platform';
+import { nativeThemeBackground } from '../mobileNativeChrome';
 
 /** AVSpeechSynthesizer in the iOS app (FolioSpeechPlugin in AppDelegate.swift). It plays even with the ringer switch off. */
 interface FolioSpeechPlugin {
@@ -51,6 +53,41 @@ interface FolioEditorPlugin {
 }
 export const nativeEditor = registerPlugin<FolioEditorPlugin>('FolioEditor');
 const REMINDERS = 'folio.reminders';
+
+/** Tells the native shell which colour the app's background is (FolioSurfacePlugin in AppDelegate.swift). */
+interface FolioSurfacePlugin {
+  setBackground(options: { color: string }): Promise<void>;
+}
+const nativeSurface = registerPlugin<FolioSurfacePlugin>('FolioSurface');
+
+/**
+ * Puts the app's own background behind the native surfaces, on mount and again on every theme change.
+ *
+ * The window and the web view default to the system background, which is pure black in dark mode, so
+ * they are what shows through anywhere the page does not paint — the strip above the status bar, and
+ * the launch window before the first frame. Handing them the theme's colour makes the background
+ * continuous behind the status bar on every surface by default, instead of depending on each one
+ * remembering to paint. The colour is resolved at runtime, so it cannot be a build-time value.
+ */
+export const useNativeSurfaceBackground = (): void => {
+  React.useEffect(() => {
+    if (!isCapacitorApp()) return;
+    const push = () => { void nativeSurface.setBackground({ color: nativeThemeBackground() }).catch(() => undefined); };
+    push();
+    // The root dark/light class is the one signal every theme path converges on (settings toggle,
+    // synced settings, system-preference changes in system mode), so it is enough to watch.
+    const root = document.documentElement;
+    let wasDark = root.classList.contains('dark');
+    const themeClassObserver = new MutationObserver(() => {
+      const isDark = root.classList.contains('dark');
+      if (isDark === wasDark) return;
+      wasDark = isDark;
+      push();
+    });
+    themeClassObserver.observe(root, { attributes: true, attributeFilter: ['class'] });
+    return () => themeClassObserver.disconnect();
+  }, []);
+};
 
 /** Splits text into sentence groups short enough for Bella to answer quickly. */
 export function speechChunks(text: string, limit = 300): string[] {
