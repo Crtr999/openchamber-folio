@@ -14,8 +14,8 @@ import { askModelRef, resolveAskModel, type AskModelSelection } from '@/lib/foli
 import { askComposerAction, askMentionChats, collectAskMentions, flattenAskMentions, nextAskMentionIndex, type AskMention } from '@/lib/folio/ask-mentions';
 import { FolioIcon } from './FolioIcon';
 import { FolioAskModelPicker } from './FolioAskModelPicker';
-import type { Message, Part, PermissionRequest } from '@/lib/opencode/model';
-import type { SkillMentions } from '@/lib/opencode/client';
+import type { Message, Part, PermissionRequest, Session } from '@/lib/opencode/model';
+import { opencodeClient, type SkillMentions } from '@/lib/opencode/client';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { selectSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
@@ -55,7 +55,23 @@ export function FolioAskPanel({ note, onClose }: { note: FolioNote; onClose: () 
   const [picker, setPicker] = React.useState<{ query: string; start: number }>();
   const [pickIndex, setPickIndex] = React.useState(0);
   const notes = useFolioStore((s) => s.status?.notes);
-  const sessions = useGlobalSessionsStore((s) => s.activeSessions);
+  const [allSessions, setAllSessions] = React.useState<readonly Session[]>([]);
+  React.useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const page = await opencodeClient.listSessionsPage({ global: true, limit: 500 });
+        if (mounted) setAllSessions(page.sessions);
+      } catch { /* OpenCode may not be available */ }
+    };
+    load();
+    const interval = setInterval(load, 45_000);
+    return () => { mounted = false; clearInterval(interval); };
+  }, []);
+
+  // The global store as a fallback.
+  const storeSessions = useGlobalSessionsStore((s) => s.activeSessions);
+  const sessions = allSessions.length > 0 ? allSessions : storeSessions;
   const askSelection = useFolioAskModelStore((s) => s.selection);
   const providers = useConfigStore((s) => s.providers);
   const currentProviderId = useConfigStore((s) => s.currentProviderId);
@@ -127,7 +143,19 @@ export function FolioAskPanel({ note, onClose }: { note: FolioNote; onClose: () 
       // The page is the conversation's subject, so it is named first and sent in
       // full the first time and whenever it changed since; the mentions the
       // question refers to follow it.
-      let context = `The user is asking a question about their Folio notebook page "${page.title || 'Untitled'}" (page id ${page.id}), which is the subject of this conversation. Answer from the page below. There is no project, no code and nothing to look up here: the notebook is not in this conversation's folder, so do not search the filesystem, run commands, or look for the answer anywhere else. Use the folio tool to read a page they @mention and to make any change they ask for on their notes or databases; edits appear on their screen immediately.`;
+      let context = `The user is asking a question about their Folio notebook page "${page.title || 'Untitled'}" (page id ${page.id}), which is the subject of this conversation. Answer from the page below.
+
+You have access to the "folio" tool that edits notes and databases. Use it when the user asks you to change their notes or databases:
+- folio.read a page to see its content
+- folio.update_block to change the text or properties of a specific block
+- folio.append to add a new block at the end of a page  
+- folio.insert to insert a new block at a specific position
+- folio.rename a page
+- folio.create a new page
+- folio.update_row and folio.delete_row to change database rows
+The tool edits appear on the user's screen immediately. When the user says to fix or change something, use the tool rather than saying you cannot.
+
+There is no project, no filesystem, no code to search here. The notebook is not stored in this conversation's folder.`;
       if (page.excludedFromAI) context += ' This page is excluded from AI, so its content is not shared.';
       else if (current.sentModified !== page.modified) {
         const response = await useFolioStore.getState().api?.request({ command: 'markdown', noteID: page.id, flag: true });

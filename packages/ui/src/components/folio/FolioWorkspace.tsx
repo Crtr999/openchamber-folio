@@ -171,7 +171,19 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
       edit({ ...current, blocks: rest.length ? rest : [makeBlock()] });
       setBlockRange(undefined);
     };
-    const onDown = (event: PointerEvent) => { if (!articleRef.current?.contains(event.target instanceof Node ? event.target : null)) setBlockRange(undefined); };
+    const onDown = (event: PointerEvent) => {
+      const article = articleRef.current;
+      if (!article) return;
+      if (!article.contains(event.target instanceof Node ? event.target : null)) {
+        setBlockRange(undefined);
+        return;
+      }
+      // A click inside the article that is NOT on the handle button clears block selection
+      // (the handle is the only way to select a block by clicking).
+      if (blockRange && !(event.target instanceof Element && event.target.closest('button[aria-label="Block type"]'))) {
+        setBlockRange(undefined);
+      }
+    };
     window.addEventListener('keydown', onKey);
     window.addEventListener('pointerdown', onDown);
     return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('pointerdown', onDown); };
@@ -321,6 +333,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
     return () => { document.removeEventListener('focusin', update); document.removeEventListener('focusout', later); };
   }, [mobile]);
   const dragStart = React.useRef<{ id: string; x: number; y: number; moved: boolean } | undefined>(undefined);
+  const pressedAt = React.useRef<{ x: number; y: number } | undefined>(undefined);
   const dropSlot = (id: string, x: number, y: number): Omit<Drop, 'id'> | undefined => {
     const current = latestNote(); const article = articleRef.current; if (!current || !article) return undefined;
     const box = article.getBoundingClientRect();
@@ -353,6 +366,7 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
     if (event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     dragStart.current = { id, x: event.clientX, y: event.clientY, moved: false };
+    pressedAt.current = { x: event.clientX, y: event.clientY };
   };
   const onHandleMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     const start = dragStart.current; if (!start) return;
@@ -382,8 +396,14 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
       }
       return;
     }
+    // Click: select the block (like Notion), not the menu
     setDragging(undefined);
-    setBlockMenuID(blockMenuID === id ? undefined : id);
+    setBlockMenuID(undefined);
+    const current = latestNote();
+    if (!current) return;
+    const index = current.blocks.findIndex((b) => b.id === id);
+    if (index === -1) return;
+    setBlockRange((prev) => (prev?.anchor === index && prev?.focus === index ? undefined : { anchor: index, focus: index }));
   };
 
   const move = (id: string, delta: number) => {
