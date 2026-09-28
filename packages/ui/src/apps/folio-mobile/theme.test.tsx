@@ -29,6 +29,7 @@ describe('the iPhone theme in Folio sync', () => {
   let root: Root;
   let context: ThemeContextValue | undefined;
   let originalDescriptors: Map<string, PropertyDescriptor | undefined>;
+  let desktopInvocations: string[];
 
   function Probe() {
     context = useThemeSystem();
@@ -44,6 +45,16 @@ describe('the iPhone theme in Folio sync', () => {
     windowInstance = new Window();
     const names = ['window', 'document', 'navigator', 'localStorage', 'Element', 'HTMLElement', 'Node', 'Event', 'CustomEvent', 'fetch', 'IS_REACT_ACT_ENVIRONMENT'];
     originalDescriptors = new Map(names.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
+    desktopInvocations = [];
+    // The phone has no Electron bridge, but a stub that records every call makes
+    // "the phone never reaches for the desktop path" an assertion rather than a hope.
+    Object.assign(windowInstance, {
+      __OPENCHAMBER_ELECTRON__: { runtime: 'electron' },
+      __OPENCHAMBER_PLATFORM__: 'darwin',
+      __OPENCHAMBER_DESKTOP__: {
+        invoke: (command: string) => { desktopInvocations.push(command); return Promise.resolve(null); },
+      },
+    });
     Object.assign(globalThis, {
       window: windowInstance, document: windowInstance.document, navigator: windowInstance.navigator,
       localStorage: windowInstance.localStorage, Element: windowInstance.Element, HTMLElement: windowInstance.HTMLElement,
@@ -69,6 +80,14 @@ describe('the iPhone theme in Folio sync', () => {
 
   const open = async (): Promise<void> => {
     await act(async () => { root.render(<ThemeSystemProvider><Phone /><Probe /></ThemeSystemProvider>); });
+  };
+
+  /** The app launched again against the same storage: what the phone shows has to come back on its own. */
+  const reopen = async (): Promise<void> => {
+    await act(async () => { root.unmount(); });
+    root = createRoot(host);
+    context = undefined;
+    await open();
   };
 
   test('a phone that has not chosen a theme takes the one the Mac is showing', async () => {
@@ -128,6 +147,41 @@ describe('the iPhone theme in Folio sync', () => {
     expect(takeMacTheme(undefined)).toBeUndefined();
     expect(readFolioTheme()).toEqual(record);
     expect(shown().darkThemeId).toBe('dracula-dark');
+  });
+
+  test('a theme picked here is still showing the next time the app opens', async () => {
+    await open();
+    const opening = { light: shown().lightThemeId, dark: shown().darkThemeId, mode: shown().themeMode };
+
+    await act(async () => { shown().setTheme('dracula-dark'); });
+    const chosen = readFolioTheme();
+    expect(chosen?.dark).toBe('dracula-dark');
+
+    await reopen();
+
+    // The phone owns this choice: it survives the relaunch on its own, with no Mac in reach.
+    expect(shown().darkThemeId).toBe('dracula-dark');
+    expect(shown().themeMode).toBe('dark');
+    expect(shown().currentTheme.metadata.id).toBe('dracula-dark');
+    expect({ light: shown().lightThemeId, dark: shown().darkThemeId, mode: shown().themeMode })
+      .not.toEqual(opening);
+    // Reopening is not a change made here, so the choice keeps the stamp it was made with.
+    expect(readFolioTheme()?.at).toBe(chosen?.at);
+  });
+
+  test('the phone takes and gives its theme without the desktop path', async () => {
+    await open();
+    await act(async () => { shown().setTheme('dracula-dark'); });
+    await act(async () => { announceMacTheme(macTheme({ mode: 'light', at: Date.now() + 1_000 })); });
+
+    // The Mac's choice landed, and the phone's own record carries it forward...
+    expect(shown().lightThemeId).toBe(light);
+    expect(readFolioTheme()?.mode).toBe('light');
+    // ...without one call to the Mac window's sync command, even with a bridge
+    // present that would answer. The phone's own record and the synced event are
+    // its only theme channel; the other calls the stub records are the shell's
+    // splash colours, which the theme system pushes on any Electron window.
+    expect(desktopInvocations.filter((command) => command === 'desktop_folio_sync')).toEqual([]);
   });
 
   test('pairing with a Mac again starts from that Mac theme', async () => {
