@@ -1,4 +1,5 @@
 import { FolioWorkspace } from '@/components/folio/FolioWorkspace';
+import { FolioThemeBridge } from '@/components/folio/FolioThemeBridge';
 import { useFolioStore } from '@/lib/folio/store';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import React from 'react';
@@ -146,6 +147,8 @@ export const MainLayout: React.FC = () => {
                 <HelpDialog />
                 <OpenCodeStatusDialog />
                 <SessionDialogs />
+                {/* The theme is the app's, so the iPhone's choice is followed even while Folio is closed. */}
+                <FolioThemeBridge />
 
                 {/* Persistent top-left controls (toggle + project actions) that
                     stay put while the sidebar/header animate beneath them. */}

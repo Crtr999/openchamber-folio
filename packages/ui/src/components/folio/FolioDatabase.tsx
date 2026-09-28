@@ -10,7 +10,7 @@ import { FolioIcon } from './FolioIcon';
 import { FolioIconPicker } from './FolioIconPicker';
 import { FolioConfirm } from './FolioConfirm';
 import { setPageIcon } from '@/lib/folio/rows';
-import { chartPoints, defaultView, displayColumns, groupsFor, splitValues, viewRows, type FilterOp } from '@/lib/folio/database';
+import { chartPoints, defaultView, displayColumns, groupsFor, ownViews, splitValues, viewRows, type FilterOp } from '@/lib/folio/database';
 
 type Column = FolioTable['columns'][number];
 type Row = FolioTable['rows'][number];
@@ -131,8 +131,7 @@ export function FolioDatabase({ table, onChange, viewID, pageOf, onOpenRow, mobi
   const allViews = table.views?.length ? table.views : [defaultView(table)];
   const linked = viewID ? allViews.find((v) => v.id === viewID) : undefined;
   // Linked views belong to the pages that embed them, not to the database's own tabs.
-  const own = allViews.filter((v) => !v.linked);
-  const views = own.length ? own : [defaultView(table)];
+  const views = ownViews(table);
   const [localView, setLocalView] = React.useState<string>();
   const view = linked ?? views.find((v) => v.id === (localView ?? table.activeView)) ?? views[0];
   const [editingColumn, setEditingColumn] = React.useState<string>();

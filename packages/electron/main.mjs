@@ -339,7 +339,7 @@ const folioEngine = createFolioEngine({ resourcesPath: process.resourcesPath, de
 // iPhone sync stays off until the user pairs a phone from the notebook's ⋯ menu.
 // The `folio` agent tool edits the notebook through the same engine; open windows refresh right away.
 const folioAgent = createFolioAgent({ engine: folioEngine, onChanged: (noteIDs) => emitToAllWindows('folio:changed', { noteIDs }) });
-const folioSync = createFolioSync({ engine: folioEngine, configPath: path.join(app.getPath('userData'), 'folio-sync.json'), getLocalOrigin: () => state.localOrigin || state.sidecarUrl || '', log: (message) => log.info(message) });
+const folioSync = createFolioSync({ engine: folioEngine, configPath: path.join(app.getPath('userData'), 'folio-sync.json'), getLocalOrigin: () => state.localOrigin || state.sidecarUrl || '', onPhoneTheme: (theme) => emitToAllWindows('folio:theme-synced', theme), log: (message) => log.info(message) });
 // OpenRouter balance in the menu bar, off until the user adds a key in Folio. Its own title-only status item.
 const openRouterCredits = createOpenRouterCredits({
   filePath: path.join(app.getPath('userData'), 'openrouter-credits.json'),
@@ -3530,6 +3530,8 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       if (action === 'enable') return folioSync.enable();
       if (action === 'disable') return folioSync.disable();
       if (action === 'focus') return folioSync.setFocus(args?.focus);
+      if (action === 'theme') return folioSync.setTheme(args?.theme);
+      if (action === 'theme-take') return folioSync.takePhoneTheme();
       return folioSync.status();
     }
     case 'desktop_openrouter_credits': {

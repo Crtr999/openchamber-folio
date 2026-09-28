@@ -21,11 +21,13 @@ import { toast } from '@/components/ui';
 import { markdownToNote, noteToMarkdown } from '@/lib/folio/local-engine';
 import { sendChat } from '@/lib/folio/mobile-chat';
 import { makeBlock } from '@/lib/folio/schema';
+import { embedPreviews } from '@/lib/folio/embeds';
 import { readKey, useMobileChatStore } from './chatStore';
 import { returnToChat, useChatReturnStore, useNoteFromChat } from './chatReturn';
 import { askForChatsLink, hasLocalChanges, macAsset, macBella, useSyncStore } from './sync';
+import { useFolioThemeSync } from './theme';
 import { createPhoneHost, nativeEditor, nativeNotifications, nativePost, useNativeSurfaceBackground } from './host';
-import { noteSchema } from '@/lib/folio/schema';
+import { noteSchema, type FolioNote } from '@/lib/folio/schema';
 import { FolioMobileChat } from './FolioMobileChat';
 import { FolioMobileSettings } from './FolioMobileSettings';
 import { MobileAssistantList, MobileCalendar, MobileHome, MobileSearch, type MobileView } from './FolioMobileHome';
@@ -49,6 +51,9 @@ type ChatOrigin = 'home' | 'assistant';
 export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
   const { t } = useI18n();
   useNativeSurfaceBackground();
+  // The theme the Mac is showing, and the record of the one chosen here, so a change made on either
+  // device reaches the other on the next sync.
+  useFolioThemeSync();
   const [view, setView] = React.useState<MobileView>(() => {
     try { const last = localStorage.getItem('folio.lastView'); return last === 'notes' || last === 'chat' ? last : 'home'; } catch { return 'home'; }
   });
@@ -239,8 +244,11 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
     const state = useFolioStore.getState();
     const latest = state.drafts[selectedNote.id]?.note ?? selectedNote;
     const titles: Record<string, string> = {};
-    for (const n of state.status?.notes ?? []) titles[n.id] = n.title || t('folio.untitled');
-    void nativeEditor.open({ note: latest, titles }).catch(() => { nativeFor.current = undefined; setClassicFor(selectedNote.id); });
+    // One pass over the notebook, because the editor also wants a look-up table for the databases and
+    // pages this page embeds: the text view can show what they hold, but it cannot hold it.
+    const notesByID = new Map<string, FolioNote>();
+    for (const n of state.status?.notes ?? []) { titles[n.id] = n.title || t('folio.untitled'); notesByID.set(n.id, n); }
+    void nativeEditor.open({ note: latest, titles, previews: embedPreviews(latest.blocks, notesByID) }).catch(() => { nativeFor.current = undefined; setClassicFor(selectedNote.id); });
   }, [useNative, selectedNote, t, nativeEpoch]);
   const closeNative = React.useCallback((next: MobileView) => { afterClose.current = next; void nativeEditor.close(); }, []);
   const [trashing, setTrashing] = React.useState<string>();

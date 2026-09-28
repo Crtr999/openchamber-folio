@@ -18,6 +18,29 @@ export function defaultView(table: FolioTable): FolioView {
 export const splitValues = (value: string): string[] => value.split(',').map((v) => v.trim()).filter(Boolean);
 const checked = (value: string) => /^(true|yes|1|x)$/i.test(value.trim());
 
+/** Every view the database knows about, falling back to the one its own layout describes. */
+function allViews(table: FolioTable): FolioView[] {
+  return table.views?.length ? table.views : [defaultView(table)];
+}
+
+/** The views a database shows as its own tabs. Linked views belong to the pages that embed them. */
+export function ownViews(table: FolioTable): FolioView[] {
+  const own = allViews(table).filter((v) => !v.linked);
+  return own.length ? own : [defaultView(table)];
+}
+
+/**
+ * The view a page that embeds this database shows: the one its block links to, or else the database's
+ * own active view. The phone's read-only summary of an embedded database and the grid the Mac and the
+ * classic editor draw both start here, so they cannot drift apart and show different rows.
+ */
+export function embeddedView(table: FolioTable, viewID: string | undefined): FolioView {
+  const linked = viewID ? allViews(table).find((v) => v.id === viewID) : undefined;
+  if (linked) return linked;
+  const own = ownViews(table);
+  return own.find((v) => v.id === table.activeView) ?? own[0];
+}
+
 /** Columns the view shows, in its order; the title column always shows. */
 export function displayColumns(table: FolioTable, view: FolioView): Column[] {
   if (!view.columns?.length) return table.columns;

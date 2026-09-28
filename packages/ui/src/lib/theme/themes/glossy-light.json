@@ -1,0 +1,120 @@
+{
+  "metadata": {
+    "id": "glossy-light",
+    "name": "Glossy",
+    "variant": "light",
+    "description": "Frosted glass over soft daylight, with a light edge on every panel",
+    "version": "1.0.0",
+    "tags": [
+      "light",
+      "glass",
+      "translucent"
+    ]
+  },
+  "colors": {
+    "primary": {
+      "base": "#1f6fd0",
+      "foreground": "#ffffff",
+      "hover": "#1a5fb4",
+      "active": "#164f99",
+      "muted": "#1f6fd080"
+    },
+    "surface": {
+      "background": "#e9ecf4",
+      "foreground": "#1b2130",
+      "muted": "#ffffffa8",
+      "mutedForeground": "#515b70",
+      "elevated": "#ffffffc4",
+      "elevatedForeground": "#161b28",
+      "overlay": "#1b213020",
+      "subtle": "#ffffff8f",
+      "backdrop": "radial-gradient(118% 88% at 8% -6%, #86a9eabd 0%, #86a9ea00 58%), radial-gradient(100% 80% at 106% 8%, #f5c78fa8 0%, #f5c78f00 62%), linear-gradient(168deg, #f3eff9 0%, #e9ecf4 45%, #dcecee 100%)"
+    },
+    "interactive": {
+      "border": "#2a355226",
+      "selection": "#3d6fd42e",
+      "selectionForeground": "#141a26",
+      "borderHover": "#2a355240",
+      "borderFocus": "#1f6fd0",
+      "focus": "#1f6fd0",
+      "focusRing": "#1f6fd066",
+      "cursor": "#1b2130",
+      "hover": "#ffffff8c",
+      "active": "#ffffffad"
+    },
+    "status": {
+      "error": "#c0392b",
+      "errorForeground": "#ffffff",
+      "warning": "#8a6100",
+      "warningForeground": "#ffffff",
+      "success": "#1d7a4d",
+      "successForeground": "#ffffff",
+      "info": "#5a3ec8",
+      "infoForeground": "#ffffff"
+    },
+    "syntax": {
+      "base": {
+        "background": "#f7f9fdf2",
+        "foreground": "#232a39",
+        "comment": "#5f6779",
+        "keyword": "#7a3ec8",
+        "string": "#0f6b45",
+        "number": "#9a4a06",
+        "function": "#1a5fb4",
+        "variable": "#232a39",
+        "type": "#0a6472",
+        "operator": "#a3245c"
+      },
+      "tokens": {
+        "commentDoc": "#5b6376",
+        "constant": "#0a6472",
+        "punctuation": "#5f6779",
+        "stringEscape": "#9a4a06",
+        "variableLocal": "#414a5c"
+      },
+      "highlights": {
+        "diffAdded": "#1d7a4d",
+        "diffRemoved": "#c0392b",
+        "diffModified": "#1a5fb4",
+        "lineNumber": "#98a0b0"
+      }
+    },
+    "pr": {
+      "open": "#1d7a4d",
+      "draft": "#515b70",
+      "blocked": "#8a6100",
+      "merged": "#7a3ec8"
+    },
+    "chat": {
+      "userMessageBackground": "#ffffffb5",
+      "divider": "#2a35521f"
+    },
+    "markdown": {
+      "link": "#1a5fb4",
+      "linkHover": "#164f99",
+      "inlineCode": "#0f6b45",
+      "inlineCodeBackground": "#ffffff8f",
+      "blockquote": "#515b70",
+      "blockquoteBorder": "#2a355226",
+      "listMarker": "#1f6fd099"
+    },
+    "tools": {
+      "border": "#2a35521f",
+      "icon": "#515b70",
+      "title": "#1b2130",
+      "description": "#515b70",
+      "edit": {
+        "addedBackground": "#1d7a4d25",
+        "removedBackground": "#c0392b25",
+        "lineNumber": "#98a0b0"
+      }
+    }
+  },
+  "config": {
+    "transitions": {
+      "fast": "150ms ease",
+      "normal": "250ms ease",
+      "slow": "350ms ease"
+    }
+  }
+}

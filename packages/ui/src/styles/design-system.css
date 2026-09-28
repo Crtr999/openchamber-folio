@@ -408,6 +408,135 @@
 }
 }
 
+/* Frosted glass for the two Glossy presets.
+
+   The scope is the theme id `CSSVariableGenerator.apply` writes on <html> from
+   the active theme's metadata, not a colour: a preset reaches these rules only
+   by being named, so no other palette can pick up a transparent canvas or a
+   backdrop filter by sharing a surface value. The block sits outside
+   `@layer components` because it has to outrank the Tailwind background-color
+   utilities whose fill it clears.
+
+   The canvas stops painting its own colour and the theme's wallpaper reaches
+   the whole page; that is what gives every pane below something to refract. */
+:root[data-theme-id^='glossy-'] {
+  background-color: var(--surface-background);
+  background-image: var(--surface-backdrop);
+
+  /* One glass material for the whole theme. The shared glass surfaces stop
+     thinning the palette's own veil, because a 52% dark panel cut to half
+     again is not enough to sit over running text. */
+  --oc-glass-blur: 30px;
+  --oc-glass-saturation: 1.55;
+  --oc-glass-popover-opacity: 100%;
+  --oc-glass-tooltip-opacity: 100%;
+}
+
+/* The wallpaper on the body box as well as the root. The body also carries the
+   theme background as an inline colour (`updateBrowserChrome`), and a
+   background image paints over a background colour, so the wallpaper lands
+   without having to outrank an inline style. */
+:root[data-theme-id^='glossy-'] body {
+  background-image: var(--surface-backdrop);
+}
+
+:root[data-theme-id^='glossy-'] .bg-background,
+:root[data-theme-id^='glossy-'] .bg-surface-background,
+:root[data-theme-id^='glossy-'] [class~='bg-[var(--surface-background)]'] {
+  background-color: transparent;
+}
+
+/* Every painted surface over the wallpaper: the sidebar, cards, dialogs, the
+   canvas-rooted floating menus, and the shared glass surfaces. A light edge
+   along the top of each panel and a soft shadow under it are what make the
+   stack read as layered glass rather than flat tinted boxes. */
+:root[data-theme-id^='glossy-'] :is(
+  .bg-background,
+  .bg-card,
+  .bg-popover,
+  .bg-secondary,
+  .bg-sidebar,
+  .bg-surface-elevated,
+  .bg-surface-muted,
+  .oc-surface-elevated,
+  .oc-glass-panel,
+  .oc-glass-popover,
+  .oc-glass-tooltip,
+  .oc-glass-composer
+) {
+  -webkit-backdrop-filter: blur(var(--oc-glass-blur)) saturate(var(--oc-glass-saturation));
+  backdrop-filter: blur(var(--oc-glass-blur)) saturate(var(--oc-glass-saturation));
+  box-shadow:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.72),
+    inset 0 0 0 1px rgb(23 32 58 / 0.05),
+    0 1px 2px rgb(23 32 58 / 0.1),
+    0 12px 28px -10px rgb(23 32 58 / 0.22);
+}
+
+:root.dark[data-theme-id^='glossy-'] :is(
+  .bg-background,
+  .bg-card,
+  .bg-popover,
+  .bg-secondary,
+  .bg-sidebar,
+  .bg-surface-elevated,
+  .bg-surface-muted,
+  .oc-surface-elevated,
+  .oc-glass-panel,
+  .oc-glass-popover,
+  .oc-glass-tooltip,
+  .oc-glass-composer
+) {
+  box-shadow:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.16),
+    inset 0 0 0 1px rgb(255 255 255 / 0.07),
+    0 1px 2px rgb(0 0 0 / 0.28),
+    0 14px 32px -10px rgb(0 0 0 / 0.5);
+}
+
+/* Without a real backdrop filter, or when the reader has asked for less
+   transparency, a pane has to carry its own fill: nothing is behind it to
+   refract, so the veil is mixed toward the opaque canvas instead. */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  :root[data-theme-id^='glossy-'] :is(
+    .bg-background,
+    .bg-card,
+    .bg-popover,
+    .bg-secondary,
+    .bg-sidebar,
+    .bg-surface-elevated,
+    .bg-surface-muted,
+    .oc-surface-elevated,
+    .oc-glass-panel,
+    .oc-glass-popover,
+    .oc-glass-tooltip,
+    .oc-glass-composer
+  ) {
+    background-color: color-mix(in srgb, var(--surface-background) 88%, var(--surface-elevated));
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-theme-id^='glossy-'] :is(
+    .bg-background,
+    .bg-card,
+    .bg-popover,
+    .bg-secondary,
+    .bg-sidebar,
+    .bg-surface-elevated,
+    .bg-surface-muted,
+    .oc-surface-elevated,
+    .oc-glass-panel,
+    .oc-glass-popover,
+    .oc-glass-tooltip,
+    .oc-glass-composer
+  ) {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background-color: color-mix(in srgb, var(--surface-background) 88%, var(--surface-elevated));
+  }
+}
+
 @theme inline {
   --radius-none: 0;
   --radius-sm: 0.25rem; /* 4px */

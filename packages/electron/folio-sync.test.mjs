@@ -115,3 +115,68 @@ test('focus travels both ways and the phone gets a one-time chats link from the 
   assert.equal(payload.v, 2);
   origin.close(); sync.disable();
 });
+
+const dracula = { mode: 'dark', light: 'openchamber-light', dark: 'dracula-dark', at: 1_000 };
+const nord = { mode: 'light', light: 'nord-light', dark: 'nord-dark', at: 2_000 };
+
+/** A paired Mac with an empty notebook, reached the way the phone reaches it. */
+function themeSync(onPhoneTheme = () => {}) {
+  const engine = { request: async () => ({ ok: true, state: { notes: [] } }), syncRequest: async () => ({ ok: true, text: '{}' }) };
+  const sync = createFolioSync({ engine, configPath: path.join(mkdtempSync(path.join(tmpdir(), 'folio-sync-')), 'c.json'), getLocalOrigin: () => '', onPhoneTheme });
+  const status = sync.enable(); sync.stop();
+  const key = Buffer.from(new URLSearchParams(status.pairingURL.split('?')[1]).get('k'), 'base64url');
+  return { sync, call: async (value) => decrypt(key, await sync.handleEncrypted(encrypt(key, { t: Date.now(), ...value }))) };
+}
+
+test('the theme choice travels to the phone, and an older peer without one is left alone', async () => {
+  const { sync, call } = themeSync();
+  // Before any window reports, the Mac has no theme to offer and the phone keeps what it is showing.
+  assert.equal((await call({ op: 'sync', since: 0, notes: [] })).macTheme, null);
+  // The window's report is what the next sync carries back, so a theme set on the Mac reaches the phone.
+  sync.setTheme({ mode: dracula.mode, light: dracula.light, dark: dracula.dark });
+  const reply = await call({ op: 'sync', since: 0, notes: [], theme: { ...nord, at: 0 } });
+  assert.deepEqual(reply.macTheme, { ...dracula, at: 0 });
+  // A build that sends no theme at all is understood, and the Mac keeps its own.
+  const plain = await call({ op: 'sync', since: 0, notes: [] });
+  assert.deepEqual(plain.macTheme, { ...dracula, at: 0 });
+  // Nothing the phone sent is applied when it is not a newer change.
+  assert.equal(sync.takePhoneTheme(), null);
+  sync.disable();
+});
+
+test('a phone theme is taken only when it is the newer change', async () => {
+  const taken = [];
+  const { sync, call } = themeSync((theme) => taken.push(theme));
+  sync.setTheme({ mode: dracula.mode, light: dracula.light, dark: dracula.dark, at: dracula.at });
+
+  // A phone that has been offline since before the Mac's choice keeps its stamp, and loses.
+  const stale = await call({ op: 'sync', since: 0, notes: [], theme: { ...nord, at: dracula.at - 1 } });
+  assert.deepEqual(stale.macTheme, { ...dracula, at: dracula.at });
+  assert.deepEqual(taken, []);
+
+  // A change the user made on the phone afterwards is the newer one, and comes back settled.
+  const fresh = await call({ op: 'sync', since: 0, notes: [], theme: nord });
+  assert.deepEqual(fresh.macTheme, nord);
+  assert.deepEqual(taken, [nord]);
+  assert.deepEqual(sync.takePhoneTheme(), nord);
+  assert.equal(sync.takePhoneTheme(), null, 'a window that already had the event does not apply it twice');
+
+  // The same choice reported again moves the stamp only forward, so the two devices stop trading it.
+  sync.setTheme({ mode: nord.mode, light: nord.light, dark: nord.dark, at: 500 });
+  assert.deepEqual((await call({ op: 'sync', since: 0, notes: [] })).macTheme, nord);
+  sync.disable();
+});
+
+test('turning sync off forgets the theme, so a new pairing starts from the Mac', async () => {
+  const { sync, call } = themeSync();
+  sync.setTheme({ mode: nord.mode, light: nord.light, dark: nord.dark, at: nord.at });
+  await call({ op: 'sync', since: 0, notes: [], theme: { ...dracula, at: nord.at + 1 } });
+  assert.deepEqual(sync.takePhoneTheme(), { ...dracula, at: nord.at + 1 });
+  sync.disable();
+  sync.enable(); sync.stop();
+  assert.equal(sync.takePhoneTheme(), null);
+  const key = Buffer.from(new URLSearchParams(sync.status().pairingURL.split('?')[1]).get('k'), 'base64url');
+  const reply = decrypt(key, await sync.handleEncrypted(encrypt(key, { t: Date.now(), op: 'sync', since: 0, notes: [] })));
+  assert.equal(reply.macTheme, null);
+  sync.disable();
+});

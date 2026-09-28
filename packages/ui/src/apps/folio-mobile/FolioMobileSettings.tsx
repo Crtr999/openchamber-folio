@@ -1,9 +1,11 @@
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, type I18nKey } from '@/lib/i18n';
+import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { chatProviders, listModels, type ChatModel, type ProviderID } from '@/lib/folio/mobile-chat';
 import type { LocalEngine } from '@/lib/folio/local-engine';
 import { useFolioStore } from '@/lib/folio/store';
+import type { Theme, ThemeMode } from '@/types/theme';
 import { readKey, useMobileChatStore, writeKey } from './chatStore';
 import { nativeGet } from './host';
 import { useSyncStore } from './sync';
@@ -11,6 +13,63 @@ import { useBalanceStore } from './balance';
 import { formatDollars } from '@/lib/folio/credits';
 
 const section = 'mb-6 rounded-xl border border-border/70 p-4';
+
+const APPEARANCE_MODES: readonly { mode: ThemeMode; labelKey: I18nKey }[] = [
+  { mode: 'system', labelKey: 'folio.appearanceSystem' },
+  { mode: 'light', labelKey: 'folio.appearanceLight' },
+  { mode: 'dark', labelKey: 'folio.appearanceDark' },
+];
+
+/** The Mac drops the variant suffix from a theme's name, so the same theme reads the same on both. */
+const themeLabel = (name: string, variant: 'light' | 'dark'): string => {
+  const suffix = variant === 'dark' ? ' Dark' : ' Light';
+  return name.endsWith(suffix) ? name.slice(0, -suffix.length) : name;
+};
+
+/**
+ * The theme, from the same store the Mac reads and writes, so a choice made here is the one the Mac
+ * shows and the one the next sync carries back. Picking a theme also makes it the active variant,
+ * which is what the Mac's own theme picker does; the two variants are listed apart, as the Mac lists
+ * them in two pickers, because most themes ship in both.
+ */
+export function AppearanceSection({ onThemeChanged }: { onThemeChanged: () => void }) {
+  const { t } = useI18n();
+  const { availableThemes, currentTheme, themeMode, setTheme, setThemeMode } = useThemeSystem();
+  const groups = React.useMemo<readonly { labelKey: I18nKey; themes: Theme[] }[]>(() => {
+    const byName = [...availableThemes].sort((a, b) => a.metadata.name.localeCompare(b.metadata.name));
+    return [
+      { labelKey: 'folio.appearanceLight', themes: byName.filter((theme) => theme.metadata.variant === 'light') },
+      { labelKey: 'folio.appearanceDark', themes: byName.filter((theme) => theme.metadata.variant === 'dark') },
+    ];
+  }, [availableThemes]);
+
+  return <section className={section}>
+    <h2 className="mb-1 font-semibold">{t('folio.appearance')}</h2>
+    <p className="mb-3 text-xs text-muted-foreground">{t('folio.appearanceHint')}</p>
+    <select
+      className="mb-3 w-full rounded-lg border border-border bg-background px-2 py-2 text-sm"
+      aria-label={t('folio.appearanceMode')}
+      value={themeMode}
+      onChange={(e) => {
+        const next = APPEARANCE_MODES.find((option) => option.mode === e.target.value);
+        if (!next) return;
+        setThemeMode(next.mode);
+        onThemeChanged();
+      }}
+    >
+      {APPEARANCE_MODES.map((option) => <option key={option.mode} value={option.mode}>{t(option.labelKey)}</option>)}
+    </select>
+    <div className="max-h-64 overflow-y-auto">
+      {groups.map((group) => <React.Fragment key={group.labelKey}>
+        <p className="px-1 pb-1 pt-2 text-xs font-medium text-muted-foreground">{t(group.labelKey)}</p>
+        {group.themes.map((theme) => <button key={theme.metadata.id} type="button" className="flex w-full items-center justify-between gap-2 border-b border-border/40 px-1 py-2 text-left text-sm" onClick={() => { setTheme(theme.metadata.id); onThemeChanged(); }}>
+          <span className="min-w-0 truncate">{themeLabel(theme.metadata.name, theme.metadata.variant)}</span>
+          {theme.metadata.id === currentTheme.metadata.id && <Icon name="check" className="size-4 shrink-0 text-muted-foreground" />}
+        </button>)}
+      </React.Fragment>)}
+    </div>
+  </section>;
+}
 
 function KeyField({ provider, name, hint }: { provider: ProviderID; name: string; hint: string }) {
   const { t } = useI18n();
@@ -73,6 +132,7 @@ function SyncSection({ engine }: { engine: LocalEngine }) {
 /** Keys, models and backups for the standalone iPhone app. */
 export function FolioMobileSettings({ engine, onMenu, onExportBackup }: { engine: LocalEngine; onMenu: () => void; onExportBackup: () => void }) {
   const { t } = useI18n();
+  const syncNow = useSyncStore((s) => s.syncNow);
   const addModels = useMobileChatStore((s) => s.addModels);
   const [provider, setProvider] = React.useState<ProviderID>('openrouter');
   const [found, setFound] = React.useState<ChatModel[]>([]);
@@ -101,6 +161,7 @@ export function FolioMobileSettings({ engine, onMenu, onExportBackup }: { engine
     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 pb-[max(env(safe-area-inset-bottom),1rem)]">
       {message && <div role="status" className="mb-4 rounded-lg bg-secondary px-3 py-2 text-sm">{message}</div>}
       <SyncSection engine={engine} />
+      <AppearanceSection onThemeChanged={() => { void syncNow(engine); }} />
       <section className={section}>
         <h2 className="mb-1 font-semibold">{t('folio.aiKeys')}</h2>
         <p className="mb-3 text-xs text-muted-foreground">{t('folio.aiKeysHint')}</p>

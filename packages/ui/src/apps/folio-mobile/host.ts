@@ -2,6 +2,7 @@ import React from 'react';
 import { z } from 'zod';
 import { registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import type { FolioNote } from '@/lib/folio/schema';
+import type { FolioEmbedPreviews } from '@/lib/folio/embeds';
 import type { FolioHost } from '@/lib/folio/local-engine';
 import { isCapacitorApp } from '@/lib/platform';
 import { nativeThemeBackground } from '../mobileNativeChrome';
@@ -44,7 +45,11 @@ export const nativeNotifications = registerPlugin<FolioNotificationsPlugin>('Fol
 
 /** The native iPhone page editor (FolioNoteEditor.swift). Pages come and go as Folio page JSON. */
 interface FolioEditorPlugin {
-  open(options: { note: FolioNote; titles: Record<string, string> }): Promise<void>;
+  /**
+   * `previews` is keyed by the asset a `database`, `page` or `pageIn` block points at, and is only
+   * ever drawn: the editor restores those blocks from `note`, so nothing in here is stored.
+   */
+  open(options: { note: FolioNote; titles: Record<string, string>; previews: FolioEmbedPreviews }): Promise<void>;
   close(): Promise<void>;
   addListener(event: 'change', listener: (data: { note: unknown }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'closed', listener: (data: { noteID: string }) => void): Promise<PluginListenerHandle>;

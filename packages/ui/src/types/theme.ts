@@ -29,6 +29,13 @@ interface SurfaceColors {
   elevatedForeground: string;
   overlay: string;
   subtle: string;
+  /**
+   * A CSS `background-image` value painted behind a transparent canvas, so
+   * translucent surfaces have something to refract. Only a theme that paints
+   * glass needs one; the canvas colour stays the opaque base the native shells,
+   * the splash and the contrast maths read.
+   */
+  backdrop?: string;
 }
 
 interface InteractiveColors {

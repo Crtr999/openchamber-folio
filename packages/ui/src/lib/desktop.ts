@@ -1,6 +1,7 @@
 import { responseSchema, requestSchema } from '@/lib/folio/schema';
 import { withNoteDeltas } from '@/lib/folio/delta';
 import { setFolioAssetReader } from '@/lib/folio/assets';
+import { syncedThemeSchema, type SyncedTheme, type ThemeChoice } from '@/lib/folio/theme-sync';
 import { z } from 'zod';
 import type { RuntimeAPIs } from '@/lib/api/types';
 import { getInjectedBootOutcome } from '@/lib/desktopBoot';
@@ -892,6 +893,23 @@ export const folioSyncCommand = async (action: 'status' | 'enable' | 'disable'):
 export const reportFolioFocus = async (focus: { noteID: string; blockID?: string; reading: boolean; at: number }): Promise<void> => {
   if (!canUseElectronDesktopIPC() || getElectronPlatform() !== 'darwin') return;
   await invokeDesktop('desktop_folio_sync', { action: 'focus', focus });
+};
+
+/**
+ * Tells the Mac's sync service which theme this window is showing, so a phone syncing now gets it.
+ * `at` is the moment the user last changed it, and is left out when nothing changed here: a window
+ * that reloaded must not look like the newest change on either device.
+ */
+export const reportFolioTheme = async (theme: ThemeChoice, at?: number): Promise<void> => {
+  if (!canUseElectronDesktopIPC() || getElectronPlatform() !== 'darwin') return;
+  await invokeDesktop('desktop_folio_sync', { action: 'theme', theme: { ...theme, at } });
+};
+
+/** A phone theme sync already accepted, for a window that opened after it arrived. Null when there is none. */
+export const takeSyncedFolioTheme = async (): Promise<SyncedTheme | null> => {
+  if (!canUseElectronDesktopIPC() || getElectronPlatform() !== 'darwin') return null;
+  const parsed = syncedThemeSchema.nullish().safeParse(await invokeDesktop('desktop_folio_sync', { action: 'theme-take' }));
+  return parsed.success ? parsed.data ?? null : null;
 };
 
 const openRouterCreditsSchema = z.object({

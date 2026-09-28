@@ -37,6 +37,16 @@ const pairingResultSchema = z.object({
 });
 const assistantMessageSchema = z.object({ id: z.string().uuid(), role: z.enum(['user', 'assistant']), content: z.string().max(400_000), sourceIDs: z.array(z.string().uuid()).max(200) });
 const assistantChatSchema = z.object({ noteID: z.string().uuid(), title: z.string().max(1000), created: z.number(), modified: z.number(), messages: z.array(assistantMessageSchema).max(5000) });
+// The theme choice, not the colours it resolves to: which preset each variant uses and whether the
+// system decides. `at` is when the user last changed it, so the two devices can order their changes
+// instead of overwriting each other; 0 means "not changed in a way this device knows about", which
+// any real change beats. Ids are not checked against the catalogue here: the window that shows the
+// theme falls back to a built-in when it does not recognise one, the same as a settings sync.
+const themeChoiceSchema = z.object({ mode: z.enum(['light', 'dark', 'system']), light: z.string().min(1).max(120), dark: z.string().min(1).max(120) });
+const themeSchema = themeChoiceSchema.extend({ at: z.number().int().nonnegative() });
+/** The Mac's own report of the theme it is showing. `at` is present only for a change made right now. */
+const macThemeSchema = themeChoiceSchema.extend({ at: z.number().int().nonnegative().optional() });
+const sameTheme = (a, b) => a.mode === b.mode && a.light === b.light && a.dark === b.dark;
 const requestSchema = z.discriminatedUnion('op', [
   z.object({
     op: z.literal('sync'), t: z.number(), since: z.number(), notes: z.array(noteSchema),
@@ -46,6 +56,9 @@ const requestSchema = z.discriminatedUnion('op', [
     assistantHashes: z.record(z.string(), z.string()).default({}),
     // What the phone had open, so the Mac can offer "continue from iPhone".
     focus: focusSchema.optional(),
+    // The phone's theme choice, when it has one to offer. Absent from an older build, and from a
+    // phone that has not chosen a theme since pairing, which both mean "keep what you are showing".
+    theme: themeSchema.optional(),
   }),
   z.object({ op: z.literal('connect'), t: z.number() }),
   z.object({ op: z.literal('chat'), t: z.number(), sessionID: z.string().min(1).max(200) }),
@@ -122,13 +135,20 @@ function bonjourName() {
   try { return `${execFileSync('/usr/sbin/scutil', ['--get', 'LocalHostName'], { encoding: 'utf8', timeout: 1500 }).trim()}.local`; } catch { return `${os.hostname().replace(/\.local$/, '')}.local`; }
 }
 
-export function createFolioSync({ engine, configPath, getLocalOrigin, log = () => {}, defaultPort = DEFAULT_PORT }) {
+export function createFolioSync({ engine, configPath, getLocalOrigin, onPhoneTheme, log = () => {}, defaultPort = DEFAULT_PORT }) {
   let server = null;
   let config = null;
   let lastSync = 0;
   // Where each device last was (a page, and the place in it when reading), for picking up on the other one.
   let macFocus = null;
   let phoneFocus = null;
+  // The theme this Mac is showing, with the moment its user last changed it, and the same for the
+  // phone. The newest change wins, so an old phone offline for a day cannot undo a Mac choice made
+  // since, and a Mac that has not been told about a change cannot undo the phone's.
+  let macTheme = null;
+  // A phone theme that has been accepted but that no window has picked up yet: a reload can miss the
+  // event, and the next window to ask for it applies it.
+  let pendingPhoneTheme = null;
   try { config = configSchema.parse(JSON.parse(readFileSync(configPath, 'utf8'))); } catch { config = null; }
 
   const keyBytes = () => Buffer.from(config.key, 'base64url');
@@ -275,7 +295,15 @@ export function createFolioSync({ engine, configPath, getLocalOrigin, log = () =
       .map((n) => ({ ...n, created: toPhoneTime(n.created), modified: toPhoneTime(n.modified) }));
     lastSync = cursor;
     if (request.focus && (!phoneFocus || request.focus.at > phoneFocus.at)) phoneFocus = { ...request.focus, noteID: request.focus.noteID.toUpperCase() };
-    return { t: cursor, cursor, notes: changed, assistant: assistantOut, macChats: await macChats(), macFocus, applied };
+    // A phone theme is taken only for a strictly newer change, so the Mac keeps its own on a tie and
+    // a stale phone never overwrites it. The reply then carries the accepted theme, which is what
+    // settles the phone without another round trip.
+    if (request.theme && (!macTheme || request.theme.at > macTheme.at)) {
+      macTheme = request.theme;
+      pendingPhoneTheme = request.theme;
+      onPhoneTheme?.(request.theme);
+    }
+    return { t: cursor, cursor, notes: changed, assistant: assistantOut, macChats: await macChats(), macFocus, macTheme, applied };
   }
 
   async function handle(body) {
@@ -337,6 +365,23 @@ export function createFolioSync({ engine, configPath, getLocalOrigin, log = () =
     status,
     /** The Mac notebook reports the page (and reading place) in front, for the phone's "continue" card. */
     setFocus(focus) { const parsed = focusSchema.safeParse(focus); if (parsed.success) macFocus = { ...parsed.data, noteID: parsed.data.noteID.toUpperCase() }; return status(); },
+    /**
+     * The window's current theme, so a phone syncing now receives it. `at` travels only with a change
+     * the user just made here: a re-report after a reload says what is showing without claiming to be
+     * newer than the phone's choice, and adopting a phone theme reports back its own stamp so the two
+     * stop trading the same value back and forth. A stamp never moves backwards.
+     */
+    setTheme(theme) {
+      const parsed = macThemeSchema.safeParse(theme);
+      if (parsed.success) {
+        const { at, ...choice } = parsed.data;
+        if (!macTheme || !sameTheme(macTheme, choice)) macTheme = { ...choice, at: at ?? 0 };
+        else if (at !== undefined) macTheme = { ...macTheme, at: Math.max(macTheme.at, at) };
+      }
+      return status();
+    },
+    /** Hands an accepted phone theme to the window that shows it. Once: a second window has the event. */
+    takePhoneTheme() { const theme = pendingPhoneTheme; pendingPhoneTheme = null; return theme ?? null; },
     enable() {
       if (!config) {
         config = { key: randomBytes(32).toString('base64url'), port: defaultPort };
@@ -346,7 +391,7 @@ export function createFolioSync({ engine, configPath, getLocalOrigin, log = () =
       return status();
     },
     disable() {
-      server?.close(); server = null; config = null; lastSync = 0;
+      server?.close(); server = null; config = null; lastSync = 0; macTheme = null; pendingPhoneTheme = null;
       rmSync(configPath, { force: true });
       return status();
     },

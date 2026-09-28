@@ -173,6 +173,11 @@ const sidebarBaseRgb = hexToRgb(theme.colors.surface.muted);
     document.head.appendChild(style);
 
     document.documentElement.setAttribute('data-theme', theme.metadata.variant);
+    // The variant is not enough to tell two palettes apart, and a theme that
+    // paints its own surfaces needs to be nameable from CSS. The id is the
+    // stable key across both variants, so a stylesheet can scope a treatment to
+    // one theme without matching on a colour.
+    document.documentElement.setAttribute('data-theme-id', theme.metadata.id);
 
   }
 
@@ -196,6 +201,11 @@ const sidebarBaseRgb = hexToRgb(theme.colors.surface.muted);
     vars.push(`  --surface-elevated-foreground: ${surface.elevatedForeground};`);
     vars.push(`  --surface-overlay: ${surface.overlay};`);
     vars.push(`  --surface-subtle: ${surface.subtle};`);
+    // Emitted only for a theme that authors a backdrop, so every other preset's
+    // generated stylesheet stays byte-identical to what it was.
+    if (surface.backdrop) {
+      vars.push(`  --surface-backdrop: ${surface.backdrop};`);
+    }
     return vars;
   }
 

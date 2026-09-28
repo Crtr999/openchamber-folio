@@ -1,0 +1,5 @@
+# Bun reads `bunfig.toml` from the working directory only, so the UI suite is
+# run both from here and from `packages/ui`; both need the shim that stands in
+# for Vite's build-time `import.meta.glob`.
+[test]
+preload = ["./tools/bun/vite-glob-shim.ts"]

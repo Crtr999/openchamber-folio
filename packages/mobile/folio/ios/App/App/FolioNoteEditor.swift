@@ -20,10 +20,14 @@ public class FolioEditorPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func open(_ call: CAPPluginCall) {
         guard let note = call.getObject("note") as [String: Any]? else { call.reject("note is required"); return }
         let titles = (call.getObject("titles") as [String: Any]?)?.compactMapValues { $0 as? String } ?? [:]
+        // What the web app read out of the databases and pages this page embeds, keyed by the asset
+        // a block points at. It is drawn beside the page and never becomes part of it: a locked block
+        // is read back from the page's own copy of itself, not from the line the editor drew.
+        let previews = (call.getObject("previews") as [String: Any]?)?.compactMapValues { $0 as? [String: Any] } ?? [:]
         DispatchQueue.main.async {
             guard let host = self.bridge?.viewController else { call.reject("No window"); return }
             if let current = self.editor { current.finish(animated: false, notify: false) }
-            let controller = FolioNoteEditorController(note: note, titles: titles)
+            let controller = FolioNoteEditorController(note: note, titles: titles, previews: previews)
             controller.onChange = { [weak self] note in self?.notifyListeners("change", data: ["note": note]) }
             controller.onClose = { [weak self, weak controller] noteID in
                 if self?.editor === controller { self?.editor = nil }
@@ -130,7 +134,7 @@ enum FolioCodec {
     static func bool(_ value: Any?) -> Bool { (value as? NSNumber)?.boolValue ?? false }
 
     /// One line of the page: prefix, then the block's text with its marks.
-    static func line(_ block: [String: Any], number: Int, titles: [String: String]) -> NSMutableAttributedString {
+    static func line(_ block: [String: Any], number: Int, titles: [String: String], previews: [String: [String: Any]]) -> NSMutableAttributedString {
         let kind = string(block["kind"]), id = string(block["id"]), indent = int(block["indent"])
         let attrs = lineAttributes(kind: kind, id: id, indent: indent)
         let base = attrs[.font] as! UIFont
@@ -140,7 +144,9 @@ enum FolioCodec {
         switch kind {
         case "divider": text = "──────────────"
         case "page", "pageIn": text = titles[string(block["asset"])] ?? (string(block["text"]).isEmpty ? "Untitled" : string(block["text"]))
-        // Shown as one line; the grid itself opens in the classic editor or on the Mac.
+        // A text view cannot hold a grid, so an embedded database is its title plus a read-only
+        // summary of the rows underneath: enough to see the table without opening it, and the tap
+        // that opens it is still the whole line.
         case "database": text = titles[string(block["asset"])] ?? "Database"
         case "table":
             let rows = string(block["text"]).components(separatedBy: "\n")
@@ -149,14 +155,16 @@ enum FolioCodec {
         default: text = kind == "code" ? string(block["text"]) : string(block["text"]).replacingOccurrences(of: "\n", with: "\u{2028}")
         }
         let body = NSMutableAttributedString(string: text, attributes: attrs)
+        let titleLength = body.length
         if kind == "task", bool(block["checked"]) {
             body.addAttributes([.strikethroughStyle: NSUnderlineStyle.single.rawValue, .foregroundColor: UIColor.secondaryLabel], range: NSRange(location: 0, length: body.length))
         }
         // Tapping one of these lines opens the page it points at, so it is drawn the way a real link
         // looks in this text view. One pointing at nothing stays plain, rather than inviting a tap
-        // that goes nowhere.
-        if (kind == "page" || kind == "pageIn" || kind == "database"), titles[string(block["asset"])] != nil {
-            body.addAttributes([.foregroundColor: UIColor.link, .underlineStyle: NSUnderlineStyle.single.rawValue], range: NSRange(location: 0, length: body.length))
+        // that goes nowhere. Only the title is a link: the summary under it is what the link leads to,
+        // not another place to go.
+        if (kind == "page" || kind == "pageIn" || kind == "database"), titles[string(block["asset"])] != nil, titleLength > 0 {
+            body.addAttributes([.foregroundColor: UIColor.link, .underlineStyle: NSUnderlineStyle.single.rawValue], range: NSRange(location: 0, length: titleLength))
         }
         if !locked.contains(kind), kind != "code", let marks = block["marks"] as? [Any] {
             for case let mark as [String: Any] in marks {
@@ -184,18 +192,49 @@ enum FolioCodec {
                 }
             }
         }
+        // The summary of an embedded object goes on after the marks, so a mark range still means what
+        // it meant before there was anything under the title, and so nothing about it can be read back
+        // as part of the block's text. Line separators, not newlines: the whole object stays the one
+        // paragraph the block owns, which is the only thing keeping this line and this block the same.
+        if let detail = embeddedDetail(kind: kind, asset: string(block["asset"]), previews: previews) {
+            let style = NSMutableParagraphStyle()
+            style.lineSpacing = 2
+            style.paragraphSpacing = 6
+            body.append(NSAttributedString(string: "\u{2028}" + detail, attributes: [
+                .font: UIFont.systemFont(ofSize: baseSize - 2),
+                .foregroundColor: UIColor.secondaryLabel,
+                .paragraphStyle: style,
+            ]))
+        }
         line.append(body)
         let highlight = string(block["highlight"])
         if highlight != "none", let tint = color(highlight) { line.addAttribute(.backgroundColor, value: tint.withAlphaComponent(0.3), range: NSRange(location: 0, length: line.length)) }
         return line
     }
 
-    static func document(_ blocks: [[String: Any]], titles: [String: String]) -> NSAttributedString {
+    /// What the web app read out of the database or page a block points at, as the lines drawn under
+    /// its title, or nothing when it had nothing to show. A database shows up to a few rows and then
+    /// how many it left out, the same count the `table` block above already prints; a page shows the
+    /// first line of its own writing, because a column of titles says nothing about what they hold.
+    static func embeddedDetail(kind: String, asset: String, previews: [String: [String: Any]]) -> String? {
+        guard kind == "database" || kind == "page" || kind == "pageIn", !asset.isEmpty, let preview = previews[asset] else { return nil }
+        if string(preview["kind"]) == "database" {
+            let rows = (preview["rows"] as? [Any] ?? []).compactMap { $0 as? String }
+            var lines = rows.map { "•  " + $0 }
+            let hidden = int(preview["hidden"])
+            if hidden > 0 { lines.append("(\(hidden) more rows)") }
+            return lines.isEmpty ? nil : lines.joined(separator: "\u{2028}")
+        }
+        let snippet = string(preview["snippet"]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return snippet.isEmpty ? nil : snippet
+    }
+
+    static func document(_ blocks: [[String: Any]], titles: [String: String], previews: [String: [String: Any]]) -> NSAttributedString {
         let doc = NSMutableAttributedString()
         var number = 0
         for (index, block) in blocks.enumerated() {
             number = string(block["kind"]) == "numbered" ? number + 1 : 0
-            let line = line(block, number: max(number, 1), titles: titles)
+            let line = line(block, number: max(number, 1), titles: titles, previews: previews)
             if index < blocks.count - 1 {
                 let kind = string(block["kind"])
                 line.append(NSAttributedString(string: "\n", attributes: lineAttributes(kind: kind, id: string(block["id"]), indent: int(block["indent"]))))
@@ -300,6 +339,7 @@ final class FolioNoteEditorController: UIViewController, UITextViewDelegate, UIT
     private var note: [String: Any]
     private var blocks: [[String: Any]]
     private let titles: [String: String]
+    private let previews: [String: [String: Any]]
     private let textView = UITextView()
     private let titleField = UITextField()
     private var saveTimer: Timer?
@@ -307,10 +347,11 @@ final class FolioNoteEditorController: UIViewController, UITextViewDelegate, UIT
     private var finished = false
     private var noteID: String { FolioCodec.string(note["id"]) }
 
-    init(note: [String: Any], titles: [String: String]) {
+    init(note: [String: Any], titles: [String: String], previews: [String: [String: Any]]) {
         self.note = note
         self.blocks = (note["blocks"] as? [Any])?.compactMap { $0 as? [String: Any] } ?? []
         self.titles = titles
+        self.previews = previews
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -402,7 +443,7 @@ final class FolioNoteEditorController: UIViewController, UITextViewDelegate, UIT
         textView.allowsEditingTextAttributes = true
         textView.delegate = self
         textView.linkTextAttributes = [.foregroundColor: UIColor.link, .underlineStyle: NSUnderlineStyle.single.rawValue]
-        textView.attributedText = FolioCodec.document(blocks, titles: titles)
+        textView.attributedText = FolioCodec.document(blocks, titles: titles, previews: previews)
         textView.inputAccessoryView = makeToolbar()
         view.addSubview(textView)
 
@@ -507,6 +548,15 @@ final class FolioNoteEditorController: UIViewController, UITextViewDelegate, UIT
             changed()
             return false
         }
+        // A locked line is not typed text: a database, a page link, a divider, a simple table. Its
+        // block is read back from the page's own copy of itself, so a keystroke that lands inside one
+        // would be taken, drawn, and then dropped on the next save. Refusing it says so instead.
+        // Removing the line is how one of these blocks is deleted, and an edit reaching past the line
+        // is the user clearing several of them, so both still go through.
+        if FolioCodec.locked.contains(line.kind) {
+            let clears = range.location <= line.range.location && NSMaxRange(range) >= line.range.location + line.range.length
+            if !clears { return false }
+        }
         // Markdown shortcuts typed at the start of a plain line.
         if text == " " && line.kind == "text" && range.location == line.range.location + (line.content as NSString).length {
             let shortcuts = ["#": "heading1", "##": "heading2", "###": "heading3", "-": "bullet", "*": "bullet", "[]": "task", "1.": "numbered", ">": "quote", "\"": "quote"]
@@ -544,7 +594,7 @@ final class FolioNoteEditorController: UIViewController, UITextViewDelegate, UIT
         guard index < current.count else { return }
         change(&current, index)
         blocks = current
-        storage.setAttributedString(FolioCodec.document(current, titles: titles))
+        storage.setAttributedString(FolioCodec.document(current, titles: titles, previews: previews))
         textView.undoManager?.removeAllActions()
         if let target = paragraphs().first(where: { $0.block == index }) {
             let line = lineInfo(at: target.range.location)

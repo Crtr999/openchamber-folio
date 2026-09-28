@@ -9,6 +9,8 @@ import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeApiBaseUrl, getRuntimeKey, isTransientRuntimeKey } from '@/lib/runtime-switch';
 import { isRelayModeActive } from '@/lib/relay/runtime-tunnel';
 import { hiddenChats, readSecret, useMobileChatStore, writeSecret, type MobileChat } from './chatStore';
+import { announceMacTheme, clearFolioTheme, readFolioTheme, takeMacTheme } from './theme';
+import { syncedThemeSchema, type SyncedTheme } from '@/lib/folio/theme-sync';
 
 /**
  * iPhone side of Mac sync. The Mac listens on the local network after you pair from its
@@ -25,7 +27,7 @@ const assistantChatSchema = z.object({ noteID: z.string(), title: z.string(), is
 type AssistantChat = { noteID: string; title: string; created: number; modified: number; messages: z.infer<typeof assistantMessageSchema>[] };
 const focusSchema = z.object({ noteID: z.string(), blockID: z.string().optional(), reading: z.boolean(), at: z.number() });
 export type MacFocus = z.infer<typeof focusSchema>;
-const syncReplySchema = z.object({ cursor: z.number(), notes: z.array(z.unknown()), macChats: z.array(macChatSchema), assistant: z.array(assistantChatSchema).default([]), macFocus: focusSchema.nullish() });
+const syncReplySchema = z.object({ cursor: z.number(), notes: z.array(z.unknown()), macChats: z.array(macChatSchema), assistant: z.array(assistantChatSchema).default([]), macFocus: focusSchema.nullish(), macTheme: syncedThemeSchema.nullish() });
 const connectReplySchema = z.object({ link: z.string() });
 const assetReplySchema = z.object({ data: z.string() });
 const uploadReplySchema = z.object({ path: z.string() });
@@ -51,7 +53,7 @@ const toB64 = (bytes: Uint8Array) => btoa(Array.from(bytes, (b) => String.fromCh
 async function cryptoKey(key: string) { return crypto.subtle.importKey('raw', fromB64(key), 'AES-GCM', false, ['encrypt', 'decrypt']); }
 
 type SyncRequest =
-  | { op: 'sync'; t: number; since: number; notes: FolioNote[]; chats: MobileChat[]; assistant: AssistantChat[]; assistantHashes: Record<string, string>; focus?: FolioFocus }
+  | { op: 'sync'; t: number; since: number; notes: FolioNote[]; chats: MobileChat[]; assistant: AssistantChat[]; assistantHashes: Record<string, string>; focus?: FolioFocus; theme?: SyncedTheme }
   | { op: 'connect'; t: number }
   | { op: 'asset-get'; t: number; path: string }
   | { op: 'asset-put'; t: number; name: string; data: string }
@@ -254,6 +256,8 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     await writeSecret(KEY_NAME, parsed.key);
     writeLocal(PAIRING, parsed.pairing);
     writeLocal(STATE, { cursor: 0, localSince: 0, lastSync: 0, macChats: [] });
+    // The new Mac decides the theme first, as it does for the notes; a choice made here wins from then on.
+    clearFolioTheme();
     set({ pairing: parsed.pairing, lastSync: undefined, error: undefined, macChats: [] });
     await get().syncNow(engine);
     return true;
@@ -283,7 +287,12 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         for (const chat of chats) hashes.push([(chat.pageID ?? chat.id).toUpperCase(), await chatHash(syncable(chat))]);
         const assistantHashes = Object.fromEntries(hashes);
         const focus = useHandoffStore.getState().local;
-        const reply = await request(pairing, { op: 'sync', t: Date.now(), since: state.cursor, notes: engine.changedSince(state.localSince), chats: [], assistant, assistantHashes, focus }, syncReplySchema);
+        const theme = readFolioTheme();
+        const reply = await request(pairing, { op: 'sync', t: Date.now(), since: state.cursor, notes: engine.changedSince(state.localSince), chats: [], assistant, assistantHashes, focus, theme }, syncReplySchema);
+        // The Mac's theme lands first, and only when it is the newer change, so the pages arriving with
+        // it are already drawn in it.
+        const macTheme = takeMacTheme(reply.macTheme);
+        if (macTheme) announceMacTheme(macTheme);
         const drafts = useFolioStore.getState().drafts;
         await engine.mergeRemote(reply.notes, (id) => Boolean(drafts[id]));
         await applyAssistant(reply.assistant, started);

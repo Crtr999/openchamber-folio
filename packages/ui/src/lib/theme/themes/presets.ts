@@ -14,6 +14,8 @@ import cursor_dark_Raw from './cursor-dark.json';
 import cursor_light_Raw from './cursor-light.json';
 import dracula_dark_Raw from './dracula-dark.json';
 import dracula_light_Raw from './dracula-light.json';
+import glossy_dark_Raw from './glossy-dark.json';
+import glossy_light_Raw from './glossy-light.json';
 import gruvbox_dark_Raw from './gruvbox-dark.json';
 import gruvbox_light_Raw from './gruvbox-light.json';
 import jetbrains_dark_Raw from './jetbrains-dark.json';
@@ -60,6 +62,8 @@ export const presetThemes: Theme[] = [
   cursor_light_Raw,
   dracula_dark_Raw,
   dracula_light_Raw,
+  glossy_dark_Raw,
+  glossy_light_Raw,
   gruvbox_dark_Raw,
   gruvbox_light_Raw,
   jetbrains_dark_Raw,

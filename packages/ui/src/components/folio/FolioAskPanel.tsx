@@ -1,38 +1,37 @@
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
+import { handleDropdownNavigationKey } from '@/components/ui/dropdown-navigation';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { createChatDirectory } from '@/lib/chatDirectories';
+import { buildSkillMentionInstruction } from '@/lib/skillMentionInstruction';
 import { useFolioStore } from '@/lib/folio/store';
 import type { FolioNote } from '@/lib/folio/schema';
+import { readPageChats, useFolioAskModelStore, writePageChats, type PageChat } from '@/lib/folio/ask';
+import { askModelRef, resolveAskModel, type AskModelSelection } from '@/lib/folio/ask-model';
+import { askComposerAction, collectAskMentions, flattenAskMentions, nextAskMentionIndex, type AskMention } from '@/lib/folio/ask-mentions';
 import { FolioIcon } from './FolioIcon';
+import { FolioAskModelPicker } from './FolioAskModelPicker';
 import type { Message, Part, PermissionRequest } from '@/lib/opencode/model';
+import type { SkillMentions } from '@/lib/opencode/client';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { selectSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { createSession, respondToPermission } from '@/sync/session-actions';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useEnsureSessionMessages, useSessionMessages, useSessionPartsForMessages, useSessionPermissions, useSessionStatus } from '@/sync/sync-context';
 
-/** The conversation each page has with the AI, remembered on this Mac. */
-interface PageChat { sessionId: string; directory: string; sentModified?: number }
-const storageKey = 'folio.ask.v1';
-const readChats = (): Record<string, PageChat> => {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(storageKey) ?? '{}');
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-    const chats: Record<string, PageChat> = {};
-    for (const [noteID, value] of Object.entries(parsed)) {
-      if (value && typeof value === 'object' && 'sessionId' in value && 'directory' in value && typeof value.sessionId === 'string' && typeof value.directory === 'string') {
-        chats[noteID] = { sessionId: value.sessionId, directory: value.directory, sentModified: 'sentModified' in value && typeof value.sentModified === 'number' ? value.sentModified : undefined };
-      }
-    }
-    return chats;
-  } catch { return {}; }
-};
-const writeChats = (chats: Record<string, PageChat>) => { try { localStorage.setItem(storageKey, JSON.stringify(chats)); } catch { /* storage blocked */ } };
-
 const suggestionKeys = ['folio.askSummarize', 'folio.askOutline', 'folio.askQuiz', 'folio.askActions'] as const;
+
+/** What each group of results is called, keyed by the group the picker draws. */
+const groupKeys = { page: 'folio.askGroupPages', chat: 'folio.askGroupChats', file: 'folio.askGroupFiles', skill: 'folio.askGroupSkills' } as const;
+
+const mentionIcon = { page: 'article', chat: 'chat-3', file: 'attachment-2', skill: 'tools' } as const;
+
+/** Where a send goes, plus the skills this panel can attach to it. */
+interface AskSendOptions { sessionId: string; directory: string; skills?: SkillMentions }
 
 /**
  * Ask AI about the open page, like Notion's AI panel. It is an ordinary OpenChamber chat (your
@@ -41,62 +40,82 @@ const suggestionKeys = ['folio.askSummarize', 'folio.askOutline', 'folio.askQuiz
  */
 export function FolioAskPanel({ note, onClose }: { note: FolioNote; onClose: () => void }) {
   const { t } = useI18n();
-  const [chats, setChats] = React.useState(readChats);
+  const [chats, setChats] = React.useState(readPageChats);
   const chat = chats[note.id];
   const [draft, setDraft] = React.useState('');
   const [sending, setSending] = React.useState(false);
   const [error, setError] = React.useState<string>();
+  const [mentions, setMentions] = React.useState<AskMention[]>([]);
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
   React.useEffect(() => { setError(undefined); inputRef.current?.focus(); }, [note.id]);
-  // "@" references a page, like mentions in the chats: a list narrows as you type.
-  const [mentions, setMentions] = React.useState<Array<{ id: string; title: string }>>([]);
+  // "@" points at a page, a chat, a file or a skill: a list of groups narrows as you type.
   const [picker, setPicker] = React.useState<{ query: string; start: number }>();
   const [pickIndex, setPickIndex] = React.useState(0);
   const notes = useFolioStore((s) => s.status?.notes);
-  const matches = React.useMemo(() => {
-    if (!picker) return [];
-    const q = picker.query.toLowerCase();
-    return (notes ?? []).filter((n) => !n.trashed && !n.isChat && (n.title || '').toLowerCase().includes(q))
-      .sort((a, b) => Number(!(a.title || '').toLowerCase().startsWith(q)) - Number(!(b.title || '').toLowerCase().startsWith(q)) || b.modified - a.modified)
-      .slice(0, 8);
-  }, [picker, notes]);
-  const parentTitle = (id: string | undefined) => (id ? notes?.find((n) => n.id === id)?.title : undefined);
+  const sessions = useGlobalSessionsStore((s) => s.activeSessions);
+  const askSelection = useFolioAskModelStore((s) => s.selection);
+  const providers = useConfigStore((s) => s.providers);
+  const currentProviderId = useConfigStore((s) => s.currentProviderId);
+  const currentModelId = useConfigStore((s) => s.currentModelId);
+  const currentVariant = useConfigStore((s) => s.currentVariant);
+  const loadSkills = useSkillsStore((s) => s.loadSkills);
+  // Skills belong to the directory they are read from, and a page conversation runs in its own.
+  const skills = useSkillsStore((s) => selectSkillsForDirectory(s, chat?.directory));
+  const chatsForPicker = React.useMemo(
+    () => sessions.filter((session) => !session.parentID && session.title).map((session) => ({ id: session.id, title: session.title })),
+    [sessions],
+  );
+  const parentTitle = React.useCallback((id: string | undefined) => (id ? notes?.find((n) => n.id === id)?.title : undefined), [notes]);
+  const groups = React.useMemo(() => (picker
+    ? collectAskMentions(notes ?? [], chatsForPicker, skills, picker.query, parentTitle)
+    : []), [chatsForPicker, notes, parentTitle, picker, skills]);
+  const matches = React.useMemo(() => flattenAskMentions(groups), [groups]);
+  // The one model this panel sends on. It is the pick when the user has made one,
+  // and the app's current selection until then, and the send reads this value.
+  const model = React.useMemo<AskModelSelection | undefined>(
+    () => resolveAskModel(askSelection, { providerID: currentProviderId, modelID: currentModelId, variant: currentVariant }),
+    [askSelection, currentModelId, currentProviderId, currentVariant],
+  );
+
+  React.useEffect(() => { if (chat?.directory) void loadSkills(chat.directory); }, [chat?.directory, loadSkills]);
+
   const track = (value: string, caret: number) => {
     const found = /(^|\s)@([^\s@]{0,40})$/.exec(value.slice(0, caret));
     if (found) { setPicker({ query: found[2], start: caret - found[2].length - 1 }); setPickIndex(0); } else setPicker(undefined);
   };
-  const pick = (target: FolioNote | undefined) => {
+  const pick = (target: AskMention | undefined) => {
     const element = inputRef.current;
     if (!target || !picker || !element) { setPicker(undefined); return; }
-    const title = target.title || t('folio.untitled');
     const caret = element.selectionStart ?? draft.length;
-    const next = `${draft.slice(0, picker.start)}@${title} ${draft.slice(caret)}`;
+    const next = `${draft.slice(0, picker.start)}@${target.label} ${draft.slice(caret)}`;
     setDraft(next);
-    setMentions((old) => (old.some((m) => m.id === target.id) ? old : [...old, { id: target.id, title }]));
+    if (target.kind !== 'chat') setMentions((old) => (old.some((m) => m.id === target.id) ? old : [...old, target]));
     setPicker(undefined);
-    const at = picker.start + title.length + 2;
+    const at = picker.start + target.label.length + 2;
     requestAnimationFrame(() => { element.focus(); element.setSelectionRange(at, at); });
   };
 
-  const remember = (next: Record<string, PageChat>) => { writeChats(next); setChats(next); };
+  const remember = (next: Record<string, PageChat>) => { writePageChats(next); setChats(next); };
 
   const send = async (text: string) => {
     const question = text.trim();
     if (!question || sending) return;
-    const config = useConfigStore.getState();
-    const providerID = config.currentProviderId, modelID = config.currentModelId;
-    if (!providerID || !modelID) { setError(t('folio.askNoModel')); return; }
+    if (!model) { setError(t('folio.askNoModel')); return; }
     setSending(true); setError(undefined);
     try {
       // The page is sent as it is on screen, so unsaved typing is saved first.
       await useFolioStore.getState().flush();
       const page = useFolioStore.getState().status?.notes.find((n) => n.id === note.id) ?? note;
-      let current = readChats()[note.id];
+      const config = useConfigStore.getState();
+      const modelRef = askModelRef(providers, model);
+      let current = readPageChats()[note.id];
       if (!current) {
         const directory = await createChatDirectory();
         const session = await createSession(page.title || t('folio.untitled'), directory, undefined, undefined,
-          { model: { providerID, id: modelID, ...(config.currentVariant ? { variant: config.currentVariant } : {}) }, agent: config.currentAgentName }, 'preserve');
-        if (!session) throw new Error(t('folio.askFailed'));
+          { model: modelRef, agent: config.currentAgentName }, 'preserve');
+        // Nothing was asked and nothing can be retried from a chat that never
+        // started, which is a different failure from a turn the model refused.
+        if (!session) throw new Error(t('folio.askSessionFailed'));
         current = { sessionId: session.id, directory: session.directory || directory };
       }
       // The whole page goes along the first time and whenever it changed since; otherwise just which page it is.
@@ -106,23 +125,34 @@ export function FolioAskPanel({ note, onClose }: { note: FolioNote; onClose: () 
         const response = await useFolioStore.getState().api?.request({ command: 'markdown', noteID: page.id, flag: true });
         if (response?.ok && response.text) context += `\n\nCurrent page content:\n\n${response.text}`;
       }
-      // Pages @mentioned in the question go along in full (pages excluded from AI only by name).
-      for (const mention of mentions.filter((m) => question.includes(`@${m.title}`) && m.id !== page.id)) {
-        const target = useFolioStore.getState().status?.notes.find((n) => n.id === mention.id);
-        if (!target) continue;
-        if (target.excludedFromAI) { context += `\n\nThe user mentioned "${mention.title}", which is excluded from AI.`; continue; }
+      // Pages @mentioned in the question go along in full (pages excluded from AI only by name),
+      // and a file brings the page it is attached to along the same way.
+      const named = mentions.filter((m) => m.kind !== 'chat' && m.kind !== 'skill' && question.includes(`@${m.label}`));
+      for (const mention of named) {
+        const targetID = mention.pageID ?? mention.id;
+        const target = useFolioStore.getState().status?.notes.find((n) => n.id === targetID);
+        if (!target || target.id === page.id) continue;
+        const label = mention.kind === 'file' ? `${mention.label} (attached to page "${target.title}")` : mention.label;
+        if (target.excludedFromAI) { context += `\n\nThe user mentioned "${label}", which is excluded from AI.`; continue; }
         const response = await useFolioStore.getState().api?.request({ command: 'markdown', noteID: target.id, flag: true }).catch(() => undefined);
-        if (response?.ok && response.text) context += `\n\nMentioned page "${mention.title}" (page id ${target.id}):\n\n${response.text.slice(0, 80_000)}`;
+        if (response?.ok && response.text) context += `\n\nMentioned page "${target.title || 'Untitled'}" (page id ${target.id}), which the user referred to as "${label}":\n\n${response.text.slice(0, 80_000)}`;
       }
-      await useSessionUIStore.getState().sendMessage(question, providerID, modelID, config.currentAgentName, undefined, undefined,
-        [{ text: context, synthetic: true }], config.currentVariant, 'normal', { sessionId: current.sessionId, directory: current.directory });
-      remember({ ...readChats(), [note.id]: { ...current, sentModified: page.modified } });
+      // A named chat is read on demand through the agent tool, so only its identity travels.
+      for (const mention of mentions.filter((m) => m.kind === 'chat' && question.includes(`@${m.label}`))) {
+        context += `\n\nThe user mentioned the chat "${mention.label}" (session id ${mention.id}); read it with the openchamber tool when they refer to it.`;
+      }
+      const skillNames = mentions.filter((m) => m.kind === 'skill' && question.includes(`@${m.label}`)).map((m) => m.label);
+      const sendOptions: AskSendOptions = { sessionId: current.sessionId, directory: current.directory };
+      if (skillNames.length) sendOptions.skills = { names: skillNames, instructionFor: buildSkillMentionInstruction };
+      await useSessionUIStore.getState().sendMessage(question, model.providerID, model.modelID, config.currentAgentName, undefined, undefined,
+        [{ text: context, synthetic: true }], modelRef.variant, 'normal', sendOptions);
+      remember({ ...readPageChats(), [note.id]: { ...current, sentModified: page.modified } });
       setDraft(''); setMentions([]);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
     } finally { setSending(false); }
   };
-  const newChat = () => { const next = { ...readChats() }; delete next[note.id]; remember(next); setDraft(''); inputRef.current?.focus(); };
+  const newChat = () => { const next = { ...readPageChats() }; delete next[note.id]; remember(next); setDraft(''); inputRef.current?.focus(); };
   const openInChat = () => {
     if (!chat) return;
     void useFolioStore.getState().close();
@@ -146,32 +176,38 @@ export function FolioAskPanel({ note, onClose }: { note: FolioNote; onClose: () 
           <Icon name="sparkling" className="size-4 shrink-0 text-muted-foreground" />{t(key)}
         </button>)}
       </div>}
-    {error && <p role="alert" className="mx-3 mb-2 rounded-md bg-[color-mix(in_srgb,var(--status-error)_12%,transparent)] px-2 py-1.5 text-xs">{error}</p>}
+    {error && <p role="alert" className="mx-3 mb-2 break-words rounded-md bg-[color-mix(in_srgb,var(--status-error)_12%,transparent)] px-2 py-1.5 text-xs">{error}</p>}
     <form className="relative m-3 mt-0 rounded-xl border border-border bg-background p-2 focus-within:border-foreground/30" onSubmit={(e) => { e.preventDefault(); void send(draft); }}>
-      {picker && <div role="listbox" aria-label={t('folio.linkPage')} className="absolute inset-x-0 bottom-full z-20 mb-1 max-h-72 overflow-y-auto rounded-xl border border-border bg-background p-1.5 shadow-2xl" onMouseDown={(e) => e.preventDefault()}>
-        <div className="px-2 pb-1 pt-0.5 text-xs text-muted-foreground">{t('folio.linkPage')}</div>
-        {!matches.length && <div className="px-2 py-1.5 text-sm text-muted-foreground">{t('folio.noMatches')}</div>}
-        {matches.map((target, i) => <button key={target.id} type="button" role="option" aria-selected={i === pickIndex}
-          className={cn('flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-interactive-hover', i === pickIndex && 'bg-interactive-selection')}
-          onMouseMove={() => setPickIndex(i)} onClick={() => pick(target)}>
-          <FolioIcon value={target.icon} /><span className="min-w-0 flex-1 truncate">{target.title || t('folio.untitled')}</span>
-          {parentTitle(target.parentID) && <span className="max-w-[40%] truncate text-xs text-muted-foreground">{parentTitle(target.parentID)}</span>}
-        </button>)}
+      {picker && <div role="listbox" aria-label={t('folio.askMention')} className="absolute inset-x-0 bottom-full z-20 mb-1 max-h-72 overflow-y-auto rounded-xl border border-border bg-background p-1.5 shadow-2xl" onMouseDown={(e) => e.preventDefault()}>
+        {!matches.length && <div className="px-2 py-1.5 text-sm text-muted-foreground">{t('folio.askNoMatches')}</div>}
+        {groups.map((group) => <div key={group.kind} className="pb-1">
+          <div className="px-2 pb-1 pt-0.5 text-xs text-muted-foreground">{t(groupKeys[group.kind])}</div>
+          {group.items.map((target) => {
+            const index = matches.indexOf(target);
+            return <button key={`${target.kind}:${target.id}`} type="button" role="option" aria-selected={index === pickIndex}
+              className={cn('flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-interactive-hover', index === pickIndex && 'bg-interactive-selection')}
+              onMouseMove={() => setPickIndex(index)} onClick={() => pick(target)}>
+              {target.icon ? <FolioIcon value={target.icon} /> : <Icon name={mentionIcon[target.kind]} className="size-4 shrink-0 text-muted-foreground" />}
+              <span className="min-w-0 flex-1 truncate">{target.label || t('folio.untitled')}</span>
+              {target.detail && <span className="max-w-[40%] truncate text-xs text-muted-foreground">{target.detail}</span>}
+            </button>;
+          })}
+        </div>)}
       </div>}
       <textarea ref={inputRef} rows={2} value={draft} onChange={(e) => { setDraft(e.target.value); track(e.target.value, e.target.selectionStart ?? e.target.value.length); }} placeholder={t('folio.askPlaceholder')} aria-label={t('folio.askPlaceholder')}
         className="block max-h-48 w-full resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground"
         onBlur={() => setPicker(undefined)}
         onKeyDown={(e) => {
-          if (picker && matches.length) {
-            if (e.key === 'ArrowDown') { e.preventDefault(); setPickIndex((pickIndex + 1) % matches.length); return; }
-            if (e.key === 'ArrowUp') { e.preventDefault(); setPickIndex((pickIndex - 1 + matches.length) % matches.length); return; }
-            if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pick(matches[pickIndex]); return; }
-          }
-          if (picker && e.key === 'Escape') { e.preventDefault(); setPicker(undefined); return; }
-          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(draft); }
+          if (handleDropdownNavigationKey(e, (key) => setPickIndex(nextAskMentionIndex(pickIndex, matches.length, key === 'ArrowDown' ? 1 : -1)))) return;
+          const action = askComposerAction(e.key, Boolean(picker), matches.length, e.shiftKey, e.nativeEvent.isComposing);
+          if (action === 'move-next' || action === 'move-previous') { e.preventDefault(); setPickIndex(nextAskMentionIndex(pickIndex, matches.length, action === 'move-next' ? 1 : -1)); return; }
+          if (action === 'choose') { e.preventDefault(); pick(matches[pickIndex]); return; }
+          if (action === 'close') { e.preventDefault(); setPicker(undefined); return; }
+          if (action === 'send') { e.preventDefault(); void send(draft); }
         }} />
-      <div className="flex items-center justify-end">
-        <button type="submit" disabled={!draft.trim() || sending} className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40" aria-label={t('folio.send')}><Icon name="arrow-up" className="size-4" /></button>
+      <div className="flex items-center justify-between gap-1">
+        <FolioAskModelPicker />
+        <button type="submit" disabled={!draft.trim() || sending} className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40" aria-label={t('folio.send')}><Icon name="arrow-up" className="size-4" /></button>
       </div>
     </form>
   </aside>;
@@ -218,7 +254,7 @@ function Conversation({ chat }: { chat: PageChat }) {
           </div>;
           return null;
         })}
-        {message.error && <p className="text-xs text-[var(--status-error)]">{t('folio.askFailed')}</p>}
+        {message.error && <p className="break-words text-xs text-[var(--status-error)]">{t('folio.askFailedReason', { reason: message.error.message || t('folio.askFailed') })}</p>}
       </div>;
     })}
     {permissions.map((request) => <PermissionCard key={request.id} request={request} chat={chat} />)}

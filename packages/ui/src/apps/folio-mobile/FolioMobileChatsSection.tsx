@@ -3,6 +3,7 @@ import { DndContext, MouseSensor, TouchSensor, closestCenter, useSensor, useSens
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Icon } from '@/components/icon/Icon';
+import { SessionActivityIndicator } from '@/components/session/SessionActivityIndicator';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { isChatDirectoryPath, CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
@@ -19,6 +20,7 @@ import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/pro
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import type { ProjectEntry } from '@/lib/api/types';
 import { getSessionDirectory } from '../mobileSessionFields';
+import { useIsWorkingOnMac, useWorkingSessionsWatch } from './workingSessions';
 
 const PER_FOLDER = 5;
 const row = 'flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-[16px] active:bg-interactive-selection';
@@ -38,6 +40,22 @@ function FolderIcon({ folder }: { folder: Folder }) {
   </span>;
 }
 
+/**
+ * One conversation in a folder, carrying the Mac's working dot when the Mac is
+ * working on it. The dot is the same component, colour, size and motion the Mac
+ * sidebar and the phone's own All chats list use, in the same place: right of the
+ * title, before the date.
+ */
+function ChatRow({ session, onOpen }: { session: Session; onOpen: (session: Session) => void }) {
+  const { t } = useI18n();
+  const working = useIsWorkingOnMac(session.id);
+  return <button type="button" className={cn(row, 'py-1.5 text-[15px]')} onClick={() => onOpen(session)}>
+    <span className="min-w-0 flex-1 truncate">{session.title || t('folio.newChat')}</span>
+    {working ? <SessionActivityIndicator state="running" label={t('sessions.sidebar.session.status.active')} /> : null}
+    <span className="shrink-0 text-xs text-muted-foreground">{new Date(session.time.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+  </button>;
+}
+
 function FolderBlock({ folder, sortable, expanded, loading, onToggle, onOpen, onNew, onMore }: { folder: Folder; sortable: boolean; expanded: boolean; loading: boolean; onToggle: () => void; onOpen: (session: Session) => void; onNew: () => void; onMore: () => void }) {
   const { t } = useI18n();
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: folder.id, disabled: !sortable });
@@ -53,10 +71,7 @@ function FolderBlock({ folder, sortable, expanded, loading, onToggle, onOpen, on
       </button>
       {/* Until the Mac has answered, an empty folder is "loading", never "no chats". */}
       {folder.sessions.length === 0 && <p className="px-2 py-1.5 text-sm text-muted-foreground">{loading ? t('folio.chatsLoading') : t('folio.noChatsYet')}</p>}
-      {folder.sessions.slice(0, PER_FOLDER).map((session) => <button key={session.id} type="button" className={cn(row, 'py-1.5 text-[15px]')} onClick={() => onOpen(session)}>
-        <span className="min-w-0 flex-1 truncate">{session.title || t('folio.newChat')}</span>
-        <span className="shrink-0 text-xs text-muted-foreground">{new Date(session.time.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
-      </button>)}
+      {folder.sessions.slice(0, PER_FOLDER).map((session) => <ChatRow key={session.id} session={session} onOpen={onOpen} />)}
       {folder.sessions.length > PER_FOLDER && <button type="button" className={cn(row, 'py-1.5 text-sm text-muted-foreground')} onClick={onMore}>{t('folio.showAllChats', { count: folder.sessions.length })}</button>}
     </div>}
   </div>;
@@ -74,6 +89,10 @@ export function MobileChatsSection({ onOpenChats, onOpenSessions }: { onOpenChat
   const reorderProjects = useProjectsStore((s) => s.reorderProjects);
   const sortOrder = useSessionDisplayStore((s) => s.projectSortOrder);
   const sessions = useGlobalSessionsStore((s) => s.activeSessions);
+  // The working dot is only as good as the evidence behind it, and the list is the
+  // surface that spends that evidence. Nothing else on the phone needs the Mac's
+  // live activity re-checked, so it runs no further than these rows.
+  useWorkingSessionsWatch();
   const expandedMap = useMobileSessionTreeStore((s) => s.projectExpanded);
   const setExpanded = useMobileSessionTreeStore((s) => s.setProjectExpanded);
   const setCurrentSession = useSessionUIStore((s) => s.setCurrentSession);
