@@ -111,6 +111,7 @@ export const OPENCHAMBER_FOLIO_ACTION_DEFINITIONS = Object.freeze([
   { action: 'folio.add_row', title: 'Add a database row', description: 'Add a row to the database page; values maps column names to text' },
   { action: 'folio.update_row', title: 'Edit a database row', description: 'Change cells of rowId in the database page; values maps column names to text' },
   { action: 'folio.delete_row', title: 'Delete a database row', description: 'Delete rowId from the database page' },
+  { action: 'folio.set_view', title: 'Set the database view', description: "Set a database's view layout (table, board, gallery/card, list or chart). Pass page and kind; optional name for a new view or viewId to target a saved one." },
 ]);
 
 export const OPENCHAMBER_FOLIO_ACTIONS = Object.freeze(

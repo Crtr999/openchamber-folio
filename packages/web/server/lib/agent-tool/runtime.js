@@ -140,6 +140,9 @@ const FOLIO_PARAMETER_PROPERTIES = {
   afterBlockId: { type: 'string', description: 'Block id from folio.read' },
   rowId: { type: 'string', description: 'Row id from folio.read' },
   values: { type: 'object', additionalProperties: { type: 'string' }, description: 'Column name to cell text' },
+  kind: { type: 'string', enum: ['table', 'board', 'gallery', 'list', 'chart'], description: 'Database view layout; gallery is the card view' },
+  viewId: { type: 'string', description: 'Saved view id from folio.read' },
+  name: { type: 'string', description: 'View name for folio.set_view; defaults to "Card view" for gallery and "View" otherwise' },
 };
 
 const FOLIO_TOOL_DESCRIPTION = "Read and edit the user's Folio notebook: their notes, class pages, and databases, in the OpenChamber desktop app. Use one action per call. When the user refers to a note or page (by name or as @Title), read it with folio.read instead of searching files or the disk: the notebook is not in the project folder, and its database file must never be opened or modified directly. Edits go through the running app and appear on the user's screen right away; the app does not need to be closed. Read a page before editing it, and use the block and row ids that read returns. Pages the user excluded from AI cannot be read or changed.";

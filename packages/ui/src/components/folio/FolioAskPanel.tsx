@@ -145,17 +145,21 @@ export function FolioAskPanel({ note, onClose }: { note: FolioNote; onClose: () 
       // question refers to follow it.
       let context = `The user is asking a question about their Folio notebook page "${page.title || 'Untitled'}" (page id ${page.id}), which is the subject of this conversation. Answer from the page below.
 
-You have access to the "folio" tool that edits notes and databases. Use it when the user asks you to change their notes or databases:
-- folio.read a page to see its content
+You have access to the "folio" tool that finds, reads and edits notes and databases. Use it when the user asks you to change their notes or databases:
+- folio.search to find pages by title or content
+- folio.list to see what pages exist, optionally inside a parent page
+- folio.read a page to see its content and, for a database, its columns, rows and views
 - folio.update_block to change the text or properties of a specific block
-- folio.append to add a new block at the end of a page  
+- folio.append to add a new block at the end of a page
 - folio.insert to insert a new block at a specific position
 - folio.rename a page
 - folio.create a new page
-- folio.update_row and folio.delete_row to change database rows
+- folio.add_row, folio.update_row and folio.delete_row to change database rows
+- folio.set_view to change a database's layout (table, board, gallery/card, list, chart)
+- folio.delete_block to remove a block
 The tool edits appear on the user's screen immediately. When the user says to fix or change something, use the tool rather than saying you cannot.
 
-There is no project, no filesystem, no code to search here. The notebook is not stored in this conversation's folder.`;
+There is no project or filesystem here — but the notebook itself is fully explorable with folio.search and folio.list.`;
       if (page.excludedFromAI) context += ' This page is excluded from AI, so its content is not shared.';
       else if (current.sentModified !== page.modified) {
         const response = await useFolioStore.getState().api?.request({ command: 'markdown', noteID: page.id, flag: true });

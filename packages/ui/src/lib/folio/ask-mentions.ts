@@ -42,23 +42,27 @@ export interface AskMentionChatSource {
 /**
  * The conversations the Chats group offers, from the app's session list.
  *
- * A subagent run is a child of the conversation that spawned it, and OpenCode
- * gives it a generated title such as "Fixing app UI (@explorer subagent)". The
- * parent link is the honest test for "someone started this conversation";
- * matching on the title would quietly promote a machine-made run to something
- * the user can @, and would miss a subagent whose title reads like a chat.
+ * A subagent run is a machine-made child of the conversation that spawned it,
+ * and OpenCode marks it in the title with a trailing "(@agent subagent)" — for
+ * example "Fixing app UI (@explorer subagent)". That marker is the honest test:
+ * a nested conversation the user started has a parent link too but no marker,
+ * and it is still something they can @. Matching on the parent link alone would
+ * drop real nested conversations; matching on the word "subagent" would drop
+ * "A conversation about subagents", which is the user's own page.
  *
  * A session the server reports without a title is still a conversation. It is
  * offered under the untitled label rather than dropped, because the sidebar
  * and the command palette both list it and this picker used to be the one
  * surface where it vanished.
  */
+const subagentMarker = /\(@[^)]* subagent\)\s*$/;
+
 export function askMentionChats(
   sessions: readonly AskMentionChatSource[],
   untitledLabel: string,
 ): { id: string; title: string }[] {
   return sessions
-    .filter((session) => !session.parentID)
+    .filter((session) => !subagentMarker.test(session.title))
     .map((session) => ({ id: session.id, title: session.title.trim() || untitledLabel }));
 }
 

@@ -81,6 +81,15 @@ export function createFolioAgent({ engine, onChanged = () => {} }) {
     return index;
   };
 
+  /** The layouts a database view can switch to; gallery is the card view. */
+  const VIEW_KINDS = ['table', 'board', 'gallery', 'list', 'chart'];
+  /** The layouts the legacy single-view field can still hold. */
+  const LEGACY_VIEW_KINDS = ['table', 'board', 'chart'];
+  /** Saved views, or the one the legacy layout field describes when none were saved. */
+  const viewsOf = (grid) => (grid.views?.length ? grid.views : [{ id: 'default', name: '', kind: grid.view }]);
+  /** The view the database shows: the active saved one, else the first saved one, else the legacy layout. */
+  const shownView = (grid) => viewsOf(grid).find((view) => view.id === grid.activeView) ?? viewsOf(grid)[0];
+
   const actions = {
     'folio.list': async ({ parent }) => {
       const notes = (await state()).notes;
@@ -110,7 +119,7 @@ export function createFolioAgent({ engine, onChanged = () => {} }) {
         ...summary(note),
         markdown: noteToMarkdown(note),
         blocks: note.blocks.map((block) => ({ id: block.id, kind: block.kind, text: block.text.slice(0, 500), ...(block.kind === 'task' ? { checked: block.checked } : {}), ...(block.kind === 'page' && block.asset ? { page: block.asset } : {}), ...(block.kind === 'database' && block.asset ? { database: block.asset } : {}) })),
-        ...(note.table ? { columns: note.table.columns.map((c) => ({ name: c.name, kind: c.kind, ...(c.options.length ? { options: c.options } : {}) })), rows: note.table.rows.map((row) => ({ id: row.id, ...Object.fromEntries(note.table.columns.map((c) => [c.name, row.values[c.id] ?? ''])) })) } : {}),
+        ...(note.table ? { columns: note.table.columns.map((c) => ({ name: c.name, kind: c.kind, ...(c.options.length ? { options: c.options } : {}) })), rows: note.table.rows.map((row) => ({ id: row.id, ...Object.fromEntries(note.table.columns.map((c) => [c.name, row.values[c.id] ?? ''])) })), view: shownView(note.table).kind, views: viewsOf(note.table).map((view) => ({ id: view.id, name: view.name, kind: view.kind })) } : {}),
       };
     },
     'folio.create': async ({ title, markdown, parent }) => {
@@ -193,6 +202,48 @@ export function createFolioAgent({ engine, onChanged = () => {} }) {
         return { ...current, table: { ...grid, rows: grid.rows.filter((_, index) => index !== at) } };
       });
       return { deleted: rowId };
+    },
+    'folio.set_view': async ({ page, kind, name, viewId }) => {
+      const wanted = String(kind ?? '').trim().toLowerCase();
+      // "card view" is how the gallery layout is named in a sentence.
+      const layout = wanted === 'card' || wanted === 'cards' ? 'gallery' : wanted;
+      if (!VIEW_KINDS.includes(layout)) throw usage(`kind must be one of: ${VIEW_KINDS.join(', ')}; gallery is the card view.`);
+      const label = String(name ?? '').trim();
+      const note = await save(resolve((await state()).notes, page).id, (current) => {
+        const grid = table(current);
+        const saved = grid.views ?? [];
+        if (!saved.length) {
+          // A database without saved views gets one, made active and mirrored
+          // into the legacy layout field while that field can still hold it.
+          const created = { id: randomUUID().toUpperCase(), name: label || (layout === 'gallery' ? 'Card view' : 'View'), kind: layout };
+          const createdTable = { ...grid, views: [created], activeView: created.id };
+          if (LEGACY_VIEW_KINDS.includes(layout)) createdTable.view = layout;
+          return { ...current, table: createdTable };
+        }
+        // The view named by viewId, else the active one, else the first.
+        let at = viewId
+          ? saved.findIndex((view) => view.id.toLowerCase() === String(viewId).trim().toLowerCase())
+          : saved.findIndex((view) => view.id === grid.activeView);
+        if (viewId && at < 0) throw usage(`View ${viewId} was not found. Views: ${saved.map((view) => `${view.id} (${view.name || view.kind})`).join(', ')}`);
+        if (at < 0) at = 0;
+        return {
+          ...current,
+          table: {
+            ...grid,
+            views: saved.map((view, index) => {
+              if (index !== at) return view;
+              const changed = { ...view, kind: layout };
+              if (label) changed.name = label;
+              return changed;
+            }),
+            // Only point at the edited view when nothing resolves to one already.
+            activeView: saved.some((view) => view.id === grid.activeView) ? grid.activeView : saved[at].id,
+          },
+        };
+      });
+      const grid = note.table;
+      const active = shownView(grid);
+      return { viewId: active.id, name: active.name, kind: active.kind };
     },
   };
 

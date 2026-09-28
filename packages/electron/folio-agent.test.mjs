@@ -25,6 +25,7 @@ function fakeEngine(notes) {
 
 const welcome = page('AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA', 'Welcome to Folio');
 const books = page('BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB', 'Reading list', { blocks: [], table: { columns: [{ id: 'c1', name: 'Title', kind: 'text', options: [] }, { id: 'c2', name: 'Status', kind: 'select', options: ['Reading', 'Done'] }], rows: [{ id: 'r1', values: { c1: 'Dune', c2: 'Done' } }], view: 'table' } });
+const subjects = page('EEEEEEEE-EEEE-4EEE-8EEE-EEEEEEEEEEEE', 'Subjects', { blocks: [], table: { columns: [{ id: 'c1', name: 'Title', kind: 'text', options: [] }], rows: [{ id: 'r1', values: { c1: 'Torts' } }], view: 'table', views: [{ id: 'V1', name: 'All', kind: 'table' }, { id: 'V2', name: 'By year', kind: 'list' }], activeView: 'V1' } });
 const hidden = page('DDDDDDDD-DDDD-4DDD-8DDD-DDDDDDDDDDDD', 'Private journal', { excludedFromAI: true });
 
 test('a page named like an @mention reads as markdown with block ids', async () => {
@@ -43,6 +44,50 @@ test('database rows are added by column name through the live engine and reporte
   assert.deepEqual(engine.notes[0].table.rows.at(-1), { id: rowId, values: { c1: 'Hamlet', c2: 'Reading' } });
   assert.deepEqual(changed, [books.id]);
   await assert.rejects(agent.execute('folio.add_row', { page: 'Reading list', values: { Author: 'x' } }), /No column "Author". Columns: Title, Status/);
+});
+
+test('set_view changes the layout of a saved view and creates one on a database without saved views', async () => {
+  const engine = fakeEngine([structuredClone(subjects), structuredClone(welcome)]);
+  const agent = createFolioAgent({ engine });
+  // "card view" is the gallery layout; the active view changes kind in place.
+  const result = await agent.execute('folio.set_view', { page: 'Subjects', kind: 'card' });
+  assert.deepEqual(result, { viewId: 'V1', name: 'All', kind: 'gallery' });
+  assert.deepEqual(engine.notes[0].table.views.map((v) => `${v.id}:${v.name}:${v.kind}`), ['V1:All:gallery', 'V2:By year:list']);
+  assert.equal(engine.notes[0].table.activeView, 'V1');
+  // A view named by id, renamed when a name comes with the kind.
+  await agent.execute('folio.set_view', { page: 'Subjects', kind: 'chart', viewId: 'V2', name: 'Charts' });
+  assert.deepEqual(engine.notes[0].table.views[1], { id: 'V2', name: 'Charts', kind: 'chart' });
+  await assert.rejects(agent.execute('folio.set_view', { page: 'Subjects', kind: 'grid' }), /kind must be one of/);
+  await assert.rejects(agent.execute('folio.set_view', { page: 'Subjects', kind: 'board', viewId: 'V9' }), /View V9 was not found/);
+  await assert.rejects(agent.execute('folio.set_view', { page: 'Welcome to Folio', kind: 'board' }), /is not a database/);
+
+  // Without saved views one is created, made active, and a legacy layout kind
+  // is mirrored into the field older code reads.
+  const plain = fakeEngine([structuredClone(books)]);
+  const plainAgent = createFolioAgent({ engine: plain });
+  const created = await plainAgent.execute('folio.set_view', { page: 'Reading list', kind: 'gallery' });
+  assert.deepEqual(created, { viewId: created.viewId, name: 'Card view', kind: 'gallery' });
+  assert.deepEqual(plain.notes[0].table.views, [{ id: created.viewId, name: 'Card view', kind: 'gallery' }]);
+  assert.equal(plain.notes[0].table.activeView, created.viewId);
+  assert.equal(plain.notes[0].table.view, 'table');
+  const legacy = fakeEngine([structuredClone(books)]);
+  const legacyAgent = createFolioAgent({ engine: legacy });
+  const board = await legacyAgent.execute('folio.set_view', { page: 'Reading list', kind: 'board' });
+  assert.equal(board.name, 'View');
+  assert.deepEqual(legacy.notes[0].table.views, [{ id: board.viewId, name: 'View', kind: 'board' }]);
+  assert.equal(legacy.notes[0].table.view, 'board');
+});
+
+test('reading a database reports the view it shows and the views it saved', async () => {
+  const agent = createFolioAgent({ engine: fakeEngine([structuredClone(subjects)]) });
+  const result = await agent.execute('folio.read', { page: 'Subjects' });
+  assert.equal(result.view, 'table');
+  assert.deepEqual(result.views, [{ id: 'V1', name: 'All', kind: 'table' }, { id: 'V2', name: 'By year', kind: 'list' }]);
+  // A database without saved views reports its legacy layout as the one view.
+  const plain = createFolioAgent({ engine: fakeEngine([structuredClone(books)]) });
+  const legacy = await plain.execute('folio.read', { page: 'Reading list' });
+  assert.equal(legacy.view, 'table');
+  assert.deepEqual(legacy.views, [{ id: 'default', name: '', kind: 'table' }]);
 });
 
 test('appending markdown adds typed blocks; editing a line keeps its id', async () => {
