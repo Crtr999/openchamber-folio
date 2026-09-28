@@ -45,13 +45,15 @@ function hideChat(id: string) { try { localStorage.setItem(HIDDEN, JSON.stringif
 function promised<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
 }
-const database = new Promise<IDBDatabase>((resolve, reject) => {
+let connection: Promise<IDBDatabase> | undefined;
+/** Opened the first time a conversation is read or written, so importing the store never opens a database of its own. */
+const database = () => connection ??= new Promise<IDBDatabase>((resolve, reject) => {
   const request = indexedDB.open('folio-chats', 1);
   request.onupgradeneeded = () => { request.result.createObjectStore('chats', { keyPath: 'id' }); request.result.createObjectStore('meta'); };
   request.onsuccess = () => resolve(request.result);
   request.onerror = () => reject(request.error);
 });
-const objects = async (name: 'chats' | 'meta', mode: IDBTransactionMode) => (await database).transaction(name, mode).objectStore(name);
+const objects = async (name: 'chats' | 'meta', mode: IDBTransactionMode) => (await database()).transaction(name, mode).objectStore(name);
 
 interface ChatState {
   loaded: boolean;

@@ -22,6 +22,7 @@ import { markdownToNote, noteToMarkdown } from '@/lib/folio/local-engine';
 import { sendChat } from '@/lib/folio/mobile-chat';
 import { makeBlock } from '@/lib/folio/schema';
 import { readKey, useMobileChatStore } from './chatStore';
+import { returnToChat, useChatReturnStore, useNoteFromChat } from './chatReturn';
 import { askForChatsLink, hasLocalChanges, macAsset, macBella, useSyncStore } from './sync';
 import { createPhoneHost, nativeEditor, nativeNotifications, nativePost, useNativeSurfaceBackground } from './host';
 import { noteSchema } from '@/lib/folio/schema';
@@ -121,13 +122,11 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
   }, [engine]);
 
   // A page opened from anywhere else (a new page, an @ link, a meeting note, a chat citation) is shown.
-  // The first selection after launch is only the restored page, so the app still opens on Home.
-  const selectedID = useFolioStore((s) => s.status?.selectedID);
-  const lastSelection = React.useRef<string | undefined>(undefined);
-  React.useEffect(() => {
-    if (lastSelection.current !== undefined && selectedID && lastSelection.current !== selectedID) setView('notes');
-    lastSelection.current = selectedID;
-  }, [selectedID]);
+  // The first selection after launch is only the restored page, so the app still opens on Home. The same
+  // step remembers the conversation a page came out of, so the page can hand the user back to it.
+  const showPage = React.useCallback(() => setView('notes'), []);
+  useNoteFromChat(view, showPage);
+  const noteChatID = useChatReturnStore((s) => s.chatID);
   const openNote = (id: string) => { void useFolioStore.getState().run({ command: 'select', noteID: id }); setView('notes'); };
 
   // The Mac sent a one-time chats link over the paired sync: connect the chats in the background.
@@ -168,6 +167,10 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
   }), [connectLink, sessionsRequest]);
   const goHome = () => setView('home');
   const openChat = (id: string | undefined, origin: ChatOrigin) => { useMobileChatStore.getState().open(id); setChatOrigin(origin); setView('chat'); };
+  // Out of a page, back is where the page came from: the conversation it was opened from, or Home.
+  const leavePage = () => setView(returnToChat() ? 'chat' : 'home');
+  // The conversation the page in front of the user came out of, named on the page's own way back to it.
+  const noteChat = useMobileChatStore((s) => (noteChatID ? s.chats.find((chat) => chat.id === noteChatID) : undefined));
   const newPage = () => { void useFolioStore.getState().run({ command: 'create', kind: 'note' }); };
   // The OpenRouter balance shows in the assistant; refresh it on launch and every ten minutes.
   React.useEffect(() => { void useBalanceStore.getState().refresh(); const timer = setInterval(() => void useBalanceStore.getState().refresh(), 600_000); return () => clearInterval(timer); }, []);
@@ -202,13 +205,14 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
         }
       })();
     },
-    onMenu: () => setView('home'),
+    onMenu: leavePage,
+    chatReturn: noteChat ? { title: noteChat.title, onBack: leavePage } : undefined,
     onAddToChat: (_markdown: string, noteID: string) => {
       useMobileChatStore.getState().open(undefined);
       useMobileChatStore.setState({ pendingNoteID: noteID });
       setChatOrigin('home'); setView('chat');
     },
-  }), [engine, host, t]);
+  }), [engine, host, t, noteChat]);
 
   // Ask AI is a new chat on the Mac (your models and tools, no key on the phone) whenever the Mac is
   // reachable; the phone's own assistant is the fallback for when it is not.
@@ -251,7 +255,9 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
         nativeFor.current = undefined;
         void useFolioStore.getState().flush().catch(() => undefined);
         const next = afterClose.current; afterClose.current = 'home';
-        if (viewNow.current === 'notes') setView(next);
+        // A page the user came out of a conversation goes back to that conversation, unless it has since
+        // been removed from this phone, which leaves Home as the only screen left to go to.
+        if (viewNow.current === 'notes') setView(next === 'chat' && !returnToChat() ? 'home' : next);
       }),
       nativeEditor.addListener('openNote', ({ noteID }) => {
         const store = useFolioStore.getState();
@@ -289,6 +295,11 @@ export function FolioMobileApp({ apis }: { apis: RuntimeAPIs }) {
   }, [closeNative]);
   // The classic editor is a one-time choice for that visit to the page.
   React.useEffect(() => { if (view !== 'notes') setClassicFor(undefined); }, [view]);
+  // The native editor's back chevron and its edge swipe save the page and close it, and the web app picks
+  // what comes up: the conversation the page came out of, or Home when it came from nowhere. It reads the
+  // remembered conversation from the store rather than from the render, because the effect that remembers
+  // it runs before this one in the same commit.
+  React.useEffect(() => { if (view === 'notes') afterClose.current = useChatReturnStore.getState().chatID ? 'chat' : 'home'; }, [view, noteChatID]);
   // Leaving the page by any other route (a notification, a pairing link) closes the native editor too,
   // and so does a page that turns out to belong in the classic editor: the native one covers the web view
   // it mounts in, so without this the tap that selected a database would leave the user where they were.

@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { I18nProvider } from '@/lib/i18n';
 import { useFolioStore } from '@/lib/folio/store';
 import { makeBlock, statusSchema, type FolioNote, type FolioRequest } from '@/lib/folio/schema';
-import { FolioWorkspace } from './FolioWorkspace';
+import { FolioWorkspace, type FolioMobileHooks } from './FolioWorkspace';
 
 const page: FolioNote = { id: 'F61645A9-DC34-499F-B2FA-CA73D7254098', title: 'Research', icon: '', blocks: [makeBlock()], tags: [], favorite: false, excludedFromAI: false, isMeeting: false, trashed: false, created: 1, modified: 1 };
 const statusFor = (note: FolioNote) => statusSchema.parse({
@@ -21,6 +21,8 @@ describe('FolioWorkspace', () => {
   let host: HTMLDivElement;
   let root: Root;
   let requests: FolioRequest[];
+  let viaBar: number;
+  let viaChevron: number;
 
   beforeEach(() => {
     windowInstance = new Window();
@@ -36,6 +38,8 @@ describe('FolioWorkspace', () => {
     document.body.append(host);
     root = createRoot(host);
     requests = [];
+    viaBar = 0;
+    viaChevron = 0;
   });
 
   afterEach(async () => {
@@ -44,16 +48,28 @@ describe('FolioWorkspace', () => {
     useFolioStore.setState({ open: false, status: undefined, api: undefined });
   });
 
-  const draw = async (note: FolioNote) => {
+  const seed = (note: FolioNote) => {
     useFolioStore.setState({
       open: true, home: false, drafts: {}, status: statusFor(note),
       api: { request: async (input: FolioRequest) => { requests.push(input); return { id: 'test', ok: true }; } },
     });
+  };
+  const draw = async (note: FolioNote) => {
+    seed(note);
     await act(async () => { root.render(<I18nProvider><FolioWorkspace /></I18nProvider>); });
+  };
+  const drawOnPhone = async (chatReturn?: { title: string; onBack: () => void }) => {
+    seed(page);
+    const mobile: FolioMobileHooks = {
+      onMenu: () => { viaChevron += 1; }, chatReturn,
+      onAddToChat: () => {}, onAttach: () => {}, onImport: () => {}, onExport: () => {}, onExportLibrary: () => {}, onSummarize: () => {},
+    };
+    await act(async () => { root.render(<I18nProvider><FolioWorkspace mobile={mobile} /></I18nProvider>); });
   };
   const fire = async (element: Element | null | undefined) => {
     await act(async () => { element?.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); });
   };
+  const buttonStartingWith = (label: string) => [...host.querySelectorAll('button')].find((button) => button.textContent?.startsWith(label));
   // The trash item lives in the ⋯ menu, which is only drawn while the menu is open.
   const openMenu = async () => { await fire(host.querySelector('button[aria-label="More"]')); };
   const menuButton = (label: string) => [...host.querySelectorAll('button')].find((button) => button.textContent === label);
@@ -106,5 +122,28 @@ describe('FolioWorkspace', () => {
     await chooseTrash('Restore');
     expect(requests).toEqual([{ noteID: page.id, command: 'trash', flag: true }]);
     expect(dialog()).toBeNull();
+  });
+
+  // The phone's way back to the conversation a page came out of. It appears only when there is such a
+  // conversation, because on a page opened from Home it would name a place the user never left.
+  test('a page opened from a conversation offers it by name, and takes the user back to it', async () => {
+    await drawOnPhone({ title: 'Kitchen plans', onBack: () => { viaBar += 1; } });
+    expect(buttonStartingWith('Back to')?.textContent).toBe('Back to Kitchen plans');
+    await fire(buttonStartingWith('Back to'));
+    expect(viaBar).toBe(1);
+  });
+
+  test('a page with no conversation behind it still leaves through the back control, and names none', async () => {
+    await drawOnPhone();
+    expect(buttonStartingWith('Back to')).toBeUndefined();
+    await fire(host.querySelector('button[aria-label="Back"]'));
+    expect(viaChevron).toBe(1);
+  });
+
+  test('a conversation with no title yet is still a way back, without a name to name', async () => {
+    await drawOnPhone({ title: '', onBack: () => { viaBar += 1; } });
+    expect(buttonStartingWith('Back to')?.textContent).toBe('Back to chat');
+    await fire(buttonStartingWith('Back to'));
+    expect(viaBar).toBe(1);
   });
 });

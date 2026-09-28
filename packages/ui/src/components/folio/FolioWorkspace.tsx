@@ -74,6 +74,8 @@ const blockAliases = new Map<BlockKind, string[]>([
 /** Phone layout hooks: the standalone iPhone app has a menu instead of "Back to chat", and its own chat. */
 export interface FolioMobileHooks {
   onMenu: () => void;
+  /** The conversation this page was opened from, when there is one, and the way back to it. */
+  chatReturn?: { title: string; onBack: () => void };
   onAddToChat: (markdown: string, noteID: string) => void;
   /** iOS opens file pickers and share sheets only inside the tap, so these run synchronously from the click. */
   onAttach: (noteID: string) => void;
@@ -556,6 +558,13 @@ export function FolioWorkspace({ mobile }: { mobile?: FolioMobileHooks } = {}) {
 
   return <div className="flex h-full bg-background text-foreground">
   <div className="folio-workspace flex h-full min-w-0 flex-1 flex-col bg-background text-foreground">
+    {/* Only on the phone, and only for a page that came out of a conversation: it says where the page came
+        from and takes the user back there, so the conversation is never one dead end away. */}
+    {mobile?.chatReturn && <button type="button" onClick={mobile.chatReturn.onBack}
+      className="flex w-full shrink-0 items-center gap-2 border-b border-border/60 bg-secondary px-3 py-1.5 text-left text-[13px] text-muted-foreground active:bg-interactive-selection">
+      <Icon name="arrow-left-s" className="size-4 shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{mobile.chatReturn.title ? t('folio.backToChatNamed', { name: mobile.chatReturn.title }) : t('folio.backToChat')}</span>
+    </button>}
     {reading && note && <FolioReader note={note} startAt={readStart} onClose={() => { setReading(false); setReadStart(undefined); useHandoffStore.getState().report({ noteID: note.id, reading: false }); }} onListen={(text) => call({ command: 'read', text })}
       onPlace={(blockID) => useHandoffStore.getState().report({ noteID: note.id, blockID, reading: true })} />}
     {/* One slim bar replaces the old stacked toolbars; everything else lives in the ⋯ menu. */}
