@@ -6,7 +6,7 @@ import { resolveSyntaxTokens } from './syntax';
 const color = z.string().trim().min(1);
 const optionalColors = (keys: string[]) => z.record(z.string(), color).transform((values) => Object.fromEntries(Object.entries(values).filter(([key]) => keys.includes(key))));
 const primary = z.object({ base: color, foreground: color.optional(), hover: color.optional(), active: color.optional(), muted: color.optional() });
-const surface = z.object({ background: color, foreground: color, muted: color, mutedForeground: color, elevated: color, elevatedForeground: color.optional(), overlay: color.optional(), subtle: color.optional(), backdrop: color.optional() });
+const surface = z.object({ background: color, foreground: color, muted: color, mutedForeground: color, elevated: color, elevatedForeground: color.optional(), overlay: color.optional(), subtle: color.optional() });
 const interactive = z.object({ border: color, selection: color.optional(), selectionForeground: color.optional(), borderHover: color.optional(), borderFocus: color.optional(), focus: color.optional(), focusRing: color.optional(), cursor: color.optional(), hover: color.optional(), active: color.optional() });
 const status = z.object({
   error: color, errorForeground: color.optional(), errorBackground: color.optional(), errorBorder: color.optional(),

@@ -32,6 +32,36 @@ export interface AskMentionGroup {
 /** One result list is capped so that a large group cannot fill the picker. */
 export const ASK_MENTION_LIMIT = 8;
 
+/** A session as the picker needs to see it, before it becomes a mention. */
+export interface AskMentionChatSource {
+  id: string;
+  title: string;
+  parentID?: string;
+}
+
+/**
+ * The conversations the Chats group offers, from the app's session list.
+ *
+ * A subagent run is a child of the conversation that spawned it, and OpenCode
+ * gives it a generated title such as "Fixing app UI (@explorer subagent)". The
+ * parent link is the honest test for "someone started this conversation";
+ * matching on the title would quietly promote a machine-made run to something
+ * the user can @, and would miss a subagent whose title reads like a chat.
+ *
+ * A session the server reports without a title is still a conversation. It is
+ * offered under the untitled label rather than dropped, because the sidebar
+ * and the command palette both list it and this picker used to be the one
+ * surface where it vanished.
+ */
+export function askMentionChats(
+  sessions: readonly AskMentionChatSource[],
+  untitledLabel: string,
+): { id: string; title: string }[] {
+  return sessions
+    .filter((session) => !session.parentID)
+    .map((session) => ({ id: session.id, title: session.title.trim() || untitledLabel }));
+}
+
 const normalize = (value: string) => value.trim().toLowerCase();
 
 const matches = (query: string, ...fields: Array<string | undefined>) => {

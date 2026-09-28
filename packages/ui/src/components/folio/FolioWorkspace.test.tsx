@@ -146,4 +146,103 @@ describe('FolioWorkspace', () => {
     await fire(buttonStartingWith('Back to'));
     expect(viaBar).toBe(1);
   });
+
+  // ---- The dots in the left margin, the way Notion takes a whole block.
+  const threeLines: FolioNote = { ...page, title: 'Kitchen', blocks: [
+    { ...makeBlock(), text: 'Buy milk' },
+    { ...makeBlock(), text: 'Call the plumber' },
+    { ...makeBlock(), text: 'Water the plants' },
+  ] };
+  const blocks = () => [...host.querySelectorAll('[data-block-id]')];
+  const taken = () => blocks().filter((row) => row.className.includes('bg-interactive-selection'));
+  const dots = (row: Element) => {
+    const handle = row.querySelector('button[aria-label="Block type"]');
+    if (!handle) throw new Error('the block drew no handle');
+    return handle;
+  };
+  // happy-dom has no pointer capture, so the handle is handed the three methods a press uses.
+  const press = async (element: Element, x: number, y: number, type: string) => {
+    Object.assign(element, { setPointerCapture: () => {}, hasPointerCapture: () => true, releasePointerCapture: () => {} });
+    await act(async () => { element.dispatchEvent(new window.PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerId: 1 })); });
+  };
+  const clickDots = async (row: Element) => {
+    const handle = dots(row);
+    await press(handle, 20, 40, 'pointerdown');
+    await press(handle, 20, 40, 'pointerup');
+  };
+  const pressKey = async (key: string, meta = false) => {
+    await act(async () => { window.dispatchEvent(new window.KeyboardEvent('keydown', { key, metaKey: meta })); });
+  };
+  const blockTexts = () => (useFolioStore.getState().drafts[threeLines.id]?.note ?? useFolioStore.getState().status?.notes[0])?.blocks.map((block) => block.text);
+
+  test('the dots take the whole block, and only that block', async () => {
+    await draw(threeLines);
+    await clickDots(blocks()[1]);
+    expect(taken()).toEqual([blocks()[1]]);
+    expect(blocks()[0].className).not.toContain('bg-interactive-selection');
+    expect(blocks()[2].className).not.toContain('bg-interactive-selection');
+  });
+
+  // Otherwise there is no way back to nothing but Escape and clicking away, and the control feels stuck.
+  test('the same dots again let the block go', async () => {
+    await draw(threeLines);
+    await clickDots(blocks()[1]);
+    await clickDots(blocks()[1]);
+    expect(taken()).toEqual([]);
+  });
+
+  // A drag moves the block and takes nothing: the same press is told apart by how far it travelled.
+  test('a drag moves the block and selects nothing', async () => {
+    await draw(threeLines);
+    const handle = dots(blocks()[0]);
+    await press(handle, 20, 40, 'pointerdown');
+    await press(handle, 20, 140, 'pointermove');
+    await press(handle, 20, 140, 'pointerup');
+    expect(taken()).toEqual([]);
+    expect(blockTexts()).toEqual(['Call the plumber', 'Water the plants', 'Buy milk']);
+  });
+
+  test('Delete on a block the dots took removes that block and no other', async () => {
+    await draw(threeLines);
+    await clickDots(blocks()[1]);
+    await pressKey('Delete');
+    expect(blockTexts()).toEqual(['Buy milk', 'Water the plants']);
+    expect(taken()).toEqual([]);
+  });
+
+  test('Escape on a block the dots took lets it go', async () => {
+    await draw(threeLines);
+    await clickDots(blocks()[2]);
+    expect(taken()).toHaveLength(1);
+    await pressKey('Escape');
+    expect(taken()).toEqual([]);
+  });
+
+  // The block menu keeps the keyboard, and the dots keep the pointer: one gesture, one outcome.
+  test('the dots no longer open the block menu, but Enter and Space still do', async () => {
+    await draw(threeLines);
+    const kindButton = () => [...host.querySelectorAll('button')].find((button) => button.textContent === 'Heading 1');
+    expect(kindButton()).toBeUndefined();
+    await clickDots(blocks()[0]);
+    expect(kindButton()).toBeUndefined();
+    expect(taken()).toHaveLength(1);
+
+    await act(async () => { dots(blocks()[0]).dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); });
+    expect(kindButton()).toBeDefined();
+    expect(taken()).toHaveLength(1);
+
+    await act(async () => { dots(blocks()[0]).dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ', bubbles: true })); });
+    expect(kindButton()).toBeUndefined();
+  });
+
+  // A selection that survived the user reaching for the text would highlight a block they are editing.
+  test('clicking into a taken block lets the highlight go so the caret can be put down', async () => {
+    await draw(threeLines);
+    await clickDots(blocks()[1]);
+    expect(taken()).toHaveLength(1);
+    const text = blocks()[1].querySelector('.folio-editable');
+    if (!text) throw new Error('the block drew no text');
+    await act(async () => { text.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse', button: 0, clientX: 60, clientY: 40 })); });
+    expect(taken()).toEqual([]);
+  });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { FolioNote } from './schema';
-import { ASK_MENTION_LIMIT, askComposerAction, collectAskMentions, flattenAskMentions, nextAskMentionIndex } from './ask-mentions';
+import { ASK_MENTION_LIMIT, askComposerAction, askMentionChats, collectAskMentions, flattenAskMentions, nextAskMentionIndex } from './ask-mentions';
 
 const page = (id: string, title: string, extra: Partial<FolioNote> = {}): FolioNote => ({
   id,
@@ -39,6 +39,24 @@ const skills = [{ name: 'dataviz', description: 'Charts that read well' }, { nam
 const parentTitle = (id: string | undefined) => (id === '11111111-1111-1111-1111-111111111111' ? 'Villanova Law' : undefined);
 
 const all = collectAskMentions(notes, chats, skills, '', parentTitle);
+
+describe('which sessions the Chats group offers', () => {
+  test('a conversation is a session with no parent, whatever its title says', () => {
+    const offered = askMentionChats([
+      { id: 'ses_root', title: 'General Chat' },
+      { id: 'ses_subagent', title: 'General Chat (@explorer subagent)', parentID: 'ses_root' },
+      { id: 'ses_nested', title: 'A conversation about subagents', parentID: 'ses_root' },
+    ], 'Untitled');
+    // The third row proves the rule is the parent link and not the word
+    // "subagent": a conversation the user started is never excluded.
+    expect(offered).toEqual([{ id: 'ses_root', title: 'General Chat' }, { id: 'ses_nested', title: 'A conversation about subagents' }]);
+  });
+
+  test('a conversation the server left untitled is still offered, under a label', () => {
+    const offered = askMentionChats([{ id: 'ses_blank', title: '' }, { id: 'ses_blank2', title: '   ' }], 'Untitled');
+    expect(offered).toEqual([{ id: 'ses_blank', title: 'Untitled' }, { id: 'ses_blank2', title: 'Untitled' }]);
+  });
+});
 
 describe('the Ask AI mention picker', () => {
   test('offers more than one kind of thing, grouped', () => {

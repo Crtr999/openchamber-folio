@@ -8,9 +8,10 @@ import { createChatDirectory } from '@/lib/chatDirectories';
 import { buildSkillMentionInstruction } from '@/lib/skillMentionInstruction';
 import { useFolioStore } from '@/lib/folio/store';
 import type { FolioNote } from '@/lib/folio/schema';
+import { FOLIO_ASK_AGENT, FOLIO_ASK_PERMISSIONS } from '@/lib/folio/ask-agent';
 import { readPageChats, useFolioAskModelStore, writePageChats, type PageChat } from '@/lib/folio/ask';
 import { askModelRef, resolveAskModel, type AskModelSelection } from '@/lib/folio/ask-model';
-import { askComposerAction, collectAskMentions, flattenAskMentions, nextAskMentionIndex, type AskMention } from '@/lib/folio/ask-mentions';
+import { askComposerAction, askMentionChats, collectAskMentions, flattenAskMentions, nextAskMentionIndex, type AskMention } from '@/lib/folio/ask-mentions';
 import { FolioIcon } from './FolioIcon';
 import { FolioAskModelPicker } from './FolioAskModelPicker';
 import type { Message, Part, PermissionRequest } from '@/lib/opencode/model';
@@ -34,9 +35,11 @@ const mentionIcon = { page: 'article', chat: 'chat-3', file: 'attachment-2', ski
 interface AskSendOptions { sessionId: string; directory: string; skills?: SkillMentions }
 
 /**
- * Ask AI about the open page, like Notion's AI panel. It is an ordinary OpenChamber chat (your
- * models, agents and keys; it also appears under Chats) that starts knowing the page, and uses the
- * `folio` tool to read other pages you @mention and to change your notes and databases directly.
+ * Ask AI about the open page, like Notion's AI panel. It is an OpenChamber chat on your
+ * models and keys (it also appears under Chats), on Folio's own notebook agent rather
+ * than whichever agent the chat beside you is on, so it answers from the page instead
+ * of going looking for the source. It uses the `folio` tool to read other pages you
+ * @mention and to change your notes and databases directly.
  */
 export function FolioAskPanel({ note, onClose }: { note: FolioNote; onClose: () => void }) {
   const { t } = useI18n();
@@ -61,10 +64,11 @@ export function FolioAskPanel({ note, onClose }: { note: FolioNote; onClose: () 
   const loadSkills = useSkillsStore((s) => s.loadSkills);
   // Skills belong to the directory they are read from, and a page conversation runs in its own.
   const skills = useSkillsStore((s) => selectSkillsForDirectory(s, chat?.directory));
-  const chatsForPicker = React.useMemo(
-    () => sessions.filter((session) => !session.parentID && session.title).map((session) => ({ id: session.id, title: session.title })),
-    [sessions],
-  );
+  // The Chats group is built from the app's own session list, narrowed to the
+  // conversations someone started: a subagent run is a child session, so it is
+  // left out by that link rather than by the generated title it carries.
+  const untitledLabel = t('folio.untitled');
+  const chatsForPicker = React.useMemo(() => askMentionChats(sessions, untitledLabel), [sessions, untitledLabel]);
   const parentTitle = React.useCallback((id: string | undefined) => (id ? notes?.find((n) => n.id === id)?.title : undefined), [notes]);
   const groups = React.useMemo(() => (picker
     ? collectAskMentions(notes ?? [], chatsForPicker, skills, picker.query, parentTitle)
@@ -106,24 +110,28 @@ export function FolioAskPanel({ note, onClose }: { note: FolioNote; onClose: () 
       // The page is sent as it is on screen, so unsaved typing is saved first.
       await useFolioStore.getState().flush();
       const page = useFolioStore.getState().status?.notes.find((n) => n.id === note.id) ?? note;
-      const config = useConfigStore.getState();
       const modelRef = askModelRef(providers, model);
       let current = readPageChats()[note.id];
       if (!current) {
         const directory = await createChatDirectory();
+        // The page conversation runs on Folio's own agent and ruleset, never on
+        // the agent the ordinary chat is on: a worker handed a question about a
+        // page goes looking for the source instead of answering from the page.
         const session = await createSession(page.title || t('folio.untitled'), directory, undefined, undefined,
-          { model: modelRef, agent: config.currentAgentName }, 'preserve');
+          { model: modelRef, agent: FOLIO_ASK_AGENT, permissions: FOLIO_ASK_PERMISSIONS }, 'preserve');
         // Nothing was asked and nothing can be retried from a chat that never
         // started, which is a different failure from a turn the model refused.
         if (!session) throw new Error(t('folio.askSessionFailed'));
         current = { sessionId: session.id, directory: session.directory || directory };
       }
-      // The whole page goes along the first time and whenever it changed since; otherwise just which page it is.
-      let context = `The user is asking from their Folio notebook page "${page.title || 'Untitled'}" (page id ${page.id}). Use the folio tool to read pages they @mention and to make any change to their notes or databases; edits appear on their screen immediately.`;
+      // The page is the conversation's subject, so it is named first and sent in
+      // full the first time and whenever it changed since; the mentions the
+      // question refers to follow it.
+      let context = `The user is asking a question about their Folio notebook page "${page.title || 'Untitled'}" (page id ${page.id}), which is the subject of this conversation. Answer from the page below. There is no project, no code and nothing to look up here: the notebook is not in this conversation's folder, so do not search the filesystem, run commands, or look for the answer anywhere else. Use the folio tool to read a page they @mention and to make any change they ask for on their notes or databases; edits appear on their screen immediately.`;
       if (page.excludedFromAI) context += ' This page is excluded from AI, so its content is not shared.';
       else if (current.sentModified !== page.modified) {
         const response = await useFolioStore.getState().api?.request({ command: 'markdown', noteID: page.id, flag: true });
-        if (response?.ok && response.text) context += `\n\nCurrent page content:\n\n${response.text}`;
+        if (response?.ok && response.text) context += `\n\n<page title="${page.title || 'Untitled'}" pageId="${page.id}">\n\n${response.text}\n\n</page>`;
       }
       // Pages @mentioned in the question go along in full (pages excluded from AI only by name),
       // and a file brings the page it is attached to along the same way.
@@ -144,7 +152,10 @@ export function FolioAskPanel({ note, onClose }: { note: FolioNote; onClose: () 
       const skillNames = mentions.filter((m) => m.kind === 'skill' && question.includes(`@${m.label}`)).map((m) => m.label);
       const sendOptions: AskSendOptions = { sessionId: current.sessionId, directory: current.directory };
       if (skillNames.length) sendOptions.skills = { names: skillNames, instructionFor: buildSkillMentionInstruction };
-      await useSessionUIStore.getState().sendMessage(question, model.providerID, model.modelID, config.currentAgentName, undefined, undefined,
+      // The agent travels with every turn, not only at creation: an existing page
+      // conversation keeps this one, and a change in the ordinary chat cannot
+      // move it, because this send never reads the chat's agent.
+      await useSessionUIStore.getState().sendMessage(question, model.providerID, model.modelID, FOLIO_ASK_AGENT, undefined, undefined,
         [{ text: context, synthetic: true }], modelRef.variant, 'normal', sendOptions);
       remember({ ...readPageChats(), [note.id]: { ...current, sentModified: page.modified } });
       setDraft(''); setMentions([]);
@@ -180,6 +191,9 @@ export function FolioAskPanel({ note, onClose }: { note: FolioNote; onClose: () 
     <form className="relative m-3 mt-0 rounded-xl border border-border bg-background p-2 focus-within:border-foreground/30" onSubmit={(e) => { e.preventDefault(); void send(draft); }}>
       {picker && <div role="listbox" aria-label={t('folio.askMention')} className="absolute inset-x-0 bottom-full z-20 mb-1 max-h-72 overflow-y-auto rounded-xl border border-border bg-background p-1.5 shadow-2xl" onMouseDown={(e) => e.preventDefault()}>
         {!matches.length && <div className="px-2 py-1.5 text-sm text-muted-foreground">{t('folio.askNoMatches')}</div>}
+        {/* An empty Chats group is otherwise invisible, so a session list that never
+            arrived looks exactly like a notebook with no conversations in it. */}
+        {!chatsForPicker.length && <div className="px-2 py-1.5 text-sm text-muted-foreground">{t('folio.askNoChats')}</div>}
         {groups.map((group) => <div key={group.kind} className="pb-1">
           <div className="px-2 pb-1 pt-0.5 text-xs text-muted-foreground">{t(groupKeys[group.kind])}</div>
           {group.items.map((target) => {

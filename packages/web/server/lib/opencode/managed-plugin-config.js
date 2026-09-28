@@ -53,3 +53,33 @@ export const appendManagedPlugin = (rawConfig, pluginDirectory, purpose) => {
   ];
   return JSON.stringify(parsed);
 };
+
+/**
+ * Merge OpenChamber's own agents into an `OPENCODE_CONFIG_CONTENT` value.
+ *
+ * The notebook agent has to exist wherever the notebook tool does, on this
+ * fallback path as much as on the watched config file: Ask AI names the agent
+ * when it creates a page conversation, and OpenCode fails the turn outright for
+ * an agent id it cannot resolve. Only the ids OpenChamber owns are written, so
+ * an agent the user defined under the same name is replaced rather than
+ * silently kept, and no other agent is touched.
+ *
+ * @param {string | undefined} rawConfig the current `OPENCODE_CONFIG_CONTENT`, JSONC or unset
+ * @param {Record<string, object>} agents agent definitions keyed by id
+ * @returns {string} the merged config as JSON
+ */
+export const appendManagedAgents = (rawConfig, agents) => {
+  const ids = Object.keys(agents);
+  if (ids.length === 0) return rawConfig ?? '';
+  const errors = [];
+  const text = (rawConfig ?? '').trim();
+  const parsed = text ? parseJsonc(text, errors, { allowTrailingComma: true }) : {};
+  if (errors.length > 0 || !isJsonObject(parsed)) {
+    throw new Error('OPENCODE_CONFIG_CONTENT must contain a valid JSON object before OpenChamber can inject its managed agents');
+  }
+  if (parsed.agents !== undefined && !isJsonObject(parsed.agents)) {
+    throw new Error('OPENCODE_CONFIG_CONTENT agents must be an object before OpenChamber can inject its managed agents');
+  }
+  parsed.agents = { ...(isJsonObject(parsed.agents) ? parsed.agents : {}), ...agents };
+  return JSON.stringify(parsed);
+};

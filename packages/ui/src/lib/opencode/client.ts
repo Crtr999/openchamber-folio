@@ -20,6 +20,7 @@ import type {
   FormInfo,
   LocationGetOutput,
   PermissionEffect,
+  PermissionRuleset,
   PermissionSource,
   SessionInboxDelivery,
   SessionRevert,
@@ -797,7 +798,7 @@ class OpencodeService {
   }
 
   async createSession(
-    params?: { id?: string; title?: string; agent?: string; model?: ModelRef; metadata?: Metadata },
+    params?: { id?: string; title?: string; agent?: string; model?: ModelRef; metadata?: Metadata; permissions?: PermissionRuleset },
     directory?: string | null,
   ): Promise<Session> {
     const requestDirectory = this.resolveDirectory(directory)
@@ -812,6 +813,9 @@ class OpencodeService {
         model: params?.model && isAutoModel(params.model.providerID, params.model.id) ? undefined : params?.model,
         location: requestDirectory ? { directory: requestDirectory } : undefined,
         metadata: params?.metadata,
+        // A session ruleset is evaluated after the agent's own, so a conversation
+        // whose tools are deliberately narrow keeps them whatever the agent is.
+        permissions: params?.permissions,
       }),
     )
     return projectSession(info)

@@ -3,7 +3,7 @@
  * Replaces the action methods from the old useSessionStore.
  */
 
-import type { FilePart, FormRequest, JsonValue, Message, Metadata, ModelRef, Part, Session, TextPart, UserMessage } from "@/lib/opencode/model"
+import type { FilePart, FormRequest, JsonValue, Message, Metadata, ModelRef, Part, PermissionRuleset, Session, TextPart, UserMessage } from "@/lib/opencode/model"
 import { partIds } from "@/lib/opencode/model"
 import { Binary } from "./binary"
 import { useSessionUIStore } from "./session-ui-store"
@@ -892,14 +892,17 @@ function getRequestReplyDirectory(
 // ---------------------------------------------------------------------------
 
 /**
- * The model and agent a session starts on.
+ * The model, agent and tool rules a session starts on.
  *
  * v2 keeps the selection on the session, and a switch after creation is
  * recorded in the transcript as its own message. Callers that already know
  * what the first turn will run on pass it here, so the session is created on
- * that selection and the first prompt needs no switch at all.
+ * that selection and the first prompt needs no switch at all. `permissions` is
+ * the session's own ruleset: OpenCode evaluates it after the agent's rules, so
+ * a conversation created with a narrow one keeps that tool set even if the
+ * agent later changes.
  */
-export type SessionCreateSelection = { model?: ModelRef; agent?: string }
+export type SessionCreateSelection = { model?: ModelRef; agent?: string; permissions?: PermissionRuleset }
 
 export async function createSession(
   title?: string,
@@ -919,7 +922,7 @@ export async function createSession(
     // wrong project (closes #1637, #2270).
     const effectiveDirectory = directoryOverride ?? dir()
     const session = await opencodeClient.createSession(
-      { title, metadata, model: selection?.model, agent: selection?.agent },
+      { title, metadata, model: selection?.model, agent: selection?.agent, permissions: selection?.permissions },
       effectiveDirectory,
     )
 

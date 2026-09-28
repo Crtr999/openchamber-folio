@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createManagedConfigRuntime, MANAGED_CONFIG_FILE_NAME } from './managed-config-file.js';
+import { FOLIO_ASK_AGENT_ID } from './folio-ask-agent.js';
 
 const temporaryDirectories = [];
 
@@ -54,6 +55,7 @@ describe('managed OpenCode config file', () => {
     expect(childEnv.OPENCHAMBER_AGENT_TOOL_TOKEN).toBe('token');
     expect(await readConfigFile()).toEqual({
       plugins: ['-opencode.browser', path.join(dataDir, 'agent-tool', 'openchamber-agent-tool')],
+      agents: {},
     });
   });
 
@@ -75,7 +77,7 @@ describe('managed OpenCode config file', () => {
     const childEnv = await runtime.buildManagedChildEnv();
 
     expect(agentToolRuntime.materializePlugin).not.toHaveBeenCalled();
-    expect(await readConfigFile()).toEqual({ plugins: ['-opencode.browser'] });
+    expect(await readConfigFile()).toEqual({ plugins: ['-opencode.browser'], agents: {} });
     // A tool switched on later reaches a process that can already call back.
     expect(childEnv.OPENCHAMBER_AGENT_TOOL_TOKEN).toBe('token');
   });
@@ -155,12 +157,40 @@ describe('managed OpenCode config file', () => {
     const childEnv = await runtime.buildManagedChildEnv();
 
     expect(childEnv.OPENCODE_CONFIG).toBeUndefined();
+    // No notebook on this install, so nothing of ours is added to the user's
+    // own config content beyond the plugin list.
     expect(JSON.parse(childEnv.OPENCODE_CONFIG_CONTENT)).toEqual({
       model: 'test/model',
       plugins: ['-opencode.browser', path.join(dataDir, 'agent-tool', 'openchamber-agent-tool')],
     });
     await expect(fs.stat(path.join(dataDir, MANAGED_CONFIG_FILE_NAME))).rejects.toThrow();
     expect(await runtime.refreshManagedConfigFile()).toEqual({ updated: false, reason: 'external-config' });
+  });
+
+  it('carries the Ask AI agent into a config the user owns, without touching their own agents', async () => {
+    const { runtime } = await createHarness({
+      settings: {},
+      folioAvailable: true,
+      env: { OPENCODE_CONFIG: '/home/user/opencode.json', OPENCODE_CONFIG_CONTENT: '{"model":"test/model","agents":{"mine":{"description":"theirs"}}}' },
+    });
+
+    const childEnv = await runtime.buildManagedChildEnv();
+
+    const content = JSON.parse(childEnv.OPENCODE_CONFIG_CONTENT);
+    // A page conversation is created on this agent by id, and OpenCode fails the
+    // turn for an id it cannot resolve, so it has to reach this path too.
+    expect(Object.keys(content.agents).sort()).toEqual([FOLIO_ASK_AGENT_ID, 'mine']);
+    expect(content.agents.mine).toEqual({ description: 'theirs' });
+  });
+
+  it('refuses to inject its agents into a config content that is not a JSON object', async () => {
+    const { runtime } = await createHarness({
+      settings: {},
+      folioAvailable: true,
+      env: { OPENCODE_CONFIG: '/home/user/opencode.json', OPENCODE_CONFIG_CONTENT: 'not json' },
+    });
+
+    await expect(runtime.buildManagedChildEnv()).rejects.toThrow('valid JSON object');
   });
 
   it('leaves no temp file behind and never publishes a partial list', async () => {
@@ -183,6 +213,43 @@ describe('managed OpenCode config file', () => {
     await runtime.buildManagedChildEnv();
 
     expect(agentToolRuntime.materializePlugin).not.toHaveBeenCalled();
-    expect(await readConfigFile()).toEqual({ plugins: ['-opencode.browser'] });
+    expect(await readConfigFile()).toEqual({ plugins: ['-opencode.browser'], agents: {} });
+  });
+
+  it('publishes the Ask AI agent only where the notebook tool exists', async () => {
+    const { runtime, readConfigFile } = await createHarness({ settings: {}, folioAvailable: true });
+
+    await runtime.buildManagedChildEnv();
+
+    const { agents } = await readConfigFile();
+    expect(Object.keys(agents)).toEqual([FOLIO_ASK_AGENT_ID]);
+  });
+
+  it('gives the Ask AI agent a system prompt and a ruleset that denies everything but the notebook', async () => {
+    const { runtime, readConfigFile } = await createHarness({ settings: {}, folioAvailable: true });
+
+    await runtime.buildManagedChildEnv();
+
+    const agent = (await readConfigFile()).agents[FOLIO_ASK_AGENT_ID];
+    // The turn is built from the agent's system prompt, so an empty one would
+    // leave the page conversation running as a worker again.
+    expect(agent.system).toContain('Folio notebook');
+    // Last match wins in OpenCode, so the catch-all deny has to come first and
+    // the notebook tools after it, or a shell command would still be allowed.
+    expect(agent.permissions).toEqual([
+      { action: '*', resource: '*', effect: 'deny' },
+      { action: 'folio', resource: '*', effect: 'allow' },
+      { action: 'openchamber', resource: '*', effect: 'allow' },
+    ]);
+    // Hidden so it never becomes a default agent or shows up in the picker.
+    expect(agent.hidden).toBe(true);
+  });
+
+  it('leaves no Ask AI agent behind where the notebook is not hosted', async () => {
+    const { runtime, readConfigFile } = await createHarness({ settings: {}, folioAvailable: false });
+
+    await runtime.buildManagedChildEnv();
+
+    expect((await readConfigFile()).agents).toEqual({});
   });
 });
