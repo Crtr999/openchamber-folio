@@ -1,5 +1,5 @@
 import { canReuseManagedOpenCodePreflight } from './opencode-readiness.mjs';
-import { app, BrowserWindow, dialog, ipcMain, Menu, MessageChannelMain, nativeTheme, net as electronNet, Notification, powerMonitor, powerSaveBlocker, protocol, session, shell, webContents } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, MessageChannelMain, nativeImage, nativeTheme, net as electronNet, Notification, powerMonitor, powerSaveBlocker, protocol, safeStorage, session, shell, Tray, webContents } from 'electron';
 import contextMenu from 'electron-context-menu';
 import log from 'electron-log/main.js';
 import dgram from 'node:dgram';
@@ -14,6 +14,7 @@ import updaterPkg from 'electron-updater';
 import { ElectronSshManager } from './ssh-manager.mjs';
 import { replaceFileWithRetry } from './windows-file-replace.mjs';
 import { createTrayController } from './tray.mjs';
+import { createOpenRouterCredits, readOpencodeOpenRouterKey } from './openrouter-credits.mjs';
 import { resolveManagedOpenCodeCwd } from './opencode-cwd.mjs';
 import { stopEmbeddedServer } from './server-shutdown.mjs';
 import { resolveStartupUrlProbePlan } from './startup-url-selection.mjs';
@@ -334,12 +335,32 @@ const quitConfirmationMessage = () => {
   return `OpenChamber detected ${reasons.join(', ')}. Quitting now will stop sidecar/background processes and may interrupt pending work.`;
 };
 
+// OpenRouter balance in the header (and, when asked, a title-only menu bar item). Uses OpenCode's
+// OpenRouter key unless the user pastes another one into the badge.
+const openRouterCredits = createOpenRouterCredits({
+  filePath: path.join(app.getPath('userData'), 'openrouter-credits.json'),
+  safeStorage,
+  fallbackKey: () => readOpencodeOpenRouterKey(),
+  openExternal: (url) => { void shell.openExternal(url); },
+  log: (message) => log.info(message),
+  createTray: () => {
+    const item = new Tray(nativeImage.createEmpty());
+    return {
+      setTitle: (title) => item.setTitle(title, { fontType: 'monospacedDigit' }),
+      setToolTip: (text) => item.setToolTip(text),
+      setMenu: (template) => item.setContextMenu(Menu.buildFromTemplate(template)),
+      destroy: () => item.destroy(),
+    };
+  },
+});
+
 const shutdownBackgroundServices = () => {
   if (!state.backgroundShutdownPromise) {
     setDesktopKeepAwakeActive(false);
     shellEnvironmentAbort.abort();
     state.backgroundShutdownPromise = Promise.all([
       startShellEnvironmentProbe().catch(() => {}),
+      Promise.resolve(openRouterCredits.stop()),
       killSidecar(),
       shutdownSshSessions(),
     ]).finally(() => {
@@ -2744,8 +2765,12 @@ const compareSemver = (left, right) => {
   return 0;
 };
 
+// Personal build (Crtr999 fork): updates come from rebuilding this repo, never from upstream
+// releases, which would replace these changes with stock OpenChamber.
+const PERSONAL_BUILD = true;
+
 const setupAutoUpdater = () => {
-  if (!app.isPackaged) {
+  if (!app.isPackaged || PERSONAL_BUILD) {
     return;
   }
   autoUpdater.autoDownload = false;
@@ -3529,6 +3554,14 @@ const closeAllDevTunnels = () => {
 
 const handleInvoke = async (browserWindow, command, args = {}) => {
   switch (command) {
+    case 'desktop_openrouter_credits': {
+      const action = args?.action;
+      if (action === 'set-key') return openRouterCredits.setKey(typeof args?.key === 'string' ? args.key : '');
+      if (action === 'clear') return openRouterCredits.clear();
+      if (action === 'refresh') return openRouterCredits.refresh();
+      if (action === 'menu-bar') return openRouterCredits.setMenuBar(args?.show === true);
+      return openRouterCredits.status();
+    }
     case 'desktop_pick_theme_file': {
       const { pickThemeFile } = await import('./theme-file-picker.mjs');
       return pickThemeFile({ showDialog: (options) => dialog.showOpenDialog(browserWindow || undefined, options) });
@@ -4194,6 +4227,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
     }
 
     case 'desktop_check_for_updates': {
+      if (PERSONAL_BUILD) return { available: false, currentVersion: APP_VERSION, version: null, body: null, date: null };
       assertUpdaterCapability({ packaged: app.isPackaged });
       const currentVersion = APP_VERSION;
       const { available, updateInfo, updateResult, nextVersion, pendingUpdate } = await checkForDesktopUpdate({
@@ -4835,6 +4869,7 @@ const COMMANDS_SAFE_FOR_REMOTE = new Set([
 ]);
 
 ipcMain.handle('openchamber:invoke', async (event, command, args) => {
+  if (command === 'desktop_openrouter_credits' && event.senderFrame !== event.sender.mainFrame) throw new Error('OpenRouter credits are available only to the main application.');
   if (!isLocalSender(event.sender) && !COMMANDS_SAFE_FOR_REMOTE.has(command)) {
     log.warn(`[ipc] rejected ${command} from non-local origin: ${event.sender?.getURL?.() || '(unknown)'}`);
     throw new Error('IPC not available for this origin');
@@ -5213,6 +5248,7 @@ app.on('activate', async () => {
 });
 
 app.whenReady().then(async () => {
+  openRouterCredits.start();
   if (wasEarlyWindowClosed()) return;
   const loginItemSettings = readLoginItemSettings();
   const isBackgroundStart = shouldStartInBackground(loginItemSettings);

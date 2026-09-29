@@ -855,3 +855,19 @@ export const fetchDesktopInstalledApps = async (
     return { apps: [], success: false, hasCache: false, isCacheStale: false };
   }
 };
+
+const openRouterCreditsSchema = z.object({
+  configured: z.boolean(),
+  source: z.enum(['saved', 'opencode']).optional(),
+  menuBar: z.boolean(),
+  balance: z.object({ kind: z.enum(['account', 'limit', 'spent']), amount: z.number(), checked: z.number() }).optional(),
+  error: z.string().optional(),
+});
+export type OpenRouterCreditsStatus = z.infer<typeof openRouterCreditsSchema>;
+type OpenRouterCreditsAction = { action: 'status' | 'refresh' | 'clear' } | { action: 'set-key'; key: string } | { action: 'menu-bar'; show: boolean };
+
+/** OpenRouter balance badge, owned by the Electron main process. Undefined outside the desktop app. */
+export const openRouterCreditsCommand = async (input: OpenRouterCreditsAction): Promise<OpenRouterCreditsStatus | undefined> => {
+  if (!canUseElectronDesktopIPC()) return undefined;
+  return openRouterCreditsSchema.parse(await invokeDesktop('desktop_openrouter_credits', input));
+};

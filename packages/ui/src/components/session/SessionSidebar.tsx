@@ -21,6 +21,7 @@ import { ProjectEditDialog } from '@/components/layout/ProjectEditDialog';
 import { UpdateDialog } from '@/components/ui/UpdateDialog';
 import { SidebarHeader } from './sidebar/shell/SidebarHeader';
 import { SidebarFooter } from './sidebar/shell/SidebarFooter';
+import { SidebarScheduledSection } from './sidebar/shell/SidebarScheduledSection';
 import { SessionProjectCollection } from './sidebar/list/SessionProjectCollection';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -661,6 +662,13 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
         collapseAllProjects={projectView.actions.collapseAllProjects}
         expandAllProjects={projectView.actions.expandAllProjects}
       />
+
+      {!isVSCode && !hideDirectoryControls ? (
+        <SidebarScheduledSection
+          mobileVariant={mobileVariant}
+          onNavigate={mobileVariant ? () => setSessionSwitcherOpen(false) : undefined}
+        />
+      ) : null}
 
       <SessionProjectCollection
         topology={{

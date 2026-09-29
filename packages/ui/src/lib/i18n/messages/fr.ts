@@ -1,3 +1,4 @@
+import { carterI18n } from './carter.i18n';
 import { settingsDict } from './fr.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
@@ -68,6 +69,7 @@ export const dict = {
   ...providersI18n.fr,
   ...mcpGridI18n.fr,
   ...pluginsGridI18n.fr,
+  ...carterI18n.fr,
   'terminalView.actions.attachSelection': 'Joindre la sortie sélectionnée',
   'terminalView.actions.copySelection': 'Copier la sortie sélectionnée',
   'terminalView.toast.selectionCopied': 'Sortie copiée',
