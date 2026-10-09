@@ -1,29 +1,61 @@
 import { useSessionTabsStore } from '@/stores/useSessionTabsStore';
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { useUIStore } from '@/stores/useUIStore';
+import { canUseElectronDesktopIPC, isDesktopLocalOriginActive } from '@/lib/desktop';
+import { useMuseStore } from '@/stores/useMuseStore';
+import { useClaudeStore } from '@/stores/useClaudeStore';
 
-/**
- * Close one header session tab. Closing the active tab activates its right
- * neighbour (falling back left), or opens a new-session draft when it was the
- * last tab. Only tabs whose session is present in the loaded session list
- * count as neighbours — the same rule the strip uses for rendering. The
- * session itself is never touched.
- */
-/**
- * Activate the nth (0-based) header session tab, counting only tabs whose
- * session is present in the loaded session list — the same rule the strip
- * uses for rendering, so the digit matches what the user sees.
- */
-export const activateSessionTabByIndex = (index: number): boolean => {
-  const { tabIds } = useSessionTabsStore.getState();
-  const sessionsById = new Map(
-    useGlobalSessionsStore.getState().activeSessions.map((session) => [session.id, session] as const),
-  );
-  const renderable = tabIds.filter((id) => sessionsById.has(id));
-  const session = renderable[index] ? sessionsById.get(renderable[index]) : null;
+const websiteTabs = [
+  { id: 'website:chatgpt', title: 'ChatGPT' },
+  { id: 'website:muse', title: 'Muse' },
+  { id: 'website:claude', title: 'Claude' },
+] as const;
+
+export const getWebsiteTab = (id: string) => websiteTabs.find((tab) => tab.id === id);
+
+export const getActiveWebsiteTabId = (): string | null => {
+  const ui = useUIStore.getState();
+  if (ui.isChatGPTPageOpen) return 'website:chatgpt';
+  if (ui.isMusePageOpen) return 'website:muse';
+  if (ui.isClaudePageOpen) return 'website:claude';
+  return null;
+};
+
+export const isWebsiteTabAvailable = (): boolean => canUseElectronDesktopIPC() && isDesktopLocalOriginActive();
+
+export const activateHeaderTab = (id: string): boolean => {
+  if (!useSessionTabsStore.getState().tabIds.includes(id)) return false;
+  useSessionTabsStore.getState().focusTab(id);
+  const ui = useUIStore.getState();
+  if (getWebsiteTab(id)) {
+    if (!isWebsiteTabAvailable()) return false;
+    // ChatGPT's current full/integrated mode belongs to its retained workspace.
+    if (id === 'website:chatgpt') ui.setChatGPTPageOpen(true);
+    if (id === 'website:muse') useMuseStore.getState().open();
+    if (id === 'website:claude') useClaudeStore.getState().open();
+    return true;
+  }
+  const session = useGlobalSessionsStore.getState().activeSessions.find((entry) => entry.id === id);
   if (!session) return false;
+  ui.closeMainSurfaces();
   useSessionUIStore.getState().setCurrentSession(session.id, resolveGlobalSessionDirectory(session));
   return true;
+};
+
+const renderableTabIds = (): string[] => {
+  const sessions = new Set(useGlobalSessionsStore.getState().activeSessions.map((session) => session.id));
+  const websitesAvailable = isWebsiteTabAvailable();
+  return useSessionTabsStore.getState().tabIds.filter((id) => sessions.has(id) || (websitesAvailable && getWebsiteTab(id)));
+};
+
+/**
+ * Count loaded sessions and available singleton websites in strip order.
+ * Unknown persisted ids stay stored but are not keyboard destinations.
+ */
+export const activateSessionTabByIndex = (index: number): boolean => {
+  const id = renderableTabIds()[index];
+  return id ? activateHeaderTab(id) : false;
 };
 
 /**
@@ -32,41 +64,52 @@ export const activateSessionTabByIndex = (index: number): boolean => {
  * the current session has no tab or there is nothing to move to.
  */
 export const activateAdjacentSessionTab = (delta: -1 | 1): boolean => {
-  const { tabIds } = useSessionTabsStore.getState();
-  const { currentSessionId, setCurrentSession } = useSessionUIStore.getState();
-  const sessionsById = new Map(
-    useGlobalSessionsStore.getState().activeSessions.map((session) => [session.id, session] as const),
-  );
-  const renderable = tabIds.filter((id) => sessionsById.has(id));
+  const currentSessionId = getActiveWebsiteTabId() ?? useSessionUIStore.getState().currentSessionId;
+  const renderable = renderableTabIds();
   if (!currentSessionId || renderable.length < 2) return false;
   const index = renderable.indexOf(currentSessionId);
   if (index === -1) return false;
   const nextId = renderable[(index + delta + renderable.length) % renderable.length];
-  const next = sessionsById.get(nextId);
-  if (!next) return false;
-  setCurrentSession(next.id, resolveGlobalSessionDirectory(next));
-  return true;
+  return activateHeaderTab(nextId);
 };
 
+/** Closing changes only the working set. The last tab returns to an unsent draft. */
 export const closeSessionTabAndActivateNeighbour = (sessionId: string): void => {
   const { tabIds, closeTab } = useSessionTabsStore.getState();
   if (!tabIds.includes(sessionId)) return;
 
-  const { currentSessionId, setCurrentSession, openNewSessionDraft } = useSessionUIStore.getState();
+  const { openNewSessionDraft } = useSessionUIStore.getState();
+  const currentSessionId = getActiveWebsiteTabId() ?? useSessionUIStore.getState().currentSessionId;
   if (sessionId === currentSessionId) {
-    const sessionsById = new Map(
-      useGlobalSessionsStore.getState().activeSessions.map((session) => [session.id, session] as const),
-    );
-    const renderable = tabIds.filter((id) => sessionsById.has(id));
+    const renderable = renderableTabIds();
     const index = renderable.indexOf(sessionId);
     const neighbourId = renderable[index + 1] ?? renderable[index - 1] ?? null;
-    const neighbour = neighbourId ? sessionsById.get(neighbourId) : null;
-    if (neighbour) {
-      setCurrentSession(neighbour.id, resolveGlobalSessionDirectory(neighbour));
+    if (neighbourId) {
+      activateHeaderTab(neighbourId);
     } else {
+      useUIStore.getState().closeMainSurfaces();
       openNewSessionDraft();
     }
   }
 
   closeTab(sessionId);
+};
+
+/**
+ * Notion-style "+": the next thing opened lands in a fresh tab. The tab starts
+ * as a new chat draft and the new-tab palette opens over it.
+ */
+export const NEW_TAB_PALETTE_EVENT = 'open-carter:new-tab-palette';
+export const openNewHeaderTab = (): void => {
+  useSessionTabsStore.getState().requestNewTab();
+  useUIStore.getState().closeMainSurfaces();
+  useSessionUIStore.getState().openNewSessionDraft();
+  window.dispatchEvent(new CustomEvent(NEW_TAB_PALETTE_EVENT));
+};
+
+/** Abandon a pending new tab and return to the tab the user was in. */
+export const cancelNewHeaderTab = (): void => {
+  const { focusedTabId, cancelNewTab } = useSessionTabsStore.getState();
+  cancelNewTab();
+  if (focusedTabId) activateHeaderTab(focusedTabId);
 };

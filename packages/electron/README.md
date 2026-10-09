@@ -268,6 +268,29 @@ Use an explicit override when testing a different OpenCode CLI build or when a u
 
 ## IPC Pattern
 
+### Isolated personal websites
+
+Muse and Claude use separate durable sessions, `persist:open-carter-muse` and
+`persist:open-carter-claude`. `website-guest-security.mjs` denies permission
+requests, permission checks and device access on both. Main checks attachment
+before guest creation, including the early splash window: the parent must be
+trusted local application content using the local API runtime, and the initial
+source must match the partition's exact official HTTPS origin. Remote parents
+cannot attach to these saved login sessions. Guest preloads are stripped, Node
+integration is off, sandbox and context isolation are on, and web security stays
+enabled. These sessions are outside the browser-panel controller allowlist.
+Popup windows remain denied and links navigate the retained guest in place.
+
+Claude opens `https://claude.ai/` as a website, not an Anthropic API connection.
+It retains one guest after first selection and keeps its own sidebar. Full Claude
+focuses that same guest without dropping a draft. Home's chooser navigates the
+official root in that guest; fresh signed-in chat creation remains unverified.
+Explicitly pinned observed URL/title links are device-local, not account/team
+history or native transcripts. Account switching remains in Claude. Signed-in
+DOM remains unverified, and no automatic conversation capture runs.
+No OpenCode content is automatically sent to this website. Web, VS Code, hosted
+mobile, Capacitor and remote desktop do not expose this integration.
+
 Renderer code should call the desktop bridge exposed by `preload.mjs`. Do not import Electron from shared UI code.
 
 Add new native capabilities in this order:
@@ -276,6 +299,65 @@ Add new native capabilities in this order:
 2. Add the real command handling in `main.mjs` under `openchamber:invoke`.
 3. Gate privileged commands in main process logic so remote pages cannot access local filesystem or shell capabilities.
 4. Keep shared UI runtime contracts in `packages/ui` and server/runtime APIs in `packages/web` when the behavior is not inherently native.
+
+## Local meetings
+
+`meeting-boundary.mjs` owns meeting IPC authorization and one-use display-media
+grants. Only the main window's trusted local main frame, connected to the local
+runtime, may invoke `desktop_meeting_*`. Mini Chat, additional windows, child
+frames, website guests and remote pages cannot use it. Web, VS Code, hosted
+mobile and Capacitor do not expose this native capability.
+
+The private web meeting service owns records and local transcription. Electron
+supplies `userData/private-meetings`, separate from project/session data. The
+service restricts its files, never persists raw audio, and does not sync records
+or upload audio. Hosted dictation settings do not select its backend. Readiness
+does not download models. Local capture remains available in enterprise mode.
+
+The IPC contract uses normalized float PCM arrays at 16 kHz mono, at most 90
+seconds per chunk. Native accepts one in-flight chunk and clears its input and
+converted buffers on success or failure. The renderer owns its streams globally,
+outside the meeting view, and drains chunks before normal pause or stop.
+
+- `desktop_meeting_list` returns `{meetings, readiness, capture}`.
+- `desktop_meeting_readiness` returns `{available, modelId, reasonCode?}`.
+- Create accepts `{title?, calendarEventId?}`. Get, pause, resume and stop accept
+  `{id}`; notes accepts `{id, notes}`. Their results are flat meeting records.
+- Start accepts `{id, consent: true, mode}` and returns the record plus `capture`.
+  Mode is `system-and-microphone` or `microphone`. Microphone-only is explicitly
+  degraded; native never silently substitutes it.
+- Chunk accepts `{id, source, startMs, endMs, pcm}` and returns the updated record.
+  Sources are `microphone` and `system`; transcripts are in `segments`.
+
+Electron's default-session display handler denies requests unless start opened
+a 30-second, single-use consent window for that owner frame. Source discovery
+is rechecked after awaiting Electron. The candidate grants a screen source and
+`loopback` audio on Windows and macOS 14.2 or later. It does not use the system
+picker, broaden guest permissions or persist screen content. Renderer keeps the
+required video track alive without reading or saving frames. System audio validation is still pending; an eligible
+OS does not prove the OS permission, audio track or captured sound works.
+
+Sleep, confirmed quit, document navigation, renderer loss and runtime switching
+revoke capture and ask the service to save the partial transcript as interrupted.
+Main emits `desktop:meeting-lifecycle` with `{id, reason}` before awaiting disk.
+The renderer stops tracks synchronously without flushing interrupted audio.
+Capture and save failures include a safe `code` on that event. View navigation
+alone does not interrupt recording. The isolated preload also notifies main on
+`openchamber:runtime-endpoint-will-change`; that notification can only revoke.
+
+Optional summary IPC is `desktop_meeting_prepare_summary` with `{id, model?}`
+and `desktop_meeting_generate_summary` with `{id, model, approvalToken,
+approved: true}`. Main supplies authoritative closed-record segments, never
+notes or calendar data. The private summary service owns configured small-model
+choices, transcript-revision approval tokens and provider generation. Enterprise
+mode refuses both operations. Generation returns a meeting only after
+revision-checked `saveSummary` succeeds. A missing model/provider is an error or
+an explicit unavailable result, not a fabricated summary. Cost and subscription
+coverage are unknown; preparing choices sends no transcript.
+
+Mocked native tests live in `meeting-boundary.test.mjs`. They do not capture
+microphones, screens, audio or calendar data. HMR, packaged capture, OS permission
+prompts and real system audio still require authorized native validation.
 
 ## Logs And Data
 
@@ -306,3 +388,107 @@ For full repo validation before shipping:
 bun run type-check
 bun run lint
 ```
+
+## Personal homepage
+
+Home widgets fill the available workspace. Each column stacks its widgets independently so a tall board does not leave holes beneath shorter widgets. Handles reorder within or across columns with mouse, touch or keyboard. Drag the divider between adjacent columns to adjust their widths continuously. Focus the divider and use Left/Right, Shift for larger steps, or Home/End to reach the limits. Escape cancels an active resize. Columns keep a 240px minimum and stack below 640px of dashboard space. Full width / Column width changes each widget span. Order, spans and fractional width preferences persist locally in `openchamber.personalHome.layout.v2`; existing v1 and v2 layouts migrate to equal columns without changing order or spans. Resize previews stay in memory until released; a failed save leaves the on-screen layout usable and shows an error. Reset layout restores the initial arrangement. This presentation setting does not move Notion pages or events. Hosted MCP update arguments follow its advertised `data` wrapper, and page links normalize to IDs before writes. Calendar accepts ISO times with or without fractional seconds, and the event picker displays calendar names.
+
+Desktop draft mode displays a landscape, live work, recent chats and native personal panels. Existing project/session/rules navigation stays in the sidebar; selecting or sending a chat returns to the ordinary chat workspace. Mobile and VS Code retain the compact draft.
+
+Notion uses the hosted MCP OAuth PKCE connection (encrypted by Electron safeStorage in personal-home.json). Connect is explicit; reads occur when Home opens or Refresh is pressed. Task statuses and habit checkboxes use fetched schema and known page membership. The two personal Home data sources are the defaults; Connections changes their IDs and the saved-chat parent. Chat export is explicit and sends text only, excluding attachments, reasoning and tools. It is not an automatic sync or a Notion document editor.
+
+Task cards display the fetched due date instead of a status select. The board selects a date property named Due or Due date, or the sole date property when there is only one. Ambiguous date fields remain unset. SQL reads the property's start, end and is_datetime columns. IPC carries a nullable due object with the unchanged start/end strings and an isDatetime flag. Calendar days display without timezone conversion; timed dates retain the original time and offset. Missing dates say No due date. Older payloads without due data remain readable.
+
+Board columns retain the configured Notion status names. A dedicated handle moves a card to a column with mouse or a touch long-press; the rest of the card remains scrollable and its controls do not start a drag. The compact Move task action uses the same columns for keyboard access through the shared menu. A move updates status optimistically without changing task order or due data, locks writes while pending, and restores the prior status with an error toast on failure. Successful moves update native cached membership so the next move does not require another board fetch. Refresh stays explicit and cannot overwrite a newer move with an older read. Unknown or missing status cards remain visible but do not create writable invented categories. Authentication, membership validation, local-frame IPC and policy gates are unchanged.
+
+The new Notion egress and loopback OAuth listener are blocked at every request by enterprise mode. Home controls and chat export are disabled/hidden in that mode. Native IPC is limited to the local main application frame. These native connections do not exist in web/mobile/VS Code/remote windows. Calendar stays within EventKit on this machine and remains available in enterprise mode. EventKit may sync saved events through the user's existing Apple calendar accounts.
+
+On macOS, build:personal-home compiles the bundled CalendarBridge.app. It reads the next seven days, creates timed events and edits writable nonrecurring timed events. Recurring and all-day events remain in Calendar. Connect requests calendar access; ordinary reads never prompt. No data is fabricated when disconnected. Tokens and calendar results never enter chat context automatically.
+
+Personal builds display as Open Carter while retaining the legacy app ID, storage directory and encryption identity. Home task creation shares the task widget's heading row instead of reserving a row above the board. Habit names and daily sets remain managed in Notion.
+
+The shared chat transcript keeps a solid top edge beneath the header and retains its bottom composer fade. Home's landscape scrims are unchanged. The main header places Home directly before session tabs, omits Recent Sessions and New session actions, and retains runtime switching. The separate titlebar overlay keeps the sidebar toggle and OS controls. The phone-status header button is omitted; connection and pairing controls remain in Settings.
+
+The personal ChatGPT workspace uses the existing signed-in browser partition. Integrated mode hides the website sidebar and mirrors its loaded conversation/project navigation under the optional ChatGPT website history folder. The website still owns Chat/Work, messages, models, plugins and memory. Full ChatGPT restores the website sidebar. Local pins and chat tabs belong to Open Carter. The DOM adapter is restricted to the exact ChatGPT HTTPS origin and reads navigation metadata without cookies, tokens or application stores. It introduces no IPC, provider API connection or OpenCode context export. Native page isolation and permissions are unchanged. No ChatGPT quota badge or badge-owned polling runs in the header.
+
+Home’s ChatGPT choice uses the normal OpenCode session UI through `lib/chatgpt/native.ts`; see the session sidebar documentation for its dedicated project contract. The website workspace remains a separate full-history option.
+
+Muse appears beside ChatGPT only in local Electron windows. It opens the complete standalone `https://muse.ai/` website in `persist:open-carter-muse`, separate from ChatGPT's cookies. The website owns account memory, goals, history and artifacts. The expandable Muse folder contains a resume action and explicitly pinned website pages using observed exact-origin URL/title metadata. Queries, fragments and credentials cannot be saved. No DOM adapter, account-history mirror or native model substitution runs. Selecting Muse again retains the current page and draft; Full Muse focuses that complete website without reloading it. Popup links stay in the existing webview through the main-process handler. Existing OpenCode projects and provider configuration remain untouched. The view explains that account-history mirroring is unverified. The browser controller's partition guard prevents it from inspecting the separately signed-in Muse guest.
+
+Home widgets follow the composer directly, with no starter-chip row or add button; saved starters remain intact for compact drafts.
+
+## OpenRouter rail credits
+
+The right context rail's coin control is the only personal provider balance display. Its
+mounted reader refreshes the native feed on mount, focus and every five minutes.
+The reader runs with the pane closed and suspends while the rail is hidden.
+Remote runtimes and non-Electron clients do not mount it. The optional OpenRouter
+menu bar item retains its own timer; the revoked multi-provider billing system
+has no readers, IPC commands, management login or polling.
+`openrouter-credits.mjs` reads OpenCode's active credential database before its
+legacy auth file. Keys stay in native code. It first reads the official `/key`
+response; only a confirmed management key may read `/credits`. Inference keys
+show only their remaining key limit, not account credit or all-time spending. An
+unrestricted inference key shows Balance unavailable in the rail popover; the popover
+explains how to connect a management key through its secure password field.
+The optional menu bar item never falls back to a spending counter. Missing
+fields fail instead of becoming zero. Concurrent refreshes share one request,
+same-account failures retain stale values, and account changes clear old values.
+Redirects cannot carry credentials to another host. Enterprise policy blocks
+billing refresh and added billing keys.
+OpenRouter IPC requires the trusted local
+main application frame using its local API runtime, not just a local UI origin.
+
+OpenCode's OpenRouter credential may reach the official billing API only when
+the SDK confirms the native adapter and no custom gateway override. That
+destination guard and IPC authorization live in `openrouter-credits.mjs`.
+Account credits and a key's remaining limit are labeled separately. The app
+never infers account credit from usage or converts dollars into token estimates.
+Provider connections, accounts, model configuration and private meetings are
+unchanged. The ordinary native model/agent picker remains available. There is
+no special Home credit-pool chooser or multi-provider balance panel.
+
+## Private meetings
+
+`meeting-boundary.mjs` owns meeting IPC authorization and single-use display-media
+grants. Main imports the private service from `packages/web/server/lib/meetings`
+directly and supplies `userData/private-meetings`. Service creation registers that
+directory with the generic file-API exclusion before the local server starts.
+There is no meeting HTTP endpoint. Only the trusted local main application frame
+can read records, start capture, submit PCM or approve a summary. Remote desktop,
+web, VS Code and mobile do not expose this feature. Website guests keep their
+existing denied device permissions.
+
+Start requires literal consent and an installed local transcription model. A
+system-and-microphone start grants one audio-and-video display request for thirty
+seconds. Main returns a screen source with Electron's `loopback` audio option.
+The renderer keeps the required video track alive but does not read, store or send
+video frames. This is a macOS 14.2+ capture candidate, not verified Teams, Zoom or
+headphone compatibility. Capture includes whole-system audio, not a verified
+per-meeting filter. Microphone-only is a separate, explicitly degraded choice.
+No device or real meeting audio is captured by the tests.
+
+Home and workspace navigation keep the renderer-wide recorder alive. Closing or
+hiding its window, switching runtime, document navigation, renderer failure,
+sleep and quit revoke capture and save an interrupted partial transcript. The
+internal `desktop_meeting_interrupt` command cancels a failed or timed-out start
+or chunk without waiting for the normal pause/stop busy gate. Native lifecycle
+events clear renderer devices and unsent buffers. Normal pause and stop drain
+bounded tail chunks. A damaged saved record produces list warnings without
+blocking unrelated records. The app retains no raw audio files.
+
+Summary preparation reads configured small-model choices without uploading text.
+Only a later explicit approval token and Generate Summary call send the saved
+transcript through OpenCode's sanctioned one-shot generator. Native supplies the
+authoritative closed transcript. Notes, title, calendar context and audio are
+excluded. Cost and subscription coverage are disclosed as unknown. Enterprise
+mode refuses summaries at both native and generation boundaries. Provider keys
+and configuration are never exposed or changed by this feature.
+
+The service's persistence and summary contracts are documented in
+`packages/web/server/lib/meetings/DOCUMENTATION.md`; the UI capture owner is
+documented in `packages/ui/src/lib/meetings/DOCUMENTATION.md`.
+`meeting-boundary.test.mjs` tests native gates with mocks, and
+`meeting-integration.test.mjs` exercises the real private service and storage with
+synthetic worker/provider fixtures. These do not prove OS dialogs, live system
+audio, sherpa inference or UI interaction. Those checks remain native QA.

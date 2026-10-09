@@ -40,6 +40,8 @@ import { useSidebarSpaces, type SpaceMark } from '@/lib/spaces/spaces-store';
 import { useUIStore } from '@/stores/useUIStore';
 import { isSessionInWork } from '@/lib/sessionWorkMetadata';
 import { buildMultiRunIndex } from '@/lib/multirun/runs';
+import { getPinnedSessionKey, isSessionPinned, useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
+import { getRuntimeKey } from '@/lib/runtime-switch';
 
 const PR_NO_PR_RETRY_MS = 5 * 60_000;
 
@@ -477,6 +479,58 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     });
   }, [collection.childrenMap, ownership.bySessionId, spaceLabelById, timelineMode, topology.availableWorktreesByProject, topology.gitBranches, topology.projectRootBranches, topology.projects, view.hasSessionSearchQuery, view.homeDirectory, view.normalizedSessionSearchQuery, workSessions]);
 
+  const pinnedTouchedAt = useSessionPinnedStore((state) => state.touchedAt);
+  const pinnedSessions = React.useMemo(() => {
+    if (collection.pinnedSessionIds.size === 0) return EMPTY_WORK_SESSIONS;
+    const candidates = collection.orderedSessions.filter((session) => (
+      !session.parentID && !session.time?.archived && isSessionPinned(collection.pinnedSessionIds, session.directory, session.id)
+    ));
+    if (candidates.length === 0) return EMPTY_WORK_SESSIONS;
+    const touchedByKey = new Map(Object.entries(pinnedTouchedAt));
+    const pinnedAt = (session: Session): number => {
+      const key = getPinnedSessionKey(getRuntimeKey(), session.directory ?? '', session.id);
+      return key ? touchedByKey.get(key) ?? 0 : 0;
+    };
+    return [...candidates].sort((left, right) => pinnedAt(right) - pinnedAt(left));
+  }, [collection.orderedSessions, collection.pinnedSessionIds, pinnedTouchedAt]);
+  const pinnedItems = React.useMemo(() => {
+    if (pinnedSessions.length === 0) return EMPTY_TIMELINE_ITEMS;
+    const locations = resolveSidebarSessionLocations({
+      sessions: pinnedSessions,
+      projects: topology.projects,
+      ownerBySessionId: ownership.bySessionId,
+      spaceLabelById,
+      availableWorktreesByProject: topology.availableWorktreesByProject,
+      gitBranches: topology.gitBranches,
+      homeDirectory: view.homeDirectory,
+      rootBranchByProjectId: topology.projectRootBranches,
+      hideBranchMatchingProjectLabel: !timelineMode,
+    });
+    const nodes = new Map(pinnedSessions.map((session) => {
+      const tree = buildActiveSessionNode(collection.childrenMap, session);
+      const node: SessionNode = {
+        ...tree,
+        children: timelineMode ? [] : tree.children,
+        worktree: locations.get(session.id)?.worktree ?? null,
+      };
+      return [session.id, node];
+    }));
+    const query = view.hasSessionSearchQuery ? view.normalizedSessionSearchQuery : '';
+    const listed = query
+      ? pinnedSessions.filter((session) => {
+        const node = nodes.get(session.id);
+        return node ? sessionTreeMatchesSidebarQuery(node, query) : false;
+      })
+      : [...pinnedSessions];
+    return deriveTimelineActivityItems({
+      sessions: listed,
+      getSessionLocation: (sessionId) => locations.get(sessionId) ?? null,
+      getSessionNode: (session) => nodes.get(session.id) ?? buildActiveSessionNode(collection.childrenMap, session),
+      query: '',
+    });
+  }, [collection.childrenMap, collection.orderedSessions, ownership.bySessionId, pinnedSessions, spaceLabelById, timelineMode, topology.availableWorktreesByProject, topology.gitBranches, topology.projectRootBranches, topology.projects, view.homeDirectory, view.hasSessionSearchQuery, view.normalizedSessionSearchQuery]);
+  const pinnedItemIds = React.useMemo(() => new Set(pinnedItems.map((item) => item.node.session.id)), [pinnedItems]);
+
   const { groupStatusByKey, bootstrapSnapshot } = useSidebarGroupStatus({
     childStores,
     sections: orderedSectionsForRender,
@@ -607,6 +661,8 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     timelineItems,
     workItems,
     workSessionIds,
+    pinnedItems,
+    pinnedItemIds,
     showRecentSection: showRecentSection && !singleProjectMode && !timelineMode,
     foldersMap,
     groupSearchDataByGroup,
@@ -628,7 +684,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     hideDirectoryControls: view.hideDirectoryControls,
     sessionBatchSize: singleProjectMode && !view.useGroupedSections ? 20 : undefined,
     runIndex,
-  }), [runIndex, chatGroup, collapsedActivityKeys, timelineItems, timelineMode, workItems, workSessionIds, collapsedFolderIds, collection.pinnedSessionIds, expandedParents, folderAuthorityByOwner, foldersMap, groupSearchDataByGroup, groupStatusByKey, orderedSectionsForRender, projectSections, projectView.collapsedGroups, projectView.collapsedProjects, recentActivitySections, selectedSingleProjectId, sessionOrderIndex, showRecentSection, singleProjectMode, view.activeProjectId, view.hasSessionSearchQuery, view.hideDirectoryControls, view.normalizedSessionSearchQuery, view.showOnlyMainWorkspace, view.useGroupedSections, visibleCountByContainer]);
+  }), [runIndex, chatGroup, collapsedActivityKeys, timelineItems, timelineMode, workItems, workSessionIds, pinnedItems, pinnedItemIds, collapsedFolderIds, collection.pinnedSessionIds, expandedParents, folderAuthorityByOwner, foldersMap, groupSearchDataByGroup, groupStatusByKey, orderedSectionsForRender, projectSections, projectView.collapsedGroups, projectView.collapsedProjects, recentActivitySections, selectedSingleProjectId, sessionOrderIndex, showRecentSection, singleProjectMode, view.activeProjectId, view.hasSessionSearchQuery, view.hideDirectoryControls, view.normalizedSessionSearchQuery, view.showOnlyMainWorkspace, view.useGroupedSections, visibleCountByContainer]);
   React.useEffect(() => {
     onSearchMatchCountChange(sidebarRowModel.searchMatchCount);
   }, [onSearchMatchCountChange, sidebarRowModel.searchMatchCount]);

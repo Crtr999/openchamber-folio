@@ -2,7 +2,7 @@ import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { useProviderLogo } from '@/hooks/useProviderLogo';
 import { cn } from '@/lib/utils';
-import { getProviderLogoFallbackIcon } from './providerLogoFallback';
+import { getProviderLogoFallbackIcon, getProviderLogoInitials } from './providerLogoFallback';
 
 interface ProviderLogoProps {
     providerId: string;
@@ -26,7 +26,8 @@ export const ProviderLogo: React.FC<ProviderLogoProps> = ({
     }, [handleInternalError, externalOnError]);
 
     if (!hasLogo || !src) {
-        return fallbackIcon ? <Icon name={fallbackIcon} className={cn('text-muted-foreground', className)} /> : null;
+        return fallbackIcon ? <Icon name={fallbackIcon} className={cn('text-muted-foreground', className)} />
+            : <span aria-label={alt || providerId} className={cn('inline-flex shrink-0 items-center justify-center text-[0.625rem] font-semibold leading-none', className)}>{getProviderLogoInitials(providerId)}</span>;
     }
 
     return (

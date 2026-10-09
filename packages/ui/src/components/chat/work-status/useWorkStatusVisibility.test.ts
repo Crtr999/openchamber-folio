@@ -14,7 +14,7 @@ let effectiveDirectory: string | undefined = '/repo';
 
 mock.module('@/stores/useUIStore', () => ({
   useUIStore: (selector: (state: unknown) => unknown) =>
-    selector({ contextPanelByDirectory: panelByDirectory, workStatusPanelEnabled: panelEnabled }),
+    selector({ contextPanelByDirectory: panelByDirectory, workStatusPanelEnabled: panelEnabled, contextRailVisible: true }),
   normalizeContextPanelDirectoryKey: (value: string) => value,
 }));
 

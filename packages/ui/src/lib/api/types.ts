@@ -730,6 +730,8 @@ interface FileReadOptions {
 }
 
 export interface FilesAPI {
+  readProjectRules?(directory: string, kind: import('./project-rules-schema').ProjectRulesKind): Promise<import('./project-rules-schema').ProjectRulesSnapshot>;
+  saveProjectRules?(input: import('./project-rules-schema').ProjectRulesSave): Promise<import('./project-rules-schema').ProjectRulesSnapshot>;
   listDirectory(path: string, options?: ListDirectoryOptions): Promise<DirectoryListResult>;
   search(payload: FileSearchQuery): Promise<FileSearchResult[]>;
   createDirectory(path: string): Promise<{ success: boolean; path: string }>;
@@ -1414,6 +1416,8 @@ export interface RemoteClientRecord {
   pairingId?: string | null;
   deviceName?: string | null;
   devicePlatform?: string | null;
+  deviceModel?: string | null;
+  appVersion?: string | null;
   usesRelay?: boolean;
   /** Transport that carried the device's most recent authenticated request. */
   lastTransport?: 'relay' | 'direct' | null;

@@ -182,6 +182,7 @@ export async function routeMessage(params: {
   delivery?: 'steer'
   skills?: SkillMentions
 }): Promise<'command' | 'prompt' | 'shell'> {
+  const routeRuntimeKey = params.runtimeKey ?? getRuntimeKey()
   const requestDirectory = params.directory ?? undefined
   // The session carries its own model and agent server-side. Sending them on
   // every turn would switch the session to whatever the composer happens to
@@ -269,7 +270,7 @@ export async function routeMessage(params: {
       params.appendSubmissions?.()
       const commandContext = [...contextItems, ...skillInstructionContext()]
       await opencodeClient.sendCommand({
-        runtimeKey: params.runtimeKey,
+        runtimeKey: routeRuntimeKey,
         id: params.sessionId,
         model: selection.model,
         agent: selection.agent,
@@ -295,7 +296,7 @@ export async function routeMessage(params: {
 
   // Normal prompt — optimistic insert so message appears instantly
   await optimisticSend({
-    runtimeKey: params.runtimeKey,
+    runtimeKey: routeRuntimeKey,
     sessionId: params.sessionId,
     content: params.content,
     directory: requestDirectory,
@@ -303,7 +304,7 @@ export async function routeMessage(params: {
     context: contextItems,
     appendSubmissions: params.appendSubmissions,
     send: (messageID, context) => opencodeClient.sendMessage({
-      runtimeKey: params.runtimeKey,
+      runtimeKey: routeRuntimeKey,
       id: params.sessionId,
       providerID: params.providerID,
       model: selection.model,
@@ -1005,9 +1006,7 @@ export async function materializeOpenDraftSession(selection: {
   if (!draft?.open) return null
   const draftPermissionMode = draft.permissionMode
 
-  const trimmedAgent = typeof selection.agent === "string" && selection.agent.trim().length > 0
-    ? selection.agent.trim()
-    : undefined
+  const trimmedAgent = selection.agent?.trim() || useConfigStore.getState().currentAgentName
   let draftDirectoryOverride = draft.bootstrapPendingDirectory ?? draft.directoryOverride ?? null
   const draftProjectId = draft.selectedProjectId ?? null
 
@@ -1837,6 +1836,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
       await applyArmedGoal(createdDraftSession.sessionId, createdDraftSession.directory)
       const messageRoute = await routeMessage({
+        runtimeKey: capturedRuntimeKey,
         sessionId: createdDraftSession.sessionId,
         directory: createdDraftSession.directory,
         content,
@@ -1957,7 +1957,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       : undefined
 
     const messageRoute = await routeMessage({
-      runtimeKey: capturedTarget?.runtimeKey,
+      runtimeKey: capturedRuntimeKey,
       sessionId: targetSessionId || "",
       directory: currentSessionDirectory,
       content,

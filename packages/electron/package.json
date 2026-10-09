@@ -50,14 +50,15 @@
     "test:linux-desktop": "node --test ./linux-autostart.test.mjs && node ./scripts/smoke-linux-app-discovery.mjs && node ./scripts/smoke-path-open-utils.mjs",
     "updater:e2e:fixture": "node ./scripts/updater-e2e-fixture.mjs",
     "verify:update-manifest": "node ./scripts/verify-update-manifest.mjs",
-    "package": "bun run build:web-assets && bun run prepare:opencode-cli && bun run bundle:main && bun run rebuild:native && node ./scripts/package.mjs",
+    "package": "bun run build:web-assets && bun run prepare:opencode-cli && bun run build:personal-home && bun run bundle:main && bun run rebuild:native && node ./scripts/package.mjs",
     "finalize:latest-yml": "node ./scripts/finalize-latest-yml.mjs",
     "type-check": "node --check ./entry.mjs && node --check ./early-startup.mjs && node --check ./main.mjs && node --check ./preload.mjs",
-    "lint": "node -e \"process.exit(0)\""
+    "lint": "node -e \"process.exit(0)\"",
+    "build:personal-home": "node ./scripts/build-personal-home.mjs"
   },
   "build": {
     "appId": "com.carterlaborde.openchamber",
-    "productName": "OpenChamber Personal",
+    "productName": "Open Carter",
     "asarUnpack": [
       "node_modules/@openchamber/web/server/built-in-extensions/**/*"
     ],
@@ -87,6 +88,10 @@
       {
         "from": "resources/opencode-cli",
         "to": "opencode-cli"
+      },
+      {
+        "from": "resources/personal-home",
+        "to": "personal-home"
       }
     ],
     "afterPack": "scripts/after-pack.cjs",
@@ -102,7 +107,11 @@
       "artifactName": "${productName}-${version}-mac-${arch}.${ext}",
       "extendInfo": {
         "CFBundleIconName": "AppIcon",
-        "NSLocalNetworkUsageDescription": "OpenChamber needs access to devices and services on your local network."
+        "NSLocalNetworkUsageDescription": "OpenChamber needs access to devices and services on your local network.",
+        "NSMicrophoneUsageDescription": "Capture microphone audio only when you deliberately start local meeting recording or dictation.",
+        "NSAudioCaptureUsageDescription": "Capture system audio only after you consent and start a local meeting recording. Raw audio is not archived.",
+        "NSCalendarsFullAccessUsageDescription": "Show your agenda and save events you choose from your personal homepage.",
+        "NSCalendarsUsageDescription": "Show your agenda and save events you choose from your personal homepage."
       },
       "hardenedRuntime": true,
       "gatekeeperAssess": false,

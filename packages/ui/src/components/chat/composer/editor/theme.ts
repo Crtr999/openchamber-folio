@@ -65,7 +65,7 @@ export const COMPOSER_EDITOR_THEME_SPEC = {
     // `color` inherits, the placeholder silently renders at full text
     // brightness instead. The muted token already supplies secondary text;
     // another opacity reduction makes the hint unreadable in subdued themes.
-    '.cm-placeholder': { color: 'var(--surface-muted-foreground)' },
+    '.cm-placeholder': { color: 'var(--surface-muted-foreground)', fontSize: '12px' },
     // `drawSelection()` paints its own selection layer, and CodeMirror styles
     // it for the focused editor through
     // `&light.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground`

@@ -9,6 +9,7 @@ import {
   parseFilesystemErrorReason,
   type FilesystemErrorReason,
 } from '@openchamber/ui/lib/api/files-errors';
+import { projectRulesSnapshotSchema } from '@openchamber/ui/lib/api/project-rules-schema';
 import { runtimeFetch } from '@openchamber/ui/lib/runtime-fetch';
 import { shareFileFromNativeApp } from '@openchamber/ui/lib/nativeFileShare';
 
@@ -68,6 +69,16 @@ const directoryHeaders = (getDirectory?: () => string | undefined, override?: st
 };
 
 export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAPI => ({
+  async readProjectRules(directory, kind) {
+    const response = await runtimeFetch('/api/fs/project-rules', { query: new URLSearchParams({ kind }), headers: directoryHeaders(getDirectory, directory), cache: 'no-store' });
+    if (!response.ok) throw new FilesystemError('Could not load project rules', { status: response.status });
+    return projectRulesSnapshotSchema.parse(await response.json());
+  },
+  async saveProjectRules(input) {
+    const response = await runtimeFetch('/api/fs/project-rules', { method: 'POST', headers: { ...directoryHeaders(getDirectory, input.directory), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+    if (!response.ok) throw new FilesystemError('Could not save project rules', { status: response.status });
+    return projectRulesSnapshotSchema.parse(await response.json());
+  },
   async listDirectory(path: string, options): Promise<DirectoryListResult> {
     const target = normalizePath(path);
     const params = new URLSearchParams();

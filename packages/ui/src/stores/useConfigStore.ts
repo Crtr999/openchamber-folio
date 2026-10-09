@@ -298,10 +298,10 @@ const resolveProviderModelSelection = ({
         return { providerId: FALLBACK_PROVIDER_ID, modelId: FALLBACK_MODEL_ID };
     }
 
-    const firstProvider = providers[0];
+    const firstProvider = providers.find(provider => provider.models.length > 0);
     const firstModel = firstProvider?.models[0];
     if (firstProvider && firstModel) {
-        return { providerId: firstProvider.id, modelId: firstModel.modelID };
+        return { providerId: firstProvider.id, modelId: firstModel.id };
     }
 
     return null;
@@ -429,11 +429,11 @@ const resolveDefaultAgentModelSelection = ({
             providerId = FALLBACK_PROVIDER_ID;
             modelId = FALLBACK_MODEL_ID;
         } else {
-            const firstProvider = providers[0];
+            const firstProvider = providers.find(provider => provider.models.length > 0);
             const firstModel = firstProvider?.models[0];
             if (firstProvider && firstModel) {
                 providerId = firstProvider.id;
-                modelId = firstModel.modelID;
+                modelId = firstModel.id;
             }
         }
     }
@@ -1851,11 +1851,10 @@ export const useConfigStore = create<ConfigStore>()(
                                 if (bucket) bucket.push(model);
                                 else modelsByProvider.set(model.providerID, [model]);
                             }
-                            // A provider the user switched off, or one with no usable
-                            // model, is not offerable — v2 replaced the `connected` list
-                            // with these two facts.
+                            // Keep enabled connections even when model discovery is
+                            // empty. Inventory and send availability are distinct.
                             const processedProviders: ProviderWithModelList[] = providers
-                                .filter((provider) => provider.activation !== "disabled" && modelsByProvider.has(provider.id))
+                                .filter((provider) => provider.activation !== "disabled")
                                 .map((provider) => ({
                                     ...provider,
                                     models: modelsByProvider.get(provider.id) ?? [],
@@ -2088,7 +2087,7 @@ export const useConfigStore = create<ConfigStore>()(
                     }
  
                     const firstModel = provider?.models[0];
-                    const newModelId = isAuto ? AUTO_MODEL_ID : (firstModel?.modelID || "");
+                    const newModelId = isAuto ? AUTO_MODEL_ID : (firstModel?.id || "");
  
                     set((state) => {
                         const directoryKey = state.activeDirectoryKey;

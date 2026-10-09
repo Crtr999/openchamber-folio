@@ -40,6 +40,13 @@ import { z } from 'zod';
  * - Speech and transcription go only to servers on this machine (`tts`,
  *   `dictation`).
  * - Push notifications carry no message text or session name (`notifications`).
+ * - Desktop personal-home Notion OAuth, data access and chat export are off
+ *   (`packages/electron/personal-home.mjs`); local EventKit remains available.
+ * - Meeting summaries are off (`meetings/summary.js`), even after user approval.
+ *   Meeting capture, local transcription and private local notes stay available.
+ * - Native OpenRouter credit refresh and added billing keys are off
+ *   (`packages/electron/openrouter-credits.mjs`).
+ *   Previously fetched values are marked stale, not replaced with zero.
  * - Update checks still run but never report usage (`package-manager.js`).
  * - The server listens only on this machine unless network access is allowed
  *   (`allowNetworkAccess` / `OPENCHAMBER_ALLOW_NETWORK_ACCESS`): it refuses

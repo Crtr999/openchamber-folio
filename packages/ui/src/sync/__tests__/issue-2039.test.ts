@@ -107,9 +107,11 @@ mock.module("@/stores/utils/safeStorage", () => ({
   }),
 }))
 
+const stableSdkForTests = {}
 mock.module("@/lib/opencode/client", () => ({
   opencodeClient: {
     getDirectory: () => null,
+    getSdkClient: () => stableSdkForTests,
     getFilesystemHome: mock(async () => "/home/test"),
     getFilesystemHomeInfo: async () => ({ home: "/home/test" }),
     createDirectory: mock(async (path: string) => ({ success: true, path })),
@@ -127,7 +129,11 @@ mock.module("@/stores/permissionStore", () => ({
   },
 }))
 
+const stableEmptyRegistry: never[] = []
 mock.module("@/stores/useConfigStore", () => ({
+  selectProvidersForDirectory: () => stableEmptyRegistry,
+  selectConfigAgentsForDirectory: () => stableEmptyRegistry,
+  selectCatalogLoadedForDirectory: () => false,
   useConfigStore: {
     getState: () => ({
       currentAgentName: "agent-default",

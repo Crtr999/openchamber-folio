@@ -19,7 +19,7 @@ const browserPaneSource = readFileSync(join(__dirname, '..', '..', 'browser', 'B
 const DIRECTORY = '/path/to/repository';
 
 beforeEach(() => {
-  useUIStore.setState({ contextPanelByDirectory: {}, contextRailOrder: [] });
+  useUIStore.setState({ contextPanelByDirectory: {}, contextRailOrder: [], contextRailVisible: true });
 });
 
 describe('issue #3175 browser capture while the agent works in the background', () => {
@@ -38,6 +38,8 @@ describe('issue #3175 browser capture while the agent works in the background', 
   test('capture shows the tab only for the screenshot and restores the panel after', () => {
     expect(browserPaneSource).toContain('ui.setActiveContextPanelTab(directory, tabID)');
     expect(browserPaneSource).toContain('restorePanel();');
+    expect(browserPaneSource).toContain('const railWasVisible = ui.contextRailVisible;');
+    expect(browserPaneSource).toContain('if (!railWasVisible) now.setContextRailVisible(false);');
   });
 
   test('restoring after capture puts a closed panel and the prior tab back', () => {

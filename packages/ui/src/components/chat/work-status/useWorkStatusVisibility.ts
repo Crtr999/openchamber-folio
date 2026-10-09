@@ -72,7 +72,7 @@ export const useWorkStatusVisibility = ({ isMobile, isVSCode }: Options): Result
     React.useCallback(
       (state) => {
         const panel = directoryKey ? state.contextPanelByDirectory[directoryKey] : undefined;
-        if (!panel?.isOpen) return false;
+        if (!state.contextRailVisible || !panel?.isOpen) return false;
         const activeTab = panel.tabs.find((tab) => tab.id === panel.activeTabId)
           ?? panel.tabs[panel.tabs.length - 1]
           ?? null;

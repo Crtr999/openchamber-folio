@@ -515,7 +515,7 @@ const truncateTabLabel = (value: string, maxChars: number): string => {
 };
 
 
-export const ContextPanel: React.FC = () => {
+export const ContextPanel: React.FC<{ visible?: boolean }> = ({ visible = true }) => {
   const { t } = useI18n();
   const effectiveDirectory = useEffectiveDirectory() ?? '';
   const directoryKey = React.useMemo(() => normalizeDirectoryKey(effectiveDirectory), [effectiveDirectory]);
@@ -563,13 +563,13 @@ export const ContextPanel: React.FC = () => {
   const { themeMode, setThemeMode, lightThemeId, darkThemeId, currentTheme } = useThemeSystem();
 
   const tabs = React.useMemo(() => panelState?.tabs ?? [], [panelState?.tabs]);
-  const activeTab = tabs.find((tab) => tab.id === panelState?.activeTabId) ?? tabs[tabs.length - 1] ?? null;
+  const activeTab = tabs.find((tab) => tab.id === panelState?.activeTabId) ?? null;
   // Agent actions that name no tab go to the browser tab the user last had in front of them.
   const shownBrowserTabId = activeTab?.mode === 'browser' ? activeTab.id : null;
   React.useEffect(() => {
     if (shownBrowserTabId) setShownBrowserTab(shownBrowserTabId);
   }, [shownBrowserTabId]);
-  const isOpen = Boolean(panelState?.isOpen && activeTab);
+   const isOpen = Boolean(visible && panelState?.isOpen && activeTab);
   const [availablePanelAreaWidth, setAvailablePanelAreaWidth] = React.useState<number | null>(null);
   const hasOpenEditorFile = React.useMemo(
     () => tabs.some((tab) => tab.mode === 'file' && tab.targetPath),
@@ -1204,7 +1204,7 @@ export const ContextPanel: React.FC = () => {
         <div className="flex min-w-0 flex-1 items-center gap-1.5 px-3">
           {activeTab ? getTabIcon(activeTab, faviconByOrigin) : null}
           <span className="truncate typography-ui-label text-foreground">
-            {activeTab ? getModeLabel(activeTab.mode, t) : null}
+             {activeTab ? getModeLabel(activeTab.mode, t) : null}
           </span>
         </div>
       )}
@@ -1283,9 +1283,9 @@ export const ContextPanel: React.FC = () => {
 
   // width/min/max stay interpolable across open/close (no instant min/max
   // jumps) so the 200ms width transition matches the sidebars.
-  const panelStyle: React.CSSProperties = !isOpen
+   const panelStyle: React.CSSProperties & { '--oc-context-panel-width': string } = !isOpen
     ? {
-        ['--oc-context-panel-width' as string]: `${width}px`,
+        '--oc-context-panel-width': `${width}px`,
         width: 0,
         maxWidth: '100%',
         overflowX: 'clip',
@@ -1294,7 +1294,7 @@ export const ContextPanel: React.FC = () => {
       ? {
           // px, not '100%': px↔% width changes do not interpolate, which
           // would make the expand/collapse width snap instead of animating.
-          ['--oc-context-panel-width' as string]: availablePanelAreaWidth !== null ? `${availablePanelAreaWidth}px` : '100%',
+          '--oc-context-panel-width': availablePanelAreaWidth !== null ? `${availablePanelAreaWidth}px` : '100%',
           width: availablePanelAreaWidth !== null ? `${availablePanelAreaWidth}px` : '100%',
           maxWidth: '100%',
         }
@@ -1302,7 +1302,7 @@ export const ContextPanel: React.FC = () => {
           width: 'min(var(--oc-context-panel-width), 100%)',
           maxWidth: '100%',
           overflowX: 'clip',
-          ['--oc-context-panel-width' as string]: `${width}px`,
+           '--oc-context-panel-width': `${width}px`,
         };
 
   return (
@@ -1310,7 +1310,7 @@ export const ContextPanel: React.FC = () => {
       ref={panelRef}
       data-context-panel="true"
       tabIndex={-1}
-      inert={!isOpen || undefined}
+       inert={!isOpen || undefined}
       className={cn(
         'flex min-h-0 flex-col overflow-hidden bg-background',
         // Right-anchored while expanded: `inset-0` would teleport the left
@@ -1319,7 +1319,7 @@ export const ContextPanel: React.FC = () => {
         isExpanded
           ? 'absolute inset-y-0 right-0 z-20 min-w-0'
           : 'relative h-full flex-shrink-0',
-        !isOpen && 'pointer-events-none',
+        !visible && 'pointer-events-none',
         'will-change-[width] motion-reduce:transition-none',
         'transition-[width] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]'
       )}
@@ -1329,14 +1329,14 @@ export const ContextPanel: React.FC = () => {
       {/* Painted divider instead of border-l: a real border eats 1px of the
           content box only while collapsed, shifting the header controls by
           1px between the collapsed and expanded states. */}
-      {isOpen && !isExpanded && (
+       {isOpen && !isExpanded && (
         <div aria-hidden="true" className="absolute left-0 top-0 z-40 h-full w-px bg-border" />
       )}
       {/* Divider between the panel and the icon rail on its right. */}
-      {isOpen && (
+       {isOpen && (
         <div aria-hidden="true" className="absolute right-0 top-0 z-40 h-full w-px bg-border" />
       )}
-      {!isExpanded && (
+      {isOpen && !isExpanded && (
         <div
           className={cn(
             'absolute left-0 top-0 z-50 h-full w-[3px] cursor-col-resize transition-colors hover:bg-[var(--interactive-border)]/80',
@@ -1355,7 +1355,7 @@ export const ContextPanel: React.FC = () => {
           // release); during the drag itself nothing resizes — only the ghost
           // guide line moves.
           'transition-[width,opacity]',
-          !isOpen && 'pointer-events-none select-none opacity-0'
+          !visible && 'pointer-events-none select-none opacity-0'
         )}
         // px in the expanded state too: px↔% width changes cannot interpolate,
         // so the header controls would snap instead of riding the animation.
@@ -1364,10 +1364,10 @@ export const ContextPanel: React.FC = () => {
             ? (availablePanelAreaWidth !== null ? `${availablePanelAreaWidth}px` : '100%')
             : 'var(--oc-context-panel-width)',
         }}
-        aria-hidden={!isOpen}
+         aria-hidden={!isOpen}
       >
-      {header}
-      <div className={cn('relative min-h-0 flex-1 overflow-hidden', isResizing && 'pointer-events-none')}>
+      {isOpen && header}
+      <div className={cn('relative min-h-0 flex-1 overflow-hidden', !isOpen && 'hidden', isResizing && 'pointer-events-none')}>
         {hasFileTabs ? (
           <div className={cn('absolute inset-0 flex', isFileTabActive ? 'flex' : 'hidden')}>
             {hasOpenEditorFile || !contextEditorTreeVisible ? (

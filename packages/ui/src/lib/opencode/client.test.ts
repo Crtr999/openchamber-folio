@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test"
 import { z } from "zod"
+import type { ProviderCatalog } from './client'
 
 // The generated `@opencode/client` runs for real here; only the runtime
 // transport (`runtimeFetch`) and runtime identity are replaced. That keeps
@@ -581,30 +582,55 @@ describe("messages and config", () => {
   })
 
   test("getProvidersForConfig gathers providers, models, and the default", async () => {
-    responses.push(
-      (request) =>
-        request.url.pathname === "/api/provider"
-          ? json({ location: {}, data: [{ id: "openai", name: "OpenAI" }] })
-          : request.url.pathname === "/api/model"
-            ? json({ location: {}, data: [{ id: "openai/x", modelID: "x", providerID: "openai" }] })
-            : json({ location: {}, data: { id: "openai/x", modelID: "x", providerID: "openai" } }),
-      (request) =>
-        request.url.pathname === "/api/provider"
-          ? json({ location: {}, data: [{ id: "openai", name: "OpenAI" }] })
-          : request.url.pathname === "/api/model"
-            ? json({ location: {}, data: [{ id: "openai/x", modelID: "x", providerID: "openai" }] })
-            : json({ location: {}, data: { id: "openai/x", modelID: "x", providerID: "openai" } }),
-      (request) =>
-        request.url.pathname === "/api/provider"
-          ? json({ location: {}, data: [{ id: "openai", name: "OpenAI" }] })
-          : request.url.pathname === "/api/model"
-            ? json({ location: {}, data: [{ id: "openai/x", modelID: "x", providerID: "openai" }] })
-            : json({ location: {}, data: { id: "openai/x", modelID: "x", providerID: "openai" } }),
-    )
+    const answer = (request: CapturedRequest) => {
+      if (request.url.pathname === '/api/integration') return json({ location: {}, data: [] })
+      if (request.url.pathname === '/api/provider') return json({ location: {}, data: [{ id: 'openai', name: 'OpenAI' }] })
+      if (request.url.pathname === '/api/model') return json({ location: {}, data: [{ id: 'openai/x', modelID: 'x', providerID: 'openai', enabled: true }] })
+      return json({ location: {}, data: { id: 'openai/x', modelID: 'x', providerID: 'openai' } })
+    }
+    responses.push(answer, answer, answer, answer)
     const catalog = await opencodeClient.getProvidersForConfig("/repo/app")
     expect(catalog.providers).toEqual([{ id: "openai", name: "OpenAI" }])
     expect(catalog.models).toHaveLength(1)
     expect(catalog.default).toEqual({ id: "x", providerID: "openai" })
+  })
+
+  test('connection inventory retains empty credential/env pools and excludes 130 unconnected defaults', async () => {
+    const defaults = Array.from({ length: 130 }, (_, index) => ({ id: `unconnected-${index}`, name: `Unconnected ${index}`, activation: 'auto' }))
+    const answer = (request: CapturedRequest) => {
+      if (request.url.pathname === '/api/integration') return json({ location: {}, data: [
+        { id: 'azure-login', name: 'Azure', methods: [], connections: [{ type: 'credential', id: 'fixture-account' }] },
+        { id: 'agentrouter', name: 'AgentRouter', methods: [], connections: [{ type: 'env', name: 'FIXTURE_ROUTER_KEY' }] },
+        { id: 'disabled', name: 'Disabled', methods: [], connections: [{ type: 'env', name: 'FIXTURE_DISABLED_KEY' }] },
+      ] })
+      if (request.url.pathname === '/api/provider') return json({ location: {}, data: [
+        ...defaults,
+        { id: 'company-azure', name: 'Azure', integrationID: 'azure-login', activation: 'auto' },
+        { id: 'agentrouter', name: 'AgentRouter', activation: 'auto' },
+        { id: 'local-runtime', name: 'Local', activation: 'auto' },
+        { id: 'disabled', name: 'Disabled', activation: 'disabled' },
+      ] })
+      if (request.url.pathname === '/api/model') return json({ location: {}, data: [
+        { id: 'local-alias', modelID: 'upstream', providerID: 'local-runtime', enabled: true },
+        { id: 'off', modelID: 'off', providerID: 'unconnected-0', enabled: false },
+      ] })
+      return json({ location: {}, data: { id: 'local-alias', modelID: 'upstream', providerID: 'local-runtime' } })
+    }
+    responses.push(answer, answer, answer, answer)
+    const catalog: ProviderCatalog = await opencodeClient.getProvidersForConfig('/repo/app')
+    expect(catalog.providers.map(provider => provider.id)).toEqual(['company-azure', 'agentrouter', 'local-runtime'])
+    expect(catalog.models.filter(model => model.providerID === 'company-azure')).toHaveLength(0)
+  })
+
+  test('integration read failure rejects inventory instead of deleting connected empty pools', async () => {
+    const answer = (request: CapturedRequest) => {
+      if (request.url.pathname === '/api/integration') return new Response('offline', { status: 503 })
+      if (request.url.pathname === '/api/provider') return json({ location: {}, data: [] })
+      if (request.url.pathname === '/api/model') return json({ location: {}, data: [] })
+      return json({ location: {}, data: { id: 'unused', modelID: 'unused', providerID: 'unused' } })
+    }
+    responses.push(answer, answer, answer, answer)
+    await expect(opencodeClient.getProvidersForConfig('/repo/app')).rejects.toThrow()
   })
 })
 
@@ -612,12 +638,14 @@ describe("providers of an isolated space", () => {
   test("are the host's, asked with no directory, while models come from the space", async () => {
     const space = "/spaces/a1b2c3d4e5f6/app"
     const answer = (request: CapturedRequest) =>
-      request.url.pathname.endsWith("/provider")
+      request.url.pathname.endsWith('/integration')
+        ? json({ location: {}, data: [] })
+        : request.url.pathname.endsWith("/provider")
         ? json({ location: {}, data: [{ id: "anthropic", name: "Anthropic" }] })
         : request.url.pathname.endsWith("/model")
-          ? json({ location: {}, data: [{ id: "anthropic/x", modelID: "x", providerID: "anthropic" }] })
+          ? json({ location: {}, data: [{ id: "anthropic/x", modelID: "x", providerID: "anthropic", enabled: true }] })
           : json({ location: {}, data: { id: "anthropic/x", modelID: "x", providerID: "anthropic" } })
-    responses.push(answer, answer, answer)
+    responses.push(answer, answer, answer, answer)
     const before = requests.length
     const catalog = await opencodeClient.getProvidersForConfig(space)
     expect(catalog.providers).toEqual([{ id: "anthropic", name: "Anthropic" }])

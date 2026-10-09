@@ -1,3 +1,10 @@
+import { chatgptI18n } from './chatgpt.i18n';
+import { museI18n } from './muse.i18n';
+import { claudeI18n } from './claude.i18n';
+import { meetingsI18n } from './meetings.i18n';
+import { homeI18n } from './home.i18n';
+import { personalToolsI18n } from './personal-tools.i18n';
+import { workspaceStatusI18n } from './workspace-status.i18n';
 import { carterI18n } from './carter.i18n';
 import type { I18nKey } from './en';
 import { settingsDict } from './uk.settings';
@@ -15,6 +22,20 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  ...chatgptI18n['uk'],
+  ...museI18n.uk,
+  ...claudeI18n.uk,
+  ...meetingsI18n.uk,
+  'meeting.quickStart': 'Почати зустріч',
+  'meeting.partial': 'Деякі збережені зустрічі не вдалося прочитати. Список неповний; пошкоджені файли залишено без змін.',
+  'meeting.summaryReview': 'Переглянути модель підсумку',
+  'meeting.summaryDisclosure': 'Я дозволяю надсилання лише цього транскрипту до {provider}/{model}. Нотатки, назва, календар та аудіо виключені. Вартість і покриття підпискою невідомі. Чат не створюється.',
+  'meeting.newRecording': 'Цей запис закрито. Створіть нову зустріч, щоб записувати знову.',
+  'meeting.screenPermission': 'Дозвіл на спільний доступ до екрана запитується лише для системного звуку. Кадри екрана не читаються, не зберігаються й не передаються.',
+  'header.sessionTabs.pinSidebar': 'Закріпити на бічній панелі',
+  'header.sessionTabs.unpinSidebar': 'Відкріпити від бічної панелі',
+  ...homeI18n['uk'],
+  ...personalToolsI18n['uk'],
   "opencodeCompatibility.bundled": "OpenCode входить до складу OpenChamber. Оновіть OpenChamber, щоб отримати OpenCode v2.",
   "opencodeCompatibility.title": "Потрібен OpenCode v2",
   "opencodeCompatibility.outdatedTitle": "Оновіть OpenCode",
@@ -71,6 +92,7 @@ export const dict: Record<I18nKey, string> = {
   ...mcpGridI18n.uk,
   ...pluginsGridI18n.uk,
   ...carterI18n.uk,
+  ...workspaceStatusI18n["uk"],
   'terminalView.actions.attachSelection': 'Прикріпити вибраний вивід',
   'terminalView.actions.copySelection': 'Скопіювати вибраний вивід',
   'terminalView.toast.selectionCopied': 'Вивід скопійовано',
@@ -491,7 +513,7 @@ export const dict: Record<I18nKey, string> = {
   "sessions.sidebar.empty.noMatches.title": "Немає відповідних сесій",
   "sessions.sidebar.empty.noMatches.description": "Спробуйте інший заголовок, гілку, папку або шлях.",
   "sessions.sidebar.activity.recentTitle": "Останні",
-  "sessions.sidebar.activity.chatsTitle": "Чати",
+  "sessions.sidebar.activity.chatsTitle": "Усі чати",
   "sessions.sidebar.activity.timelineTitle": "Проєкти",
   "sessions.sidebar.header.viewMode.label": "Вигляд",
   "sessions.sidebar.header.viewMode.projects": "Згруповано",
@@ -3337,6 +3359,8 @@ export const dict: Record<I18nKey, string> = {
   'header.workStatusPanel.toggleAria': 'Перемкнути панель стану роботи',
   'header.workStatusPanel.hide': 'Сховати стан роботи',
   'header.workStatusPanel.show': 'Показати стан роботи',
+  'header.contextRail.show': 'Показати бічну панель контексту',
+  'header.contextRail.hide': 'Приховати бічну панель контексту',
   'chat.workStatus.mcp.authorizeOpenFailed': 'Не вдалося відкрити сторінку авторизації',
   'chat.workStatus.mcp.authorizeFailed': 'Авторизація не вдалася',
   'mcpDropdown.toast.authorizeOpenFailed': 'Не вдалося відкрити сторінку авторизації',

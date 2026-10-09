@@ -1,5 +1,6 @@
 import { DirectoryActionIndicator } from '../sessions/DirectoryActionIndicator';
 import React from 'react';
+import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
@@ -91,13 +92,15 @@ const ProjectHeaderIdentity: React.FC<ProjectHeaderIdentityProps> = ({
               )}
             />
           </span>
+        ) : projectIcon === 'chatgpt' ? (
+          <ProviderLogo providerId="chatgpt" className={cn('h-3.5 w-3.5', iconVisibilityClassName)} alt="ChatGPT" />
         ) : projectIconName ? (
           <Icon name={projectIconName} className={cn('h-3.5 w-3.5', iconVisibilityClassName)} style={iconColor ? { color: iconColor } : undefined} />
         ) : (
           <Icon name="folder" className={cn('h-3.5 w-3.5 text-muted-foreground/80', iconVisibilityClassName)} style={iconColor ? { color: iconColor } : undefined} />
         )}
       </span>
-      <span className="truncate typography-ui-label font-semibold lowercase text-foreground">{projectLabel}</span>
+      <span className="truncate typography-ui-label font-semibold text-foreground">{projectLabel}</span>
     </>
   );
 };
@@ -269,7 +272,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
               }
             >
             <div
-              className="relative flex items-center gap-1 py-1 pl-4 pr-3.5"
+               className="relative flex items-center gap-1 rounded-md py-1 pl-4 pr-3.5 has-[button:hover]:bg-interactive-hover/60"
               {...attributes}
             >
               {isProjectPicker ? (

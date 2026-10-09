@@ -1,3 +1,10 @@
+import { chatgptI18n } from './chatgpt.i18n';
+import { museI18n } from './muse.i18n';
+import { claudeI18n } from './claude.i18n';
+import { meetingsI18n } from './meetings.i18n';
+import { homeI18n } from './home.i18n';
+import { personalToolsI18n } from './personal-tools.i18n';
+import { workspaceStatusI18n } from './workspace-status.i18n';
 import { carterI18n } from './carter.i18n';
 import { settingsDict } from './fr.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
@@ -14,6 +21,20 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict = {
+  ...chatgptI18n['fr'],
+  ...museI18n.fr,
+  ...claudeI18n.fr,
+  ...meetingsI18n.fr,
+  'meeting.quickStart': 'Démarrer une réunion',
+  'meeting.partial': 'Certaines réunions enregistrées sont illisibles. La liste est incomplète ; les fichiers endommagés restent inchangés.',
+  'meeting.summaryReview': 'Vérifier le modèle de résumé',
+  'meeting.summaryDisclosure': "J’autorise l’envoi de cette transcription uniquement à {provider}/{model}. Notes, titre, calendrier et audio sont exclus. Le coût et la couverture par abonnement sont inconnus. Aucun chat n’est créé.",
+  'meeting.newRecording': 'Cet enregistrement est clos. Créez une nouvelle réunion pour enregistrer à nouveau.',
+  'meeting.screenPermission': "Le partage d’écran est demandé uniquement pour capturer l’audio système. Aucune image d’écran n’est lue, enregistrée ou transmise.",
+  'header.sessionTabs.pinSidebar': 'Épingler dans la barre latérale',
+  'header.sessionTabs.unpinSidebar': 'Détacher de la barre latérale',
+  ...homeI18n['fr'],
+  ...personalToolsI18n['fr'],
   "opencodeCompatibility.bundled": "OpenCode est inclus dans OpenChamber. Mettez OpenChamber à jour pour obtenir OpenCode v2.",
   "opencodeCompatibility.title": "OpenCode v2 requis",
   "opencodeCompatibility.outdatedTitle": "Mettre à jour OpenCode",
@@ -70,6 +91,7 @@ export const dict = {
   ...mcpGridI18n.fr,
   ...pluginsGridI18n.fr,
   ...carterI18n.fr,
+  ...workspaceStatusI18n["fr"],
   'terminalView.actions.attachSelection': 'Joindre la sortie sélectionnée',
   'terminalView.actions.copySelection': 'Copier la sortie sélectionnée',
   'terminalView.toast.selectionCopied': 'Sortie copiée',
@@ -314,7 +336,7 @@ export const dict = {
   'sessions.sidebar.empty.noMatches.title': 'Aucune session correspondante',
   'sessions.sidebar.empty.noMatches.description': 'Essayez un autre titre, branche, dossier ou chemin.',
   'sessions.sidebar.activity.recentTitle': 'récent',
-  'sessions.sidebar.activity.chatsTitle': 'discussions',
+  'sessions.sidebar.activity.chatsTitle': 'Toutes les discussions',
   'sessions.sidebar.activity.timelineTitle': 'Projets',
   'sessions.sidebar.header.viewMode.label': 'Affichage',
   'sessions.sidebar.header.viewMode.projects': 'Groupé',
@@ -3334,6 +3356,8 @@ export const dict = {
   'header.workStatusPanel.toggleAria': 'Basculer le panneau d\'état',
   'header.workStatusPanel.hide': 'Masquer l\'état du travail',
   'header.workStatusPanel.show': 'Afficher l\'état du travail',
+  'header.contextRail.show': 'Afficher la barre latérale de contexte',
+  'header.contextRail.hide': 'Masquer la barre latérale de contexte',
   'chat.workStatus.mcp.authorizeOpenFailed': 'Impossible d\'ouvrir la page d\'autorisation',
   'chat.workStatus.mcp.authorizeFailed': 'Échec de l\'autorisation',
   'mcpDropdown.toast.authorizeOpenFailed': 'Impossible d\'ouvrir la page d\'autorisation',

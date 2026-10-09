@@ -159,3 +159,19 @@ Config reads report `legacy: true` when the entity's file still uses v1
 spellings, and mutations answer with the `path` they wrote.
 `shared/SettingsLegacyFormatNote.tsx` turns that into one quiet line at the top
 of the page; the file is never moved, so the note has no action.
+
+## Read-only header inspectors
+
+`layout/WorkspaceStatusButtons` exposes phone connection status and project rules from the shared Header. They do not mutate Settings or send data to external services. Phone status reads the active runtime's public system/relay status and clientAuth device list, projects out identities and credentials, and labels recorded activity as recency rather than live reachability. Without clientAuth (VS Code) the view reports unavailability. Polling is limited to the open phone dialog and stops on closure or runtime switch.
+
+Rules use a fresh directory-scoped SDK config read (`opencodeClient.getRulesConfiguration`) and RuntimeAPIs.files for the working directory's AGENTS.md. `lib/opencode/rules` retains per-document policy and instruction provenance: merging the experimental config would hide lower-layer provider restrictions. The inspector deliberately labels local instructions separately from inherited, global, agent, and referenced instructions; it does not claim to preview the complete prompt or Console workspace policies. Chat link sharing is distinct from tool access and Markdown exports. The directory-keyed Header remount and runtime-switch invalidation prevent cross-workspace snapshots.
+
+Web and Electron share these inspectors. Shared mobile Header consumers can use them when rebuilt; official TestFlight clients retain their independently bundled UI and existing backend pairing contract. MobileApp navigation and desktop/server lifecycle are unchanged.
+
+### Editable project rules and rolling chat search
+
+The header Rules inspector exposes explicit Edit instructions and Edit configuration. `ProjectRulesEditor` loads a draft through the optional `FilesAPI.readProjectRules` capability; Save and Cancel are explicit. Dirty or saving drafts prevent accidental dialog dismissal. Saves include a revision, leave conflicts intact, and expose a previous-version restore. Configuration controls affect only the local file and preserve inherited sources and unknown settings. Official TestFlight UI is unchanged; VS Code omits editing until its runtime implements the optional capability.
+
+`ChatSearchPanel` searches message text and attachment names through domain SDK loaders. It waits 300 ms after typing, aborts stale queries and runtime switches, limits concurrent readers to four, and shows partial failures and a 200-result cap. A dialog-local cache holds only searchable text, filenames and public message metadata, capped at four million characters; closing or switching runtime clears it. Paging yields between batches to keep the UI responsive. `#search-message-` navigation loads older history through the existing sync loader and clears the target after a successful reveal.
+
+Search opens from the desktop sidebar trigger and the existing `openchamber:sidebar-session-search` shortcut event, not the header. It uses a nonmodal floating region with no backdrop or focus trap. Outside pointer clicks and Escape dismiss it, clear its cache and invalidate queued or in-flight reads. Project-picker portal options belong to the panel and do not dismiss it. Clicking a match selects its bounded text preview; Open chat performs navigation. Preview text is capped at 6,000 characters per displayed match. The unchanged loader scans sessions returned by the active runtime's global session endpoint; it does not search Muse, Claude or ChatGPT website history. Existing scope, date/model/attachment filters and partial-result notices remain.

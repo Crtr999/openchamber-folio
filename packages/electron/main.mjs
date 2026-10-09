@@ -1,5 +1,11 @@
+import { createPersonalHome } from './personal-home.mjs';
+import { createMeetingBoundary, isMeetingCommand, supportsMeetingSystemAudio } from './meeting-boundary.mjs';
+import { createMeetingService } from '@openchamber/web/server/lib/meetings/service.js';
+import { createMeetingSummaryService } from '@openchamber/web/server/lib/meetings/summary.js';
+import { hardenWebsiteSessions, secureWebsiteAttachment } from './website-guest-security.mjs';
+import { createPersonalCalendar } from './personal-calendar.mjs';
 import { canReuseManagedOpenCodePreflight } from './opencode-readiness.mjs';
-import { app, BrowserWindow, dialog, ipcMain, Menu, MessageChannelMain, nativeImage, nativeTheme, net as electronNet, Notification, powerMonitor, powerSaveBlocker, protocol, safeStorage, session, shell, Tray, webContents } from 'electron';
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, MessageChannelMain, nativeImage, nativeTheme, net as electronNet, Notification, powerMonitor, powerSaveBlocker, protocol, safeStorage, session, shell, Tray, webContents } from 'electron';
 import contextMenu from 'electron-context-menu';
 import log from 'electron-log/main.js';
 import dgram from 'node:dgram';
@@ -14,7 +20,7 @@ import updaterPkg from 'electron-updater';
 import { ElectronSshManager } from './ssh-manager.mjs';
 import { replaceFileWithRetry } from './windows-file-replace.mjs';
 import { createTrayController } from './tray.mjs';
-import { createOpenRouterCredits, readOpencodeOpenRouterKey } from './openrouter-credits.mjs';
+import { createOpenRouterCredits, readOpencodeOpenRouterKey, isOfficialOpenRouterBillingConnection, isOpenRouterCreditsAuthorized } from './openrouter-credits.mjs';
 import { resolveManagedOpenCodeCwd } from './opencode-cwd.mjs';
 import { stopEmbeddedServer } from './server-shutdown.mjs';
 import { resolveStartupUrlProbePlan } from './startup-url-selection.mjs';
@@ -77,7 +83,7 @@ import { attachRendererRecovery } from './renderer-recovery.mjs';
 import { mintOutsideFileGrant } from '@openchamber/web/server/lib/fs/routes.js';
 import { fetchUpdateNotes } from '@openchamber/web/server/lib/changelog/update-notes.js';
 import { applyConnectAttemptTimeout } from '@openchamber/web/server/lib/network-defaults.js';
-import { isNetworkAccessBlocked } from '@openchamber/web/server/lib/enterprise-mode.js';
+import { isNetworkAccessBlocked, isEnterpriseMode } from '@openchamber/web/server/lib/enterprise-mode.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -332,15 +338,17 @@ const quitConfirmationMessage = () => {
   if (reasons.length === 0) {
     return 'Background processes (sidecar, SSH sessions) will be stopped.';
   }
-  return `OpenChamber detected ${reasons.join(', ')}. Quitting now will stop sidecar/background processes and may interrupt pending work.`;
+  return `Open Carter detected ${reasons.join(', ')}. Quitting now will stop sidecar/background processes and may interrupt pending work.`;
 };
 
-// OpenRouter balance in the header (and, when asked, a title-only menu bar item). Uses OpenCode's
+// OpenRouter credits in the header (and, when asked, a title-only menu bar item). Uses OpenCode's
 // OpenRouter key unless the user pastes another one into the badge.
 const openRouterCredits = createOpenRouterCredits({
   filePath: path.join(app.getPath('userData'), 'openrouter-credits.json'),
   safeStorage,
   fallbackKey: () => readOpencodeOpenRouterKey(),
+  canUseOpencodeKey: () => isOfficialOpenRouterBillingConnection(),
+  isBlocked: () => isEnterpriseMode(),
   openExternal: (url) => { void shell.openExternal(url); },
   log: (message) => log.info(message),
   createTray: () => {
@@ -354,11 +362,71 @@ const openRouterCredits = createOpenRouterCredits({
   },
 });
 
+const authorizeOpenRouterCredits = (event) => {
+  const owner = state.mainWindow;
+  const runtime = owner && !owner.isDestroyed() ? getWindowRuntimeConfig(owner) : null;
+  const apiBaseUrl = runtime?.apiBaseUrl || (isDev ? state.apiBaseUrl : '');
+  const localOrigin = shouldUsePackagedUi() ? `${UI_PROTOCOL}://app`
+    : isDev ? `http://127.0.0.1:${process.env.OPENCHAMBER_HMR_UI_PORT || '5173'}` : state.localOrigin;
+  return isOpenRouterCreditsAuthorized(event, {
+    owner,
+    localOrigin,
+    localRuntime: sameOrigin(apiBaseUrl, state.sidecarUrl || state.localOrigin || ''),
+  });
+};
+
+const personalHome = createPersonalHome({
+  filePath: path.join(app.getPath('userData'), 'personal-home.json'),
+  safeStorage,
+  openExternal: (url) => shell.openExternal(url),
+  isBlocked: () => isEnterpriseMode(),
+  calendar: createPersonalCalendar({ executable: path.join(app.isPackaged ? process.resourcesPath : app.getAppPath() + '/resources', 'personal-home/CalendarBridge.app/Contents/MacOS/CalendarBridge') }),
+});
+
+const meetingBoundary = createMeetingBoundary({
+  service: createMeetingService({ directory: path.join(app.getPath('userData'), 'private-meetings') }),
+  summary: createMeetingSummaryService(),
+  isSummaryBlocked: () => isEnterpriseMode(),
+  authorize: (event) => {
+    const window = state.mainWindow;
+    if (!window || window.isDestroyed() || event.sender !== window.webContents
+      || event.senderFrame !== event.sender.mainFrame || !isLocalSender(event.sender)) return false;
+    const runtime = getWindowRuntimeConfig(window);
+    // HMR's same-origin proxy deliberately strips the renderer API base URL.
+    const apiBaseUrl = runtime.apiBaseUrl || (isDev ? state.apiBaseUrl : '');
+    return sameOrigin(apiBaseUrl, state.sidecarUrl || state.localOrigin || '');
+  },
+  getSources: (options) => desktopCapturer.getSources(options),
+  systemAudioSupported: supportsMeetingSystemAudio(process.platform, os.release()),
+  emit: (contents, detail) => {
+    if (!contents.isDestroyed() && isLocalSender(contents)) {
+      contents.send('openchamber:emit', { event: 'desktop:meeting-lifecycle', detail });
+    }
+  },
+});
+
+const interruptMeeting = (reason, contents) => {
+  void meetingBoundary.interrupt(reason, contents).catch(() => {
+    // Do not log meeting contents or backend errors. The caller sees failures over IPC.
+    log.warn('[meetings] interrupted recording could not be saved');
+  });
+};
+
+const attachMeetingLifecycle = (contents) => {
+  if (contents.getType() !== 'window') return;
+  contents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
+    if (isMainFrame && !isInPlace) interruptMeeting('navigation', contents);
+  });
+  contents.on('render-process-gone', () => interruptMeeting('renderer-gone', contents));
+  contents.on('destroyed', () => interruptMeeting('renderer-gone', contents));
+};
+
 const shutdownBackgroundServices = () => {
   if (!state.backgroundShutdownPromise) {
     setDesktopKeepAwakeActive(false);
     shellEnvironmentAbort.abort();
     state.backgroundShutdownPromise = Promise.all([
+      meetingBoundary.dispose(),
       startShellEnvironmentProbe().catch(() => {}),
       Promise.resolve(openRouterCredits.stop()),
       killSidecar(),
@@ -470,8 +538,8 @@ const requestQuitWithConfirmation = async () => {
   try {
     const result = await dialog.showMessageBox({
       type: 'warning',
-      title: 'Quit OpenChamber?',
-      message: 'Quit OpenChamber?',
+      title: 'Quit Open Carter?',
+      message: 'Quit Open Carter?',
       detail: quitConfirmationMessage(),
       buttons: ['Quit', 'Cancel'],
       defaultId: 1,
@@ -2108,6 +2176,10 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {}, 
       trayEnabled: isMacMenuBarEnabled(),
     }),
   }));
+  browserWindow.on('page-title-updated', (event, title) => {
+    event.preventDefault();
+    browserWindow.setTitle(title.replace(/OpenChamber$/, 'Open Carter'));
+  });
   browserWindow.__ocLabel = label || nextWindowLabel();
   browserWindow.__ocRuntimeConfig = { apiBaseUrl: desktopApiBaseUrl, clientToken: desktopClientToken, requestHeaders: desktopRequestHeaders };
   browserWindow.__ocInitScript = buildInitScript(desktopLocalOrigin, state.bootOutcome, desktopApiBaseUrl, desktopClientToken, desktopRequestHeaders);
@@ -2169,7 +2241,9 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {}, 
   browserWindow.on('move', () => {
     debounceWindowStatePersist(browserWindow, false);
   });
+  browserWindow.on('hide', () => interruptMeeting('navigation', browserWindow.webContents));
   browserWindow.on('close', (event) => {
+    interruptMeeting(state.quitRequested ? 'quit' : 'navigation', browserWindow.webContents);
     if (!state.quitRequested && shouldHideMainWindowToTray(browserWindow)) {
       debounceWindowStatePersist(browserWindow, true);
       event.preventDefault();
@@ -2375,6 +2449,10 @@ const showMainWindowWithSplash = () => {
 };
 
 const activateMainWindow = async (url, localOrigin, bootOutcome, runtimeConfig = {}) => {
+  // Stop capture before any host config changes, even when the document stays put.
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    await meetingBoundary.interrupt('navigation', state.mainWindow.webContents);
+  }
   state.startupResolved = true;
   state.localOrigin = localOrigin;
   state.apiBaseUrl = typeof runtimeConfig.apiBaseUrl === 'string' ? runtimeConfig.apiBaseUrl : state.apiBaseUrl;
@@ -2520,7 +2598,7 @@ const createMiniChatWindow = async ({ mode, sessionId = '', directory = '', proj
   const desktopClientToken = effectiveRuntimeConfig.clientToken || '';
   const desktopRequestHeaders = effectiveRuntimeConfig.requestHeaders || {};
   const browserWindow = new BrowserWindow({
-    title: 'OpenChamber Mini Chat',
+    title: 'Open Carter Mini Chat',
     width: MINI_CHAT_WINDOW_WIDTH,
     height: MINI_CHAT_WINDOW_HEIGHT,
     minWidth: MINI_CHAT_MIN_WINDOW_WIDTH,
@@ -3554,6 +3632,11 @@ const closeAllDevTunnels = () => {
 
 const handleInvoke = async (browserWindow, command, args = {}) => {
   switch (command) {
+    case 'desktop_personal_home': {
+      const runtime = getWindowRuntimeConfig(browserWindow);
+      if (!browserWindow || !sameOrigin(runtime.apiBaseUrl, state.localOrigin || state.sidecarUrl || '')) throw new Error('Personal connections require the local desktop instance.');
+      return personalHome.handle(args);
+    }
     case 'desktop_openrouter_credits': {
       const action = args?.action;
       if (action === 'set-key') return openRouterCredits.setKey(typeof args?.key === 'string' ? args.key : '');
@@ -3626,8 +3709,8 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       const enabled = args.enabled === true;
       const settingsArgs = {
         openAtLogin: enabled,
-        ...(process.platform === 'darwin' ? { openAsHidden: enabled } : {}),
-        ...(process.platform === 'win32' ? getLoginItemOptions() : { args: enabled ? [BACKGROUND_START_ARG] : [] }),
+        ...(process.platform === 'darwin' ? { openAsHidden: false } : {}),
+        ...(process.platform === 'win32' ? getLoginItemOptions() : { args: process.platform === 'darwin' ? [] : enabled ? [BACKGROUND_START_ARG] : [] }),
         ...(process.platform === 'win32' ? { enabled } : {}),
       };
       app.setLoginItemSettings(settingsArgs);
@@ -4558,9 +4641,9 @@ const buildMacMenu = () => {
 
   return Menu.buildFromTemplate([
     {
-      label: app.name,
+      label: 'Open Carter',
       submenu: [
-        { label: 'About OpenChamber', click: () => dispatchAction('about') },
+        { label: 'About Open Carter', click: () => dispatchAction('about') },
         {
           label: 'Check for Updates',
           click: () => dispatchCheckForUpdates(),
@@ -4670,7 +4753,7 @@ const buildAutoHiddenMenu = () => {
     {
       label: 'OpenChamber',
       submenu: [
-        { label: 'About OpenChamber', click: () => dispatchAction('about') },
+        { label: 'About Open Carter', click: () => dispatchAction('about') },
         {
           label: 'Check for Updates',
           click: () => dispatchCheckForUpdates(),
@@ -4797,7 +4880,20 @@ const loadUrlInsideWebContents = (contents, rawUrl) => {
   }
 };
 
+const attachWebsiteGuestSecurity = (contents) => {
+  if (contents.getType() === 'webview') return;
+  contents.on('will-attach-webview', (event, webPreferences, params) => {
+    const parent = BrowserWindow.fromWebContents(contents);
+    const runtime = parent ? getWindowRuntimeConfig(parent) : null;
+    const localParent = Boolean(parent && isLocalSender(contents)
+      && sameOrigin(runtime?.apiBaseUrl || '', state.localOrigin || state.sidecarUrl || ''));
+    secureWebsiteAttachment({ event, webPreferences, params, localParent });
+  });
+};
+
 app.on('web-contents-created', (_event, contents) => {
+  attachMeetingLifecycle(contents);
+  attachWebsiteGuestSecurity(contents);
   if (contents.getType() !== 'webview') return;
 
   contents.setWindowOpenHandler(({ url }) => {
@@ -4848,6 +4944,12 @@ const isLocalSender = (webContents) => {
   }
 };
 
+// The early splash window predates main.mjs and must receive the same guard.
+for (const contents of webContents.getAllWebContents()) {
+  attachWebsiteGuestSecurity(contents);
+  attachMeetingLifecycle(contents);
+}
+
 const COMMANDS_SAFE_FOR_REMOTE = new Set([
   'desktop_hosts_get',
   'desktop_host_probe',
@@ -4869,13 +4971,39 @@ const COMMANDS_SAFE_FOR_REMOTE = new Set([
 ]);
 
 ipcMain.handle('openchamber:invoke', async (event, command, args) => {
-  if (command === 'desktop_openrouter_credits' && event.senderFrame !== event.sender.mainFrame) throw new Error('OpenRouter credits are available only to the main application.');
+  if (isMeetingCommand(command)) {
+    try {
+      return await meetingBoundary.invoke(event, command, args);
+    } catch (error) {
+      // Electron serializes Error.message but not custom error.code properties.
+      const safeCode = /^[a-z][a-z0-9_]{0,80}$/.test(error?.code);
+      const code = safeCode ? error.code : 'meeting_failed';
+      throw new Error(`${code}: ${safeCode ? error.message : 'The meeting operation failed.'}`);
+    }
+  }
+  if (['desktop_openrouter_credits', 'desktop_personal_home'].includes(command) && event.senderFrame !== event.sender.mainFrame) throw new Error('This desktop connection is available only to the main application.');
+  if (command === 'desktop_openrouter_credits') {
+    if (!authorizeOpenRouterCredits(event)) {
+      throw new Error('Billing is available only in the trusted local main application.');
+    }
+  }
   if (!isLocalSender(event.sender) && !COMMANDS_SAFE_FOR_REMOTE.has(command)) {
     log.warn(`[ipc] rejected ${command} from non-local origin: ${event.sender?.getURL?.() || '(unknown)'}`);
     throw new Error('IPC not available for this origin');
   }
   const browserWindow = BrowserWindow.fromWebContents(event.sender);
-  return handleInvoke(browserWindow, command, args);
+  const result = await handleInvoke(browserWindow, command, args);
+  if (command === 'desktop_openrouter_credits' && !authorizeOpenRouterCredits(event)) {
+    throw new Error('Billing is available only in the trusted local main application.');
+  }
+  return result;
+});
+
+// An isolated-preload notification can revoke capture, never grant it.
+ipcMain.on('openchamber:meeting-runtime-changing', (event) => {
+  void meetingBoundary.runtimeChanging(event).catch(() => {
+    log.warn('[meetings] runtime-change recording interruption failed');
+  });
 });
 
 ipcMain.handle('openchamber:dialog:open', async (event, options) => {
@@ -5171,6 +5299,7 @@ app.on('before-quit', (event) => {
   state.quitRequested = true;
   // Loopback listeners would otherwise outlive the window that needed them.
   closeAllDevTunnels();
+  personalHome.close();
 
   if (state.installingUpdate) {
     return;
@@ -5269,9 +5398,20 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = readThemeSource();
   registerPackagedUiProtocol();
   hardenBrowserPanelSession();
+  hardenWebsiteSessions(partition => session.fromPartition(partition));
+  session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+    void meetingBoundary.displayMedia(request, callback);
+  }, { useSystemPicker: false });
+  powerMonitor.on('suspend', () => interruptMeeting('sleep'));
   setupAutoUpdater();
 
   if (process.platform === 'darwin') {
+    app.setAboutPanelOptions({
+      applicationName: 'Open Carter',
+      applicationVersion: '1.0',
+      version: `OpenChamber ${APP_VERSION}`,
+      copyright: 'Carter Laborde · personal build',
+    });
     Menu.setApplicationMenu(buildMacMenu());
   } else {
     Menu.setApplicationMenu(buildAutoHiddenMenu());
@@ -5279,10 +5419,20 @@ app.whenReady().then(async () => {
   setupTray();
 
   if ((process.platform === 'darwin' || process.platform === 'win32') && app.isPackaged) {
-    const openAtLogin = loginItemSettings?.openAtLogin === true;
+    let openAtLogin = loginItemSettings?.openAtLogin === true;
+    // Open Carter 1.0: launch at login by default, once. Turning it off later in
+    // Settings or System Settings is respected because the marker stays.
+    if (process.platform === 'darwin') {
+      const marker = path.join(app.getPath('userData'), 'open-carter-login-default');
+      if (!fs.existsSync(marker)) {
+        openAtLogin = true;
+        try { fs.writeFileSync(marker, '1'); } catch { /* best effort */ }
+      }
+    }
     app.setLoginItemSettings({
       openAtLogin,
-      ...(process.platform === 'darwin' ? { openAsHidden: openAtLogin, args: openAtLogin ? [BACKGROUND_START_ARG] : [] } : {}),
+      // Open Carter opens visibly at login, on Home, rather than hidden in the tray.
+      ...(process.platform === 'darwin' ? { openAsHidden: false, args: [] } : {}),
       ...(process.platform === 'win32' ? { ...getLoginItemOptions(), enabled: openAtLogin } : {}),
     });
   }

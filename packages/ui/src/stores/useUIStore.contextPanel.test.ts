@@ -9,11 +9,106 @@ const getTerminalTab = (directory: string) => getContextPanelTabs(directory).fin
 const originalPersistOptions = useUIStore.persist.getOptions();
 
 beforeEach(() => {
-  useUIStore.setState({ contextPanelByDirectory: {}, contextRailOrder: [] });
+  useUIStore.setState({ contextPanelByDirectory: {}, contextRailOrder: [], contextRailVisible: true });
   useTerminalStore.getState().clearAll();
 });
 
 describe('useUIStore context panel tabs', () => {
+  test('migration closes an unresolved selected pane without deleting genuine tabs or widths', async () => {
+    useUIStore.getState().openContextSurface('/repo', 'notes');
+    useUIStore.getState().setContextPanelWidth('/repo', 'notes', 620, 1240);
+    const panel = useUIStore.getState().contextPanelByDirectory['/repo'];
+    const options = useUIStore.persist.getOptions();
+    const migrated = await options.migrate?.({ contextPanelByDirectory: { '/repo': { ...panel, activeTabId: 'provider:obsolete' } } }, 23);
+    expect(migrated).toMatchObject({ contextPanelByDirectory: { '/repo': {
+      isOpen: false,
+      tabs: panel.tabs,
+      widthByMode: { notes: 620 },
+      widthFractionByMode: { notes: 0.5 },
+    } } });
+  });
+
+  test('billing rollback preserves genuine pane state and the rail hide preference', async () => {
+    useUIStore.getState().openContextSurface('/repo', 'notes');
+    const panel = useUIStore.getState().contextPanelByDirectory['/repo'];
+    const options = useUIStore.persist.getOptions();
+    const state = { contextPanelByDirectory: { '/repo': panel }, contextRailVisible: false, contextRailHiddenSurfaces: ['git', 'plan', 'provider:azure'], contextRailOrder: ['notes', 'provider:azure'] };
+    expect(await options.migrate?.(structuredClone(state), 23)).toMatchObject({
+      contextPanelByDirectory: { '/repo': { isOpen: true, activeTabId: panel.activeTabId } },
+      contextRailVisible: false,
+      contextRailHiddenSurfaces: ['git', 'plan'],
+      contextRailOrder: ['notes'],
+    });
+    expect(await options.migrate?.(structuredClone(state), 24)).toMatchObject({ contextRailHiddenSurfaces: ['git', 'plan'], contextRailOrder: ['notes'] });
+  });
+
+  test('billing rollback drops only retired tabs and widths and closes their selected panel', async () => {
+    useUIStore.getState().openContextSurface('/repo', 'notes');
+    useUIStore.getState().setContextPanelWidth('/repo', 'notes', 620, 1240);
+    const panel = useUIStore.getState().contextPanelByDirectory['/repo'];
+    const retired = { ...panel.tabs[0], id: 'provider:azure', mode: 'provider:azure', dedupeKey: 'provider:azure' };
+    const saved = { ...panel, activeTabId: retired.id, tabs: [...panel.tabs, retired],
+      widthByMode: { ...panel.widthByMode, 'provider:azure': 700 },
+      widthFractionByMode: { ...panel.widthFractionByMode, 'provider:azure': 0.6 } };
+    const options = useUIStore.persist.getOptions();
+    const migrated = await options.migrate?.({ contextPanelByDirectory: { '/repo': saved } }, 24);
+    expect(migrated).toMatchObject({ contextPanelByDirectory: { '/repo': {
+      isOpen: false, tabs: panel.tabs, widthByMode: { notes: 620 }, widthFractionByMode: { notes: 0.5 },
+    } } });
+  });
+
+  test('hiding the entire context area preserves tabs, selection, widths and open state', () => {
+    const store = useUIStore.getState();
+    store.openContextPanelTab('/repo', { mode: 'file', targetPath: '/repo/a.ts' });
+    store.setContextPanelWidth('/repo', 'file', 600, 1200);
+    store.openContextPanelTab('/other', { mode: 'notes' });
+    const previous = useUIStore.getState().contextPanelByDirectory;
+    store.setContextRailVisible(false);
+    expect(useUIStore.getState().contextRailVisible).toBe(false);
+    expect(useUIStore.getState().contextPanelByDirectory).toBe(previous);
+    store.setContextRailVisible(true);
+    expect(useUIStore.getState().contextPanelByDirectory).toBe(previous);
+    expect(previous['/repo'].isOpen).toBe(true);
+  });
+
+  test('showing the rail does not open a previously closed panel', () => {
+    const store = useUIStore.getState();
+    store.openContextPanelTab('/repo', { mode: 'notes' });
+    store.closeContextPanel('/repo');
+    store.setContextRailVisible(false);
+    store.setContextRailVisible(true);
+    expect(useUIStore.getState().contextPanelByDirectory['/repo'].isOpen).toBe(false);
+  });
+
+  test('explicit surface navigation reveals a hidden active surface instead of closing it', () => {
+    const store = useUIStore.getState();
+    store.openContextSurface('/repo', 'notes');
+    const id = useUIStore.getState().contextPanelByDirectory['/repo'].activeTabId;
+    store.setContextRailVisible(false);
+    store.openContextSurface('/repo', 'notes');
+    expect(useUIStore.getState().contextRailVisible).toBe(true);
+    expect(useUIStore.getState().contextPanelByDirectory['/repo'].activeTabId).toBe(id);
+    expect(useUIStore.getState().contextPanelByDirectory['/repo'].isOpen).toBe(true);
+  });
+
+  test('background opens leave the hidden preference untouched, foreground opens reveal it', () => {
+    const store = useUIStore.getState();
+    store.setContextRailVisible(false);
+    store.openContextBrowser('/repo', 'https://example.com', { reveal: false });
+    expect(useUIStore.getState().contextRailVisible).toBe(false);
+    store.openContextFile('/repo', '/repo/a.ts');
+    expect(useUIStore.getState().contextRailVisible).toBe(true);
+  });
+
+  test('rail visibility persists and migration preserves explicit choices', async () => {
+    const options = useUIStore.persist.getOptions();
+    useUIStore.getState().setContextRailVisible(false);
+    expect(options.partialize?.(useUIStore.getState())).toMatchObject({ contextRailVisible: false });
+    expect(await options.migrate?.({ contextRailVisible: false }, 22)).toMatchObject({ contextRailVisible: false });
+    expect(await options.migrate?.({}, 22)).toMatchObject({ contextRailVisible: true });
+    expect(await options.migrate?.({ contextRailVisible: 'false' }, 22)).toMatchObject({ contextRailVisible: true });
+  });
+
   test('opens a plugin surface tab', () => {
     useUIStore.getState().openContextPanelTab('/repo', {
       mode: 'plugin:hello',

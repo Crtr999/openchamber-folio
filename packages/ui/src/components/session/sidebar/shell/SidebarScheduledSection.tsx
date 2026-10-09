@@ -116,7 +116,7 @@ export const SidebarScheduledSection: React.FC<{ mobileVariant: boolean; onNavig
         <button
           type="button"
           onClick={toggle}
-          className="group flex w-full items-center gap-1.5 py-1 pl-4 pr-10 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          className="group flex w-full items-center gap-1.5 rounded-md py-0.5 pl-4 pr-10 text-left hover:bg-interactive-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           aria-expanded={!collapsed}
         >
           <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
@@ -125,7 +125,7 @@ export const SidebarScheduledSection: React.FC<{ mobileVariant: boolean; onNavig
               <Icon name={collapsed ? 'arrow-right-s' : 'arrow-down-s'} className="h-3.5 w-3.5" />
             </span>
           </span>
-          <span className="typography-ui-label font-semibold lowercase text-foreground">{t('sessions.sidebar.scheduled.title')}</span>
+          <span className="typography-ui-label font-semibold text-foreground">{t('sessions.sidebar.scheduled.title')}</span>
           {collapsed && <span className="typography-micro tabular-nums text-muted-foreground">{items.length}</span>}
         </button>
         <button
@@ -159,7 +159,7 @@ export const SidebarScheduledSection: React.FC<{ mobileVariant: boolean; onNavig
                   onClick={() => openTask(item)}
                   title={describe(item)}
                   className={cn(
-                    'my-0.5 flex w-full items-center gap-2 rounded-md py-1 pl-1.5 pr-2 text-left typography-ui-label hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                    'my-0.5 flex w-full items-center gap-2 rounded-md py-1 pl-[26px] pr-2 text-left typography-ui-label hover:bg-interactive-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
                     isActive && 'bg-interactive-selection/70 text-interactive-selection-foreground',
                     !task.enabled && 'text-muted-foreground',
                   )}

@@ -31,6 +31,19 @@ const localeDictionaries = {
 } as const;
 
 describe('i18n dictionaries', () => {
+  test('sidebar section headings use the requested English labels and translated locale labels', () => {
+    expect(enDict['sessions.sidebar.activity.chatsTitle']).toBe('All Chats');
+    expect(enDict['sessions.sidebar.pinned.title']).toBe('Pinned');
+    expect(enDict['sessions.sidebar.scheduled.title']).toBe('Scheduled');
+    for (const [locale, dictionary] of Object.entries(localeDictionaries)) {
+      if (locale === 'en') continue;
+      for (const key of ['sessions.sidebar.activity.chatsTitle', 'sessions.sidebar.pinned.title', 'sessions.sidebar.scheduled.title'] as const) {
+        expect(dictionary[key]).toBeTruthy();
+        expect(dictionary[key]).not.toBe(enDict[key]);
+      }
+    }
+  });
+
   test('all locales stay in key parity with english', () => {
     const englishKeys = Object.keys(enDict).sort();
 

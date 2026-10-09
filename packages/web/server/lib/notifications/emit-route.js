@@ -31,6 +31,7 @@ export const createPluginNotificationEmitter = (dependencies) => {
     readSettingsFromDiskMigrated,
     emitDesktopNotification,
     broadcastUiNotification,
+    isRootNotificationSession,
     now = Date.now,
   } = dependencies;
 
@@ -62,6 +63,9 @@ export const createPluginNotificationEmitter = (dependencies) => {
     }
 
     const settings = await readSettingsFromDiskMigrated();
+    if (parsed.data.sessionId && isRootNotificationSession && !await isRootNotificationSession(parsed.data.sessionId, parsed.data.directory)) {
+      return { status: 200, body: { delivered: false, reason: 'not-root-session' } };
+    }
     if (settings.nativeNotificationsEnabled === false) {
       return { status: 200, body: { delivered: false, reason: 'notifications-disabled' } };
     }

@@ -33,7 +33,7 @@ test('a collapsed virtual folder shows live and unread descendants without mount
   const sessions = [{ session: session('parent'), worktree: null, children: [{ session: session('child', 'parent'), worktree: null, children: [] }] }];
   const render = (notifyOnSubtasks = false, isCollapsed = true, archivedBucket = false) => root.render(
     <I18nProvider><SessionSidebarFolderItem
-      folder={{ id: 'folder', name: 'Folder', createdAt: 1, sessionIds: ['parent'] }}
+      folder={{ id: 'folder', name: 'API iOS Notes', createdAt: 1, sessionIds: ['parent'] }}
       sessions={[]} activityNodes={sessions} notifyOnSubtasks={notifyOnSubtasks}
       isCollapsed={isCollapsed} archivedBucket={archivedBucket} renderBody={false}
       onToggle={() => undefined} onRename={() => undefined} onDelete={() => undefined}
@@ -43,6 +43,13 @@ test('a collapsed virtual folder shows live and unread descendants without mount
     replaceGlobalSessionStatusById(new Map());
     useNotificationStore.setState({ list: [], index: { session: { unseenCount: {}, unseenHasError: {} }, project: { unseenCount: {}, unseenHasError: {} } } });
     await act(async () => render());
+    const folderHeader = container.querySelector('[aria-label="Expand folder API iOS Notes"]');
+    expect(folderHeader).not.toBeNull();
+    expect(folderHeader?.classList.contains('w-full')).toBe(true);
+    expect(folderHeader?.classList.contains('rounded-md')).toBe(true);
+    expect(folderHeader?.classList.contains('hover:bg-interactive-hover/60')).toBe(true);
+    expect(folderHeader?.textContent).toContain('API iOS Notes');
+    expect(folderHeader?.querySelector('.lowercase')).toBeNull();
     await act(async () => replaceGlobalSessionStatusById(new Map([['child', { status: { type: 'busy' }, directory: '/repo' }]])));
     expect(container.querySelector('[aria-label="Session active"]')).not.toBeNull();
     expect(container.querySelector('[data-hidden-session]')).toBeNull();

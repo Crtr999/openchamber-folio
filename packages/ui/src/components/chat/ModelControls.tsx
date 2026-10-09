@@ -1,3 +1,8 @@
+import { toast } from '@/components/ui';
+import { openNativeChatGPT } from '@/lib/chatgpt/native';
+import { useMuseStore } from '@/stores/useMuseStore';
+import { useClaudeStore } from '@/stores/useClaudeStore';
+import { ClaudeLogo } from '@/components/ui/ClaudeLogo';
 import { OPENCODE_TOOLS } from '@/lib/opencode/tools';
 import React from 'react';
 import { focusChatInput } from './composer/editor/dom';
@@ -17,6 +22,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
+import { MuseLogo } from '@/components/ui/MuseLogo';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon } from "@/components/icon/Icon";
@@ -24,7 +30,7 @@ import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import type { IconName } from "@/components/icon/icons";
 import { ModelPickerList, type ModelPickerEntry } from '@/components/model-picker/ModelPickerList';
 import { useIsVSCodeRuntime } from '@/hooks/useRuntimeAPIs';
-import { isDesktopShell } from '@/lib/desktop';
+import { isDesktopShell, isElectronShell, isDesktopLocalOriginActive } from '@/lib/desktop';
 import { useAgentColors } from '@/hooks/useAgentColors';
 import { useDeviceInfo } from '@/lib/device';
 import { mergeModelMetadataWithLiveModel } from '@/lib/modelMetadata';
@@ -2944,12 +2950,42 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                                 <DropdownMenuSeparator />
                                             </>
                                         )}
+                                        {!selection && !currentSessionId && isElectronShell() && isDesktopLocalOriginActive()
+                                            && matchesRankQuery(['ChatGPT'], agentSearchQuery) && <DropdownMenuItem
+                                                className="typography-meta"
+                                                onSelect={() => {
+                                                    setIsAgentSelectorOpen(false);
+                                                    void openNativeChatGPT(t('chatgpt.nativeUnavailable')).catch(error => toast.error(error instanceof Error ? error.message : t('chatgpt.nativeUnavailable')));
+                                                }}>
+                                                <ProviderLogo providerId="chatgpt" alt="ChatGPT" className="size-4" />
+                                                <span className="font-medium">ChatGPT</span>
+                                            </DropdownMenuItem>}
+                                        {!selection && !currentSessionId && isElectronShell() && isDesktopLocalOriginActive()
+                                            && matchesRankQuery(['Muse'], agentSearchQuery) && <DropdownMenuItem
+                                                className="typography-meta"
+                                                onSelect={() => {
+                                                    setIsAgentSelectorOpen(false);
+                                                    useMuseStore.getState().open();
+                                                }}>
+                                                <MuseLogo className="size-4" />
+                                                <span className="font-medium">Muse</span>
+                                            </DropdownMenuItem>}
+                                        {!selection && !currentSessionId && isElectronShell() && isDesktopLocalOriginActive()
+                                            && matchesRankQuery(['Claude'], agentSearchQuery) && <DropdownMenuItem
+                                                className="typography-meta"
+                                                onSelect={() => {
+                                                    setIsAgentSelectorOpen(false);
+                                                    useClaudeStore.getState().open();
+                                                }}>
+                                                <ClaudeLogo className="size-4" />
+                                                <span className="font-medium">Claude</span>
+                                            </DropdownMenuItem>}
                                         {sortedAndFilteredAgents.length === 0 ? (
                                             <div className="px-2 py-4 text-center typography-meta text-muted-foreground">
                                                 No agents found
                                             </div>
                                         ) : (
-                                            sortedAndFilteredAgents.map((agent) => (
+                                            sortedAndFilteredAgents.filter(agent => currentSessionId || selection || !isElectronShell() || !isDesktopLocalOriginActive() || (agent.name !== 'ChatGPT' && agent.name !== 'Muse' && agent.name !== 'Claude')).map((agent) => (
                                                 <AgentDescriptionTooltip key={agent.name} description={agent.description}>
                                                     <DropdownMenuItem
                                                         className="typography-meta"
@@ -3037,7 +3073,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
     const inlineMobileSelection = isMobile && Boolean(selection);
     const inlineClassName = cn(
-        '@container/model-controls flex items-center min-w-0',
+        '@container/model-controls flex min-w-0',
+        'items-center',
         // Only force full-width + truncation behaviors on true mobile layouts.
         // VS Code also uses "compact" mode, but should keep its right-aligned inline sizing.
         isMobile && 'w-full',

@@ -146,7 +146,8 @@ const SessionFolderItemBase = <TSessionNode,>({
         ref={droppableRef}
         className={cn(
           'group/folder relative flex items-center justify-between gap-1.5 py-1 min-w-0 rounded-md',
-          'cursor-pointer',
+          'w-full cursor-pointer',
+          !renaming && !isDropTarget && 'hover:bg-interactive-hover/60',
           isDropTarget && 'bg-primary/10 ring-1 ring-inset ring-primary/30',
         )}
         onClick={renaming ? undefined : (event) => {

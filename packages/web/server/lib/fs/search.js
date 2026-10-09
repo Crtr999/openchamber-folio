@@ -1,3 +1,5 @@
+import { isPrivateMeetingPath } from '../meetings/private-paths.js';
+
 const FILE_SEARCH_MAX_CONCURRENCY = 5;
 const FILE_SEARCH_EXCLUDED_DIRS = new Set([
   'node_modules',
@@ -97,6 +99,10 @@ const fuzzyMatchScoreNormalized = (normalizedQuery, candidate) => {
 
 export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinaryForSpawn }) => {
   const searchFilesystemFiles = async (rootPath, options) => {
+    // Refuse recursive scans whose scope could include private meeting records.
+    if (await isPrivateMeetingPath(rootPath, { includeAncestors: true })) {
+      throw Object.assign(new Error('Private meeting files are not available through filesystem search'), { code: 'EACCES' });
+    }
     const { limit, query, includeHidden, respectGitignore } = options;
     const includeHiddenEntries = Boolean(includeHidden);
     const normalizedQuery = query.trim().toLowerCase();

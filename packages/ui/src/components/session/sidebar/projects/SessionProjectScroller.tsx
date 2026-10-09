@@ -1,4 +1,7 @@
 import React from 'react';
+import { ChatGPTFolder } from '../shell/ChatGPTFolder';
+import { MuseFolder } from '../shell/MuseFolder';
+import { ClaudeFolder } from '../shell/ClaudeFolder';
 import { cn } from '@/lib/utils';
 import {
   DndContext,
@@ -363,7 +366,7 @@ function SessionProjectScrollerComponent({ model, view, actions }: Props): React
     if (row.kind === 'session') {
       const subtreeContainsEditing = new Set<string>();
       if (nodeContainsSessionId(row.node, model.state.editingId)) subtreeContainsEditing.add(row.node.session.id);
-      return <div onFocusCapture={() => setFocusedRowKey(row.key)} onBlurCapture={() => setFocusedRowKey((current) => current === row.key ? null : current)}>
+      return <div className={row.renderContext === 'pinned' ? 'pl-5' : undefined} onFocusCapture={() => setFocusedRowKey(row.key)} onBlurCapture={() => setFocusedRowKey((current) => current === row.key ? null : current)}>
         <SessionTreeItem
           {...model.groupProps}
           node={row.node} depth={row.depth} groupDirectory={row.groupDirectory} projectId={row.projectId}
@@ -381,12 +384,12 @@ function SessionProjectScrollerComponent({ model, view, actions }: Props): React
       </div>;
     }
     if (row.kind === 'run') {
-      return <RunSidebarRow
+      return <div className={row.renderContext === 'pinned' ? 'pl-5' : undefined}><RunSidebarRow
         run={row.run} laneNodes={row.laneNodes} renderContext={row.renderContext}
         projectId={row.projectId} projectLabel={row.projectLabel}
         expansionKey={row.expansionKey} expanded={row.expanded} forceExpanded={row.forceExpanded}
         notifyOnSubtasks={model.groupProps.notifyOnSubtasks} toggleParent={model.groupProps.toggleParent}
-      />;
+      /></div>;
     }
     if (row.kind === 'show-control') {
       // Timeline rows have no left gutter, so the control lines up with their
@@ -487,6 +490,9 @@ function SessionProjectScrollerComponent({ model, view, actions }: Props): React
             <SessionSidebarRows model={model.rowModel} scrollElement={scrollElement} pinnedRowIndexes={pinnedRowIndexes} renderRow={renderRow} onFirstVisibleIndexChange={handleFirstVisibleIndexChange} />
           </SortableContext>
         </DndContext>
+        <ChatGPTFolder />
+        <MuseFolder />
+        <ClaudeFolder />
       </ScrollableOverlay>
     </CrossfadeZoneHeaders>
     <FolderDeleteConfirmDialog value={folderDeleteConfirm} setValue={setFolderDeleteConfirm} onConfirm={() => {

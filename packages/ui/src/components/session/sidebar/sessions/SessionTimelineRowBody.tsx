@@ -59,10 +59,12 @@ const ProjectImageIcon: React.FC<{ project: TimelineRowProject; fallback: React.
   />;
 };
 
-const TimelineProjectIcon: React.FC<{ project: TimelineRowProject | null }> = ({ project }) => {
+export const TimelineProjectIcon: React.FC<{ project: TimelineRowProject | null }> = ({ project }) => {
   const iconName = project?.icon ? PROJECT_ICON_MAP[project.icon] : null;
   const iconColor = project?.color ? (PROJECT_COLOR_MAP[project.color] ?? null) : null;
-  const glyph = iconName
+  const glyph = project?.icon === 'chatgpt'
+    ? <ProviderLogo providerId="chatgpt" className="h-3.5 w-3.5" alt="ChatGPT" />
+    : iconName
     ? <Icon name={iconName} className={cn('h-3.5 w-3.5', !iconColor && 'text-muted-foreground/75')} style={iconColor ? { color: iconColor } : undefined} />
     : <Icon name="folder" className="h-3.5 w-3.5 text-muted-foreground/75" style={iconColor ? { color: iconColor } : undefined} />;
   if (!project?.iconImage) {

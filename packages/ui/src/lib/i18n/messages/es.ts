@@ -1,3 +1,10 @@
+import { chatgptI18n } from './chatgpt.i18n';
+import { museI18n } from './muse.i18n';
+import { claudeI18n } from './claude.i18n';
+import { meetingsI18n } from './meetings.i18n';
+import { homeI18n } from './home.i18n';
+import { personalToolsI18n } from './personal-tools.i18n';
+import { workspaceStatusI18n } from './workspace-status.i18n';
 import { carterI18n } from './carter.i18n';
 import type { I18nKey } from './en';
 import { settingsDict } from './es.settings';
@@ -15,6 +22,20 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  ...chatgptI18n['es'],
+  ...museI18n.es,
+  ...claudeI18n.es,
+  ...meetingsI18n.es,
+  'meeting.quickStart': 'Iniciar reunión',
+  'meeting.partial': 'No se pudieron leer algunas reuniones guardadas. La lista está incompleta; los archivos dañados no se modificaron.',
+  'meeting.summaryReview': 'Revisar modelo de resumen',
+  'meeting.summaryDisclosure': 'Autorizo enviar solo esta transcripción a {provider}/{model}. Se excluyen notas, título, calendario y audio. El coste y la cobertura de suscripción son desconocidos. No se crea un chat.',
+  'meeting.newRecording': 'Esta grabación está cerrada. Crea una nueva reunión para volver a grabar.',
+  'meeting.screenPermission': 'El permiso para compartir pantalla se solicita solo para capturar audio del sistema. No se leen, guardan ni transmiten imágenes de pantalla.',
+  'header.sessionTabs.pinSidebar': 'Fijar en la barra lateral',
+  'header.sessionTabs.unpinSidebar': 'Desfijar de la barra lateral',
+  ...homeI18n['es'],
+  ...personalToolsI18n['es'],
   "opencodeCompatibility.bundled": "OpenCode viene incluido en OpenChamber. Actualiza OpenChamber para obtener OpenCode v2.",
   "opencodeCompatibility.title": "Se requiere OpenCode v2",
   "opencodeCompatibility.outdatedTitle": "Actualiza OpenCode",
@@ -71,6 +92,7 @@ export const dict: Record<I18nKey, string> = {
   ...mcpGridI18n.es,
   ...pluginsGridI18n.es,
   ...carterI18n.es,
+  ...workspaceStatusI18n["es"],
   'terminalView.actions.attachSelection': 'Adjuntar salida seleccionada',
   'terminalView.actions.copySelection': 'Copiar salida seleccionada',
   'terminalView.toast.selectionCopied': 'Salida copiada',
@@ -491,7 +513,7 @@ export const dict: Record<I18nKey, string> = {
   "sessions.sidebar.empty.noMatches.title": "No hay sesiones coincidentes",
   "sessions.sidebar.empty.noMatches.description": "Inténtalo con un título, rama, carpeta o ruta diferente.",
   "sessions.sidebar.activity.recentTitle": "reciente",
-  "sessions.sidebar.activity.chatsTitle": "chats",
+  "sessions.sidebar.activity.chatsTitle": "Todos los chats",
   "sessions.sidebar.activity.timelineTitle": "Proyectos",
   "sessions.sidebar.header.viewMode.label": "Vista",
   "sessions.sidebar.header.viewMode.projects": "Agrupado",
@@ -3337,6 +3359,8 @@ export const dict: Record<I18nKey, string> = {
   'header.workStatusPanel.toggleAria': 'Alternar panel de estado',
   'header.workStatusPanel.hide': 'Ocultar estado del trabajo',
   'header.workStatusPanel.show': 'Mostrar estado del trabajo',
+  'header.contextRail.show': 'Mostrar barra lateral de contexto',
+  'header.contextRail.hide': 'Ocultar barra lateral de contexto',
   'chat.workStatus.mcp.authorizeOpenFailed': 'No se pudo abrir la página de autorización',
   'chat.workStatus.mcp.authorizeFailed': 'Error de autorización',
   'mcpDropdown.toast.authorizeOpenFailed': 'No se pudo abrir la página de autorización',

@@ -153,18 +153,35 @@ describe('buildSessionSidebarRowModel', () => {
     expect(buildSessionSidebarRowModel(input).searchMatchCount).toBe(2);
   });
 
-  test('in work sits under Chats and above Recent', () => {
+  test('in work sits under Chats and above Recent, and pinned sits above them all', () => {
     const working = node('working');
-    const input = args([project([group([working, node('other')])])]);
+    const input = args([project([group([working, node('other'), node('pinned-one')])])]);
     input.chatGroup = group([node('chat')], { id: 'chats', directory: '/chats', folderScopeKey: '/chats' });
     input.showRecentSection = true;
     input.recentSections = [{ key: 'active-now', items: [{ node: node('other'), projectId: 'project-a', groupDirectory: '/repo', secondaryMeta: null }] }];
     input.workItems = [timelineItem('working')];
     input.workSessionIds = new Set(['working']);
+    input.pinnedItems = [timelineItem('pinned-one')];
+    input.pinnedItemIds = new Set(['pinned-one']);
 
     const headers = buildSessionSidebarRowModel(input).rows.flatMap((row) => (row.kind === 'activity-header' ? [row.activityKey] : []));
 
-    expect(headers).toEqual(['chats', 'work', 'active-now']);
+    expect(headers).toEqual(['pinned', 'chats', 'work', 'active-now']);
+  });
+
+  test('a pinned session leaves every other projection', () => {
+    const input = args([project([group([node('pinned-one'), node('other')])])]);
+    input.showRecentSection = true;
+    input.recentSections = [{
+      key: 'active-now',
+      items: ['pinned-one', 'other'].map((id) => ({ node: node(id), projectId: 'project-a', groupDirectory: '/repo', secondaryMeta: null })),
+    }];
+    input.pinnedItems = [timelineItem('pinned-one')];
+    input.pinnedItemIds = new Set(['pinned-one']);
+
+    const rows = buildSessionSidebarRowModel(input).rows.flatMap((row) => (row.kind === 'session' ? [`${row.renderContext}:${row.node.session.id}`] : []));
+
+    expect(rows).toEqual(['pinned:pinned-one', 'recent:other', 'project:other']);
   });
 
   test('no block while nothing is in work', () => {

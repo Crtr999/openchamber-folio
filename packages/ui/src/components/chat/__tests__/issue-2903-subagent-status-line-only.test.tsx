@@ -44,6 +44,9 @@ mock.module('@/stores/permissionStore', () => ({
   usePermissionStore: { getState: () => ({ getSessionMode: () => 'ask', hydrate: async () => undefined }) },
 }));
 mock.module('@/stores/useConfigStore', () => ({
+  selectProvidersForDirectory: () => [],
+  selectConfigAgentsForDirectory: () => [],
+  selectCatalogLoadedForDirectory: () => false,
   useConfigStore: {
     getState: () => ({ isConnected: true, hasEverConnected: true, settingsMessageStreamTransport: 'auto' }),
     setState: () => undefined,

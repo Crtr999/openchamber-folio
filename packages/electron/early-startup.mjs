@@ -60,7 +60,8 @@ export const readLoginItemSettings = () => {
 export const shouldStartInBackground = (loginItemSettings = readLoginItemSettings()) => {
   return (
     process.argv.includes(BACKGROUND_START_ARG) ||
-    loginItemSettings?.wasOpenedAtLogin === true ||
+    // Open Carter shows its window at login on macOS (it is the daily home screen).
+    (process.platform !== 'darwin' && loginItemSettings?.wasOpenedAtLogin === true) ||
     loginItemSettings?.wasOpenedAsHidden === true
   );
 };
@@ -390,7 +391,7 @@ export const usesFramelessChrome = process.platform === 'win32' || process.platf
 export const buildMainWindowOptions = ({ bounds, backgroundColor, additionalArguments }) => {
   const usesCustomTitleBar = process.platform === 'darwin' || usesFramelessChrome;
   const options = {
-    title: 'OpenChamber',
+    title: 'Open Carter',
     width: bounds?.width ?? DEFAULT_WINDOW_WIDTH,
     height: bounds?.height ?? DEFAULT_WINDOW_HEIGHT,
     minWidth: MIN_WINDOW_WIDTH,
@@ -412,6 +413,8 @@ export const buildMainWindowOptions = ({ bounds, backgroundColor, additionalArgu
       contextIsolation: true,
       nodeIntegration: false,
       webviewTag: true,
+      // Chromium's built-in PDF viewer renders PDFs in the Files preview iframe.
+      plugins: true,
       // sandbox must stay off: the preload uses contextBridge + ipcRenderer
       // from Electron's Node layer. contextIsolation + nodeIntegration:false
       // keep the renderer world walled off from Node. Do NOT flip to true —

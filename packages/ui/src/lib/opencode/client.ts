@@ -62,6 +62,7 @@ import {
   type Vcs,
 } from "./model"
 import { ascendingId } from "./ids"
+import { projectRulesConfiguration } from "./rules"
 import { toJsonRecord } from "./json"
 import { deniesAnyProvider, mergeConfigDocuments, projectAgent, projectMessages, projectProject, projectSession, projectVcs } from "./projection"
 
@@ -411,6 +412,7 @@ export type SessionPage = {
 const sessionPageSpacesSchema = z.object({ spaces: z.array(spaceMarkSchema).optional() })
 
 export type SessionListOptions = {
+  signal?: AbortSignal
   directory?: string | null
   /** No directory filter at all: every session the server knows. */
   global?: boolean
@@ -792,7 +794,7 @@ class OpencodeService {
         search: options.search,
         cursor: options.cursor,
         parentID: options.parentID,
-      }),
+      }, { signal: options.signal }),
     )
     const spaces = options.global ? sessionPageSpacesSchema.safeParse(response).data?.spaces : undefined
     return {
@@ -873,7 +875,7 @@ class OpencodeService {
    */
   async getSessionMessages(
     id: string,
-    options?: { limit?: number; cursor?: string; order?: "asc" | "desc" },
+    options?: { limit?: number; cursor?: string; order?: "asc" | "desc"; signal?: AbortSignal },
     directory?: string | null,
   ): Promise<MessagePage> {
     const response = await call("message.list", () =>
@@ -882,7 +884,7 @@ class OpencodeService {
         limit: options?.limit,
         cursor: options?.cursor,
         order: options?.cursor ? undefined : options?.order,
-      }),
+      }, { signal: options?.signal }),
     )
     const items = projectMessages(response.data, id).map(({ message, parts }) => ({ info: message, parts }))
     const lastPage = options?.limit !== undefined && items.length < options.limit
@@ -1533,6 +1535,12 @@ class OpencodeService {
     return deniesAnyProvider(entries)
   }
 
+  /** Fresh read-only configuration and provenance for the rules inspector. */
+  async getRulesConfiguration(directory: string) {
+    const entries = await call("config.get", () => this.clientFor(this.resolveDirectory(directory)).config.get())
+    return projectRulesConfiguration(entries)
+  }
+
   /** Effective configuration for a directory: every discovered document folded, highest priority last. */
   async getConfig(directory?: string | null): Promise<Config> {
     const effectiveDirectory = this.resolveDirectory(directory)
@@ -1599,13 +1607,24 @@ class OpencodeService {
     const request = (async () => {
       const client = this.clientFor(effectiveDirectory)
       const providerClient = isSpaceDirectory(effectiveDirectory) ? this.client : client
-      const [providers, models, fallback] = await Promise.all([
+      const [providers, models, integrations, fallback] = await Promise.all([
         call("provider.list", () => providerClient.provider.list().then((r) => r.data)),
         call("model.list", () => client.model.list().then((r) => r.data)),
+        call("integration.list", () => providerClient.integration.list().then((r) => r.data)),
         call("model.default", () => client.model.default().then((r) => r.data)).catch(() => undefined),
       ])
+      const modelProviderIDs = new Set(models.filter(model => model.enabled).map(model => model.providerID))
+      const connectedIntegrationIDs = new Set(integrations.filter(integration => integration.connections.length > 0).map(integration => integration.id))
+      // Activation is permission to try, not evidence of a connection. Keep
+      // credential/env-backed empty pools and usable credential-free runtimes,
+      // without filling native navigation with unconnected catalog defaults.
+      const connectedProviders = providers.filter(provider => provider.activation !== 'disabled' && (
+        modelProviderIDs.has(provider.id)
+        || connectedIntegrationIDs.has(provider.integrationID ?? provider.id)
+        || (z.string().trim().safeParse(provider.settings?.apiKey).data?.length ?? 0) > 0
+      ))
       return compact({
-        providers,
+        providers: connectedProviders,
         models,
         default: fallback ? { id: fallback.modelID, providerID: fallback.providerID } : undefined,
       })

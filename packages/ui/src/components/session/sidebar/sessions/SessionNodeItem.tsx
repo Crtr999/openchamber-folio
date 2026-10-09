@@ -1,4 +1,5 @@
 import { DirectoryActionIndicator } from './DirectoryActionIndicator';
+import { useSessionTabsStore } from '@/stores/useSessionTabsStore';
 import { useSessionTurnActive } from '@/sync/global-session-status';
 import React from 'react';
 import { SessionActivityIndicator } from '@/components/session/SessionActivityIndicator';
@@ -42,7 +43,7 @@ import { canShowSessionWorktreeMenu, getSessionWorktreeMenuDisabled, nodeContain
 import { useSessionRowMenuState } from './useSessionRowMenuState';
 import type { SessionNode } from '../types';
 import type { SessionSidebarRenderContext } from '../sessionSidebarRowModel';
-import { SessionTimelineRowBody } from './SessionTimelineRowBody';
+import { SessionTimelineRowBody, TimelineProjectIcon } from './SessionTimelineRowBody';
 import { formatProjectLabel, formatSessionCompactDateLabel, formatSessionDateLabel, normalizePath, renderHighlightedText } from '../utils';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { openExternalUrl } from '@/lib/url';
@@ -342,18 +343,16 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     : 'group-hover:opacity-0 group-has-[:focus-visible]:opacity-0';
   const showOpenInEditorAction = isVSCode;
   const showQuickArchiveAction = !archivedBucket && !mobileVariant;
+  const showQuickPinAction = !archivedBucket && !mobileVariant && !alwaysShowActions;
   const sessionWorkEnabled = useUIStore((state) => state.sessionWorkEnabled);
   const sessionRecapEnabled = useUIStore((state) => state.sessionRecapEnabled);
   // Track / Done belongs to top-level project sessions: Chats are plain
-  // conversations, never work. Touch layouts keep their actions permanently
-  // visible, where an icon on every row would be noise: there it lives in the
-  // session menu only.
+  // conversations, never work. It remains available in the session menu.
   const canTrackWork = sessionWorkEnabled && !archivedBucket && !node.session.parentID && !isChatDirectoryPath(node.session.directory);
-  const showWorkAction = canTrackWork && !alwaysShowActions;
-  // Hover-revealed actions besides the menu: work, quick archive, and in VS
-  // Code open-in-editor, each 16px. The date sits in the row flow, so the
+  // Hover-revealed actions besides the menu: quick pin, quick archive, and in
+  // VS Code open-in-editor, each 16px. The date sits in the row flow, so the
   // title must shrink enough to clear them or they overlap the timestamp.
-  const extraHoverActions = (showWorkAction ? 1 : 0) + (showQuickArchiveAction ? 1 : 0) + (showOpenInEditorAction ? 1 : 0);
+  const extraHoverActions = (showQuickPinAction ? 1 : 0) + (showQuickArchiveAction ? 1 : 0) + (showOpenInEditorAction ? 1 : 0);
   const revealPaddingClass = isVSCode
     ? ['group-hover:pr-8', 'group-hover:pr-14', 'group-hover:pr-18', 'group-hover:pr-22'][extraHoverActions]
     // Just enough room for the revealed buttons, anchored at the row edge
@@ -398,13 +397,14 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   );
   const isTimelineRow = renderContext === 'timeline' || renderContext === 'timeline-chat';
   const isTimelineChatRow = renderContext === 'timeline-chat';
+  const isPinnedZoneRow = renderContext === 'pinned';
   // Timeline rows show the project's own icon; the row reads exactly that one
   // project record, and `find` keeps the reference stable between renders.
   const timelineProject = useProjectsStore(
     React.useCallback((state) => {
-      if (!isTimelineRow || !projectId) return null;
+      if ((!isTimelineRow && !isPinnedZoneRow) || !projectId) return null;
       return state.projects.find((entry) => entry.id === projectId) ?? null;
-    }, [isTimelineRow, projectId]),
+    }, [isTimelineRow, isPinnedZoneRow, projectId]),
   );
   const tooltipProjectLabel = secondaryMeta?.projectLabel
     ?? (projectLabelFromStore ? formatProjectLabel(projectLabelFromStore) : null);
@@ -866,7 +866,8 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   // session read (or watched) while it finishes never keeps a stale total.
   const showActivityDuration = (isStreaming || showUnreadStatus) && hasActivityDuration;
   const hideLeadingIndicatorOnHover = !alwaysShowActions && hasChildren && (isSessionActionPending || showStatusMarker || isPinnedSession);
-  const showPinnedMarker = isPinnedSession && !isSessionActionPending && !showStatusMarker;
+  const showGutterProjectIcon = isPinnedZoneRow && !isSubtaskSession;
+  const showPinnedMarker = !showGutterProjectIcon && isPinnedSession && !isSessionActionPending && !showStatusMarker;
   const pinnedMarkerContent = (
     <Icon
       name="pushpin"
@@ -889,6 +890,14 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
           aria-label={isAiRenaming ? t('sessions.aiRename.generating') : t('sessions.sidebar.session.status.movingToWorktree')}
         />
       ) : showStatusMarker ? statusMarkerContent : showPinnedMarker ? pinnedMarkerContent : null}
+    </span>
+  ) : null;
+  const gutterProjectIcon = showGutterProjectIcon ? (
+    <span
+      style={{ left: ROW_GUTTER_LEFT_PX + depth * ROW_DEPTH_STEP_PX }}
+      className="pointer-events-none absolute top-1/2 inline-flex h-3.5 w-3.5 -translate-y-1/2 items-center justify-center"
+    >
+      <TimelineProjectIcon project={timelineProject} />
     </span>
   ) : null;
   const hideChevronUntilHover = hasChildren && !alwaysShowActions && (isSessionActionPending || showStatusMarker || isPinnedSession);
@@ -1110,6 +1119,17 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     <>
       <Item
         onClick={() => {
+          if (useSessionUIStore.getState().currentSessionId === session.id) return;
+          useSessionTabsStore.getState().requestNewTab();
+          handleSessionSelect(session.id, sessionDirectory);
+        }}
+        className="[&>svg]:mr-1"
+      >
+        <Icon name="add" className="mr-1 h-4 w-4" />
+        {t('header.sessionTabs.openInNewTab')}
+      </Item>
+      <Item
+        onClick={() => {
           // Defer rename until dropdown close transition completes.
           // onOpenChangeComplete fires after animation + focus cleanup are done,
           // avoiding focus stealing from Base UI's unmount cleanup.
@@ -1132,7 +1152,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
       {canTrackWork ? (
         <Item onClick={() => { void toggleSessionWork(); }} className="[&>svg]:mr-1">
           <Icon name={isInWork ? 'check' : 'eye'} className="mr-1 h-4 w-4" />
-          {isInWork ? t('sessions.sidebar.session.work.markDone') : t('sessions.sidebar.session.work.track')}
+          {workActionLabel}
         </Item>
       ) : null}
       <Item onClick={() => { void handleExportSession(); }} className="[&>svg]:mr-1">
@@ -1397,17 +1417,10 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     </>
   );
 
-  const handleWorkToggleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    void toggleSessionWork();
-  };
-
   // Three-line timeline rows are taller, so their hover actions step up one
   // size to match the metadata they replace (the pin marker, the dot, the time).
   const actionButtonSizeClass = alwaysShowActions ? 'h-6 w-6' : isTimelineRow && !isTimelineChatRow ? 'h-5 w-5' : 'h-4 w-4';
   const actionIconSizeClass = alwaysShowActions ? 'h-3.5 w-3.5' : isTimelineRow && !isTimelineChatRow ? 'h-3 w-3' : 'h-2.5 w-2.5';
-  const checkIconSizeClass = alwaysShowActions ? 'h-4 w-4' : isTimelineRow && !isTimelineChatRow ? 'h-3.5 w-3.5' : 'h-3 w-3';
 
   // The recap of the last turn, for the whole-row tooltip, under the same
   // freshness rule the chat uses.
@@ -1598,13 +1611,14 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
                 className={cn(
                   'group relative my-0.5 flex cursor-pointer items-center rounded-md pr-2.5',
                   isTimelineRow && !isTimelineChatRow ? 'py-1.5' : 'py-1',
-                  isTimelineRow && !(isActive || isRowSelected) && 'hover:bg-interactive-hover/60',
+                  !(isActive || isRowSelected) && 'hover:bg-interactive-hover/60',
                   (isActive || isRowSelected) && 'bg-interactive-selection/70 text-interactive-selection-foreground',
                   isRowSelected && 'ring-1 ring-inset ring-border',
                 )}
               />
             }
           >
+          {isTimelineRow ? null : gutterProjectIcon}
           {isTimelineRow ? null : leadingIndicators}
           {isTimelineRow ? null : subsessionChevron}
           <div className="flex min-w-0 flex-1 items-center">
@@ -1797,29 +1811,30 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
                 ? 'opacity-100'
                 : cn('opacity-0', revealOnHoverClass),
           )}>
-            {showWorkAction ? (
+            {showQuickPinAction && sessionDirectory ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
                     type="button"
                     className={cn(
-                      'inline-flex items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-opacity',
+                      'inline-flex items-center justify-center rounded-md text-muted-foreground transition-opacity hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       actionButtonSizeClass,
-                      isInWork ? 'text-status-success' : 'text-muted-foreground hover:text-foreground',
                     )}
-                    aria-label={workActionLabel}
+                    aria-label={t(isPinnedSession ? 'sessions.sidebar.session.menu.unpin' : 'sessions.sidebar.session.menu.pin')}
                     onPointerDown={handleRowActionPointerDown}
                     onMouseDown={handleRowActionMouseDown}
-                    onClick={handleWorkToggleClick}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      togglePinnedSession({ directory: sessionDirectory, sessionId: session.id });
+                    }}
                     onKeyDown={(event) => event.stopPropagation()}
                   >
-                    {/* The check glyph draws smaller than the others at the same
-                        box, so it takes the next icon size; the button stays put. */}
-                    <Icon name={isInWork ? 'check' : 'eye'} className={isInWork ? checkIconSizeClass : actionIconSizeClass} />
+                    <Icon name={isPinnedSession ? 'unpin' : 'pushpin'} className={actionIconSizeClass} />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="left" sideOffset={8}>
-                  {workActionLabel}
+                  {t(isPinnedSession ? 'sessions.sidebar.session.menu.unpin' : 'sessions.sidebar.session.menu.pin')}
                 </TooltipContent>
               </Tooltip>
             ) : null}

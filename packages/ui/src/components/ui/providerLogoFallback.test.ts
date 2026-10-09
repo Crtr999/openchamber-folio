@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { getProviderLogoFallbackIcon } from './providerLogoFallback';
+import { getProviderLogoFallbackIcon, getProviderLogoInitials } from './providerLogoFallback';
 
 describe('provider logo fallbacks', () => {
+  test('missing dedicated logos remain visible with distinct provider initials', () => {
+    expect(['azure', 'agentrouter', 'mistral'].map(getProviderLogoInitials)).toEqual(['AZ', 'AR', 'M']);
+    expect(getProviderLogoInitials('custom-provider')).toBe('CU');
+  });
   test('uses a local terminal icon for Command Code provider ID variants', () => {
     for (const providerId of ['command-code', 'commandcode', 'command_code', 'command code']) {
       expect(getProviderLogoFallbackIcon(providerId)).toBe('terminal-box');

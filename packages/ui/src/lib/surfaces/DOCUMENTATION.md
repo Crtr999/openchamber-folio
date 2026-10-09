@@ -16,6 +16,11 @@ Full-screen extension pages are separate from this rail registry. `contributes.p
   surfaces through `extras` on `sortContextSurfaces` /
   `getVisibleContextRailSurfaces`. Do not copy guest types out of
   `@openchamber/sdk`.
+- Providers are not context surfaces. Persistence v25 removes retired
+  `provider:<id>` tabs, widths, rail order and visibility entries. If a retired
+  tab was selected, the panel closes and reserves no body width. Valid tabs,
+  their widths, open selections and the whole-rail hide preference stay intact.
+  The local Electron header owns the separate OpenRouter coin counter.
 - `availability: 'always'` surfaces are always present on the rail.
   `availability: 'has-content'` surfaces (chat) are hidden from the
   rail until a tab of their mode exists, and stay visible for as long as one
@@ -32,9 +37,21 @@ Full-screen extension pages are separate from this rail registry. `contributes.p
   discarded on hydration. Tree-only mode temporarily suspends panel expansion;
   reopening the editor restores its previous expanded state. The tree stays
   right-aligned at its saved width during the panel's collapse transition.
+- A closed panel, or one without a resolvable selected tab, reserves zero width.
+  Only the 44px icon rail remains. Hydration closes unresolved selections without
+  deleting valid tabs or per-mode widths; opening a surface restores its width.
 - Rail order is user-reorderable and persisted globally in
   `useUIStore.contextRailOrder`; `sortContextSurfaces` applies it on top of the
   registry's default order and appends any missing surfaces.
+- `useUIStore.contextRailVisible` is a device-local switch for the entire rail
+  and context panel, exposed beside Work Status in the header. It defaults to
+  visible, independently of per-directory `isOpen`, selected tabs and widths.
+  Hiding reclaims the full right edge and passes `visible=false` to the retained
+  panel so hidden panes suspend visible work. Showing restores the previous
+  open/closed selection. Explicit surface/file/tab opens reveal the rail;
+  background opens with `reveal:false` leave the preference alone. VS Code and
+  mobile keep their separate layouts. There is no dedicated rail-toggle shortcut;
+  existing surface shortcuts still reveal their target.
 - `getVisibleContextRailSurfaces` is the single visibility filter shared by the
   rail and the global surface-switch shortcut (`switch_context_surface` in
   `lib/shortcuts`): it drops surfaces the user hid

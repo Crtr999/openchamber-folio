@@ -69,6 +69,9 @@ La ruta no depende de cómo esté instalado OpenChamber. La app de escritorio, e
 
 Solo hace falta `enterpriseMode`. `organization` aparece en Configuración como "Gestionado por Acme", para que la gente sepa quién tomó la decisión. `relayUrl` y `jev` fijan tu propio relay y tu propio endpoint de Jev, `allowNetworkAccess` permite que otros dispositivos lleguen a OpenChamber por la red, y `allowedExtensions` enumera los repositorios de extensiones en los que confías. Todos se describen más abajo.
 
+- **Notion / Home:** La política de tu organización impide usar Notion.
+- Los resúmenes de reuniones están desactivados, incluso con aprobación. La grabación en escritorio, la transcripción local y las notas locales privadas siguen disponibles.
+- La actualización nativa de facturación de proveedores, las nuevas claves de facturación, el inicio de sesión de administración y la vinculación de suscripciones están desactivados. Los importes anteriores se mantienen como desactualizados, no como cero.
 - Nada que configure un usuario, ni en Configuración ni en el entorno, desactiva lo que el archivo activa.
 - Cuando el archivo activa el modo empresa, solo decide el archivo. Las variables de entorno de más abajo para el relay, Jev y el acceso de red se ignoran, porque un usuario puede definirlas por su cuenta.
 - Si el archivo existe pero no se puede leer o no es JSON válido, el modo empresa sigue activado y no se fija nada. Configuración indica que no se pudo leer la política. Un archivo roto nunca levanta la protección en silencio.

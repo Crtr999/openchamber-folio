@@ -121,6 +121,16 @@ export const hasDesktopInvoke = (): boolean => {
   return typeof getDesktopBridge()?.invoke === 'function';
 };
 
+const meetingLifecycleSchema = z.object({ id: z.string().uuid(), reason: z.string() });
+export const listenMeetingLifecycle = async (handler: (event: z.infer<typeof meetingLifecycleSchema>) => void): Promise<() => void> => {
+  const bridge = getDesktopBridge();
+  if (!isElectronShell() || !isDesktopLocalOriginActive() || !bridge?.listen) throw new Error('meeting_unsupported');
+  return bridge.listen('desktop:meeting-lifecycle', (event) => {
+    const parsed = meetingLifecycleSchema.safeParse(event.payload);
+    if (parsed.success) handler(parsed.data);
+  });
+};
+
 export const canUseElectronDesktopIPC = (): boolean => isElectronShell() && hasDesktopInvoke();
 
 export const createDesktopThemeFileAPI = (): RuntimeAPIs['themeFiles'] => {

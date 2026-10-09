@@ -14,7 +14,7 @@ import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useSessionMultiSelectStore } from '@/stores/useSessionMultiSelectStore';
 import { useI18n } from '@/lib/i18n';
 import { updateDesktopSettings } from '@/lib/persistence';
-import { SessionSearchInput } from '@/components/session/SessionSearchInput';
+import { ChatSearchPanel } from '@/components/layout/ChatSearchPanel';
 import { Button } from '@/components/ui/button';
 import { GuestIcon } from '@/components/layout/GuestRailIcon';
 import { useGuestPages } from '@/hooks/useGuestSurfaces';
@@ -31,13 +31,7 @@ type Props = {
   onOpenArchive: () => void;
   headerActionIconClass: string;
   headerActionButtonClass: string;
-  isSessionSearchOpen: boolean;
-  setIsSessionSearchOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
-  sessionSearchInputRef: React.RefObject<HTMLInputElement | null>;
-  sessionSearchQuery: string;
-  setSessionSearchQuery: (value: string) => void;
-  hasSessionSearchQuery: boolean;
-  searchMatchCount: number;
+  searchEnabled: boolean;
   collapseAllProjects: () => void;
   expandAllProjects: () => void;
 };
@@ -54,13 +48,7 @@ export function SidebarHeader(props: Props): React.ReactNode {
     onOpenArchive,
     headerActionIconClass,
     headerActionButtonClass,
-    isSessionSearchOpen,
-    setIsSessionSearchOpen,
-    sessionSearchInputRef,
-    sessionSearchQuery,
-    setSessionSearchQuery,
-    hasSessionSearchQuery,
-    searchMatchCount,
+    searchEnabled,
     collapseAllProjects,
     expandAllProjects,
   } = props;
@@ -153,20 +141,7 @@ export function SidebarHeader(props: Props): React.ReactNode {
           </div>
 
           <div className="flex items-center gap-1.5">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => setIsSessionSearchOpen((prev) => !prev)}
-                  className={cn(headerActionButtonClass, 'text-muted-foreground hover:text-foreground hover:bg-transparent')}
-                  aria-label={t('sessions.sidebar.header.actions.searchSessions')}
-                  aria-expanded={isSessionSearchOpen}
-                >
-                  <Icon name="search" className={headerActionIconClass} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={4}><p>{t('sessions.sidebar.header.actions.searchSessions')}</p></TooltipContent>
-            </Tooltip>
+            <ChatSearchPanel enabled={searchEnabled} className={cn(headerActionButtonClass, 'app-region-no-drag text-muted-foreground hover:text-foreground hover:bg-transparent')} />
 
             <Tooltip>
               <TooltipTrigger asChild>
@@ -324,24 +299,6 @@ export function SidebarHeader(props: Props): React.ReactNode {
           </div>
         </div>
 
-        {isSessionSearchOpen ? (
-          <div className="pb-1">
-            <SessionSearchInput
-              inputRef={sessionSearchInputRef}
-              value={sessionSearchQuery}
-              onSearch={setSessionSearchQuery}
-              onClose={() => setIsSessionSearchOpen(false)}
-              placeholder={t('sessions.sidebar.header.search.placeholder')}
-              clearLabel={t('sessions.sidebar.header.search.clear')}
-              leadingHint={hasSessionSearchQuery
-                ? (searchMatchCount === 1
-                  ? t('sessions.sidebar.header.search.matchCountSingle', { count: searchMatchCount })
-                  : t('sessions.sidebar.header.search.matchCountPlural', { count: searchMatchCount }))
-                : undefined}
-              trailingHint={t('sessions.sidebar.header.search.escapeHint')}
-            />
-          </div>
-        ) : null}
       </div>
     </div>
   );

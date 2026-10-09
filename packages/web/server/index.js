@@ -925,6 +925,7 @@ const sessionGoalRuntime = createSessionGoalRuntime({
   persistSessionGoal: (sessionID, directory, goal) =>
     persistSessionMetadataPatch(sessionID, { openchamber: { goal } }, { directory }),
   emitGoalNotification: async ({ sessionId, directory, status, goal }) => {
+    if (!await notificationTriggerRuntime.isRootNotificationSession(sessionId, directory)) return;
     // The goal settle notification replaces the per-turn ready notifications
     // (suppressed while the goal is active) — so it obeys the same toggle.
     const settings = await readSettingsFromDisk();
@@ -1622,6 +1623,7 @@ const fileOpenRequester = createFileOpenRequester({
 });
 
 const pluginNotificationEmitter = createPluginNotificationEmitter({
+  isRootNotificationSession: notificationTriggerRuntime.isRootNotificationSession,
   readSettingsFromDiskMigrated,
   emitDesktopNotification,
   broadcastUiNotification,

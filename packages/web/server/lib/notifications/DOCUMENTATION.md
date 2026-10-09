@@ -47,7 +47,8 @@ This module provides notification message preparation utilities for the web serv
   - `maybeSendPushForTrigger(payload)`
 - Owns:
   - completion/error/question/permission trigger routing; permission suppression consults the authoritative permission-auto-accept runtime
-  - session parent cache for subtask suppression
+  - authoritative session parent cache for full-session-only notifications
+  - child sessions never dispatch completion, error, question, permission or goal alerts, regardless of the legacy subtask preference. Roots, including standalone scheduled runs, retain their existing settings and focus gates. Partial updates cannot erase a known parent. Unknown or failed session metadata skips that alert rather than assuming a root; a later trigger retries the lookup. The filter precedes desktop emission, UI notification toasts, web push, APNs and push badge counting. Session progress and approval UI remain unchanged. Already delivered OS notifications are not retracted.
   - no ready notification on a `session.idle` while a subagent of that session is still running (a background-subagent pause; OpenCode runs the parent again with the result and its next idle announces). The check comes from `../opencode/session-activity.js`; when it cannot be made, the idle announces as before
   - template resolution and fallback behavior
   - native notification fanout and web push payload fanout
@@ -91,6 +92,7 @@ This module provides notification message preparation utilities for the web serv
 - One shared rate window: 10 notifications per 10s, then 429 with `Retry-After`.
 - Follows `nativeNotificationsEnabled` (returns `{ delivered: false }`) and `notificationMode` (`requireHidden`); `showWhenFocused: true` sends `requireHidden: false` so the notice shows even while OpenChamber is focused. Live delivery only: no web push or APNs fanout.
 - Advertised as the `api.notifications.emit.v1` server capability.
+  Session-addressed plugin notices and goal dispatch use `isRootNotificationSession(sessionId, directory)`. Unscoped system/plugin notices remain allowed.
 
 ### Template runtime API (template-runtime.js)
 - `createNotificationTemplateRuntime(dependencies)`: creates shared notification/template runtime. Model-backed summarization was retired after the Zen provider became unavailable.

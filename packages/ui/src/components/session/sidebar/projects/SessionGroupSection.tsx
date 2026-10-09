@@ -972,7 +972,7 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
   return (
     <><div className="oc-group">
       <div
-        className={cn('group/gh relative flex items-start justify-between gap-1 py-1 min-w-0 rounded-md', 'cursor-pointer')}
+        className={cn('group/gh relative flex w-full items-start justify-between gap-1 py-1 min-w-0 rounded-md hover:bg-interactive-hover/60', 'cursor-pointer')}
         onClick={() => onToggleCollapsedGroup(groupKey)}
         role="button"
         tabIndex={0}

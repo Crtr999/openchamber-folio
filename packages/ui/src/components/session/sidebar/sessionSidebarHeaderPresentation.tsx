@@ -4,8 +4,9 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import type { SessionSidebarActivityKey } from './sessionSidebarRowModel';
 
-const ACTIVITY_ICON = { work: 'eye', chats: 'chat-4', 'active-now': 'history', timeline: 'folder' } as const;
+const ACTIVITY_ICON = { pinned: 'pushpin', work: 'eye', chats: 'chat-4', 'active-now': 'history', timeline: 'folder' } as const;
 const ACTIVITY_TITLE_KEY = {
+  pinned: 'sessions.sidebar.pinned.title',
   work: 'sessions.sidebar.work.title',
   chats: 'sessions.sidebar.activity.chatsTitle',
   'active-now': 'sessions.sidebar.activity.recentTitle',
@@ -33,10 +34,10 @@ export const SessionSidebarActivityHeader: React.FC<{
         type="button"
         onClick={forceExpanded ? undefined : onToggle}
         disabled={forceExpanded}
-        className={cn('group flex w-full items-center gap-1 py-2 pl-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50', 'pr-3.5')}
+        className={cn('group flex w-full items-center gap-1 rounded-md py-2 pl-1.5 text-left enabled:hover:bg-interactive-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50', 'pr-3.5')}
         aria-expanded={!collapsed}
       >
-        <span className="typography-ui-label font-semibold lowercase text-foreground">
+        <span className="typography-ui-label font-semibold text-foreground">
           {t(ACTIVITY_TITLE_KEY[activityKey])}
         </span>
         {!forceExpanded ? <Icon name={collapsed ? 'arrow-right-s' : 'arrow-down-s'} className="h-3.5 w-3.5 text-muted-foreground" /> : null}
@@ -48,7 +49,7 @@ export const SessionSidebarActivityHeader: React.FC<{
       type="button"
       onClick={forceExpanded ? undefined : onToggle}
       disabled={forceExpanded}
-      className={cn('group flex w-full items-center gap-1.5 py-1 pl-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50', chats ? 'pr-10' : 'pr-3.5')}
+      className={cn('group flex w-full items-center gap-1.5 rounded-md py-0.5 pl-4 text-left enabled:hover:bg-interactive-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50', chats ? 'pr-10' : 'pr-3.5')}
       aria-expanded={!collapsed}
     >
       <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
@@ -57,7 +58,7 @@ export const SessionSidebarActivityHeader: React.FC<{
           <Icon name={collapsed ? 'arrow-right-s' : 'arrow-down-s'} className="h-3.5 w-3.5" />
         </span> : null}
       </span>
-      <span className="typography-ui-label font-semibold lowercase text-foreground">
+      <span className="typography-ui-label font-semibold text-foreground">
         {t(ACTIVITY_TITLE_KEY[activityKey])}
       </span>
     </button>

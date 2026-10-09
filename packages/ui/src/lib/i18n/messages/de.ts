@@ -1,3 +1,10 @@
+import { chatgptI18n } from './chatgpt.i18n';
+import { museI18n } from './muse.i18n';
+import { claudeI18n } from './claude.i18n';
+import { meetingsI18n } from './meetings.i18n';
+import { homeI18n } from './home.i18n';
+import { personalToolsI18n } from './personal-tools.i18n';
+import { workspaceStatusI18n } from './workspace-status.i18n';
 import { carterI18n } from './carter.i18n';
 import { settingsDict } from './de.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
@@ -14,6 +21,20 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict = {
+  ...chatgptI18n['de'],
+  ...museI18n.de,
+  ...claudeI18n.de,
+  ...meetingsI18n.de,
+  'meeting.quickStart': 'Meeting starten',
+  'meeting.partial': 'Einige gespeicherte Meetings konnten nicht gelesen werden. Die Liste ist unvollständig; beschädigte Dateien bleiben unverändert.',
+  'meeting.summaryReview': 'Zusammenfassungsmodell prüfen',
+  'meeting.summaryDisclosure': 'Ich erlaube, nur dieses Transkript an {provider}/{model} zu senden. Notizen, Titel, Kalender und Audio sind ausgeschlossen. Kosten und Abodeckung sind unbekannt. Es wird kein Chat erstellt.',
+  'meeting.newRecording': 'Diese Aufnahme ist abgeschlossen. Erstelle ein neues Meeting für eine weitere Aufnahme.',
+  'meeting.screenPermission': 'Die Bildschirmfreigabe wird nur für Systemaudio angefordert. Keine Bildschirmbilder werden gelesen, gespeichert oder übertragen.',
+  'header.sessionTabs.pinSidebar': 'An Seitenleiste anheften',
+  'header.sessionTabs.unpinSidebar': 'Von Seitenleiste lösen',
+  ...homeI18n['de'],
+  ...personalToolsI18n['de'],
   "opencodeCompatibility.bundled": "OpenCode ist in OpenChamber enthalten. Aktualisieren Sie OpenChamber, um OpenCode v2 zu erhalten.",
   "opencodeCompatibility.title": "OpenCode v2 erforderlich",
   "opencodeCompatibility.outdatedTitle": "OpenCode aktualisieren",
@@ -70,6 +91,7 @@ export const dict = {
   ...mcpGridI18n.de,
   ...pluginsGridI18n.de,
   ...carterI18n.de,
+  ...workspaceStatusI18n["de"],
   'common.language.german': 'Deutsch',
   'common.loading': 'Wird geladen...',
   'common.unavailable': 'Nicht verfügbar',
@@ -447,7 +469,7 @@ export const dict = {
   'sessions.sidebar.empty.noMatches.title': 'Keine passenden Sitzungen',
   'sessions.sidebar.empty.noMatches.description': 'Versuchen Sie einen anderen Titel, Branch, Ordner oder Pfad.',
   'sessions.sidebar.activity.recentTitle': 'kürzlich',
-  'sessions.sidebar.activity.chatsTitle': 'Chats',
+  'sessions.sidebar.activity.chatsTitle': 'Alle Chats',
   'sessions.sidebar.activity.timelineTitle': 'Projekte',
   'sessions.sidebar.header.viewMode.label': 'Ansicht',
   'sessions.sidebar.header.viewMode.projects': 'Gruppiert',
@@ -3334,6 +3356,8 @@ export const dict = {
   'header.workStatusPanel.toggleAria': 'Arbeitsstatus-Panel umschalten',
   'header.workStatusPanel.hide': 'Arbeitsstatus ausblenden',
   'header.workStatusPanel.show': 'Arbeitsstatus anzeigen',
+  'header.contextRail.show': 'Kontext-Seitenleiste anzeigen',
+  'header.contextRail.hide': 'Kontext-Seitenleiste ausblenden',
   'chat.workStatus.mcp.authorizeOpenFailed': 'Autorisierungsseite konnte nicht geöffnet werden',
   'chat.workStatus.mcp.authorizeFailed': 'Autorisierung fehlgeschlagen',
   'mcpDropdown.toast.authorizeOpenFailed': 'Autorisierungsseite konnte nicht geöffnet werden',

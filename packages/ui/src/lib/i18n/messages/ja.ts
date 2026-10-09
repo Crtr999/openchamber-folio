@@ -1,3 +1,10 @@
+import { chatgptI18n } from './chatgpt.i18n';
+import { museI18n } from './muse.i18n';
+import { claudeI18n } from './claude.i18n';
+import { meetingsI18n } from './meetings.i18n';
+import { homeI18n } from './home.i18n';
+import { personalToolsI18n } from './personal-tools.i18n';
+import { workspaceStatusI18n } from './workspace-status.i18n';
 import { carterI18n } from './carter.i18n';
 import type { I18nKey } from './en';
 import { settingsDict } from './ja.settings';
@@ -15,6 +22,20 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  ...chatgptI18n['ja'],
+  ...museI18n.ja,
+  ...claudeI18n.ja,
+  ...meetingsI18n.ja,
+  'meeting.quickStart': '会議を開始',
+  'meeting.partial': '一部の保存済み会議を読み込めませんでした。一覧は不完全です。破損ファイルは変更していません。',
+  'meeting.summaryReview': '要約モデルを確認',
+  'meeting.summaryDisclosure': 'この文字起こしのみを {provider}/{model} に送信することを承認します。メモ、タイトル、カレンダー、音声は含みません。料金とサブスクリプション適用は不明です。チャットは作成しません。',
+  'meeting.newRecording': 'この録音は終了しています。再度録音するには新しい会議を作成してください。',
+  'meeting.screenPermission': '画面共有の許可はシステム音声の収録のためだけに要求します。画面フレームの読み取り、保存、送信は行いません。',
+  'header.sessionTabs.pinSidebar': 'サイドバーにピン留め',
+  'header.sessionTabs.unpinSidebar': 'サイドバーのピン留めを解除',
+  ...homeI18n['ja'],
+  ...personalToolsI18n['ja'],
   "opencodeCompatibility.bundled": "OpenCode は OpenChamber に同梱されています。OpenCode v2 を利用するには OpenChamber を更新してください。",
   "opencodeCompatibility.title": "OpenCode v2 が必要です",
   "opencodeCompatibility.outdatedTitle": "OpenCode を更新してください",
@@ -71,6 +92,7 @@ export const dict: Record<I18nKey, string> = {
   ...mcpGridI18n.ja,
   ...pluginsGridI18n.ja,
   ...carterI18n.ja,
+  ...workspaceStatusI18n["ja"],
   'terminalView.actions.attachSelection': '選択した出力を添付',
   'terminalView.actions.copySelection': '選択した出力をコピー',
   'terminalView.toast.selectionCopied': '出力をコピーしました',
@@ -491,7 +513,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.empty.noMatches.title': '一致するセッションがありません',
   'sessions.sidebar.empty.noMatches.description': '別のタイトル、ブランチ、フォルダ、パスをお試しください。',
   'sessions.sidebar.activity.recentTitle': '最近',
-  'sessions.sidebar.activity.chatsTitle': 'チャット',
+  'sessions.sidebar.activity.chatsTitle': 'すべてのチャット',
   'sessions.sidebar.activity.timelineTitle': 'プロジェクト',
   'sessions.sidebar.header.viewMode.label': '表示',
   'sessions.sidebar.header.viewMode.projects': 'グループ表示',
@@ -3336,6 +3358,8 @@ export const dict: Record<I18nKey, string> = {
   'header.workStatusPanel.toggleAria': '作業状況パネルを切り替え',
   'header.workStatusPanel.hide': '作業状況を非表示',
   'header.workStatusPanel.show': '作業状況を表示',
+  'header.contextRail.show': 'コンテキストサイドバーを表示',
+  'header.contextRail.hide': 'コンテキストサイドバーを非表示',
   'chat.workStatus.mcp.authorizeOpenFailed': '認証ページを開けませんでした',
   'chat.workStatus.mcp.authorizeFailed': '認証に失敗しました',
   'mcpDropdown.toast.authorizeOpenFailed': '認証ページを開けませんでした',

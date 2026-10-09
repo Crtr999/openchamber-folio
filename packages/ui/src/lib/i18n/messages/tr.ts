@@ -1,3 +1,10 @@
+import { chatgptI18n } from './chatgpt.i18n';
+import { museI18n } from './muse.i18n';
+import { claudeI18n } from './claude.i18n';
+import { meetingsI18n } from './meetings.i18n';
+import { homeI18n } from './home.i18n';
+import { personalToolsI18n } from './personal-tools.i18n';
+import { workspaceStatusI18n } from './workspace-status.i18n';
 import { carterI18n } from './carter.i18n';
 import { settingsDict } from './tr.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
@@ -14,6 +21,20 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict = {
+  ...chatgptI18n['tr'],
+  ...museI18n.tr,
+  ...claudeI18n.tr,
+  ...meetingsI18n.tr,
+  'meeting.quickStart': 'Toplantı başlat',
+  'meeting.partial': 'Bazı kayıtlı toplantılar okunamadı. Liste eksik; bozuk dosyalar değiştirilmedi.',
+  'meeting.summaryReview': 'Özet modelini incele',
+  'meeting.summaryDisclosure': 'Yalnızca bu dökümün {provider}/{model} hizmetine gönderilmesini onaylıyorum. Notlar, başlık, takvim ve ses dahil değildir. Maliyet ve abonelik kapsamı bilinmiyor. Sohbet oluşturulmaz.',
+  'meeting.newRecording': 'Bu kayıt kapatıldı. Yeniden kaydetmek için yeni toplantı oluşturun.',
+  'meeting.screenPermission': 'Ekran paylaşımı izni yalnızca sistem sesini yakalamak için istenir. Ekran görüntüleri okunmaz, kaydedilmez veya iletilmez.',
+  'header.sessionTabs.pinSidebar': 'Kenar çubuğuna sabitle',
+  'header.sessionTabs.unpinSidebar': 'Kenar çubuğundan kaldır',
+  ...homeI18n['tr'],
+  ...personalToolsI18n['tr'],
   "opencodeCompatibility.bundled": "OpenCode, OpenChamber ile birlikte gelir. OpenCode v2 için OpenChamber’ı güncelleyin.",
   "opencodeCompatibility.title": "OpenCode v2 gerekli",
   "opencodeCompatibility.outdatedTitle": "OpenCode’u güncelleyin",
@@ -70,6 +91,7 @@ export const dict = {
   ...mcpGridI18n.tr,
   ...pluginsGridI18n.tr,
   ...carterI18n.tr,
+  ...workspaceStatusI18n["tr"],
   'terminalView.actions.attachSelection': 'Seçili çıktıyı ekle',
   'terminalView.actions.copySelection': 'Seçili çıktıyı kopyala',
   'terminalView.toast.selectionCopied': 'Çıktı kopyalandı',
@@ -476,7 +498,7 @@ export const dict = {
   'sessions.sidebar.empty.noMatches.title': 'Eşleşen session yok',
   'sessions.sidebar.empty.noMatches.description': 'Farklı bir başlık, branch, klasör veya yol deneyin.',
   'sessions.sidebar.activity.recentTitle': 'son kullanılanlar',
-  'sessions.sidebar.activity.chatsTitle': 'sohbetler',
+  'sessions.sidebar.activity.chatsTitle': 'Tüm sohbetler',
   'sessions.sidebar.activity.timelineTitle': 'Projeler',
   'sessions.sidebar.header.viewMode.label': 'Görünüm',
   'sessions.sidebar.header.viewMode.projects': 'Gruplu',
@@ -3242,6 +3264,8 @@ export const dict = {
   'header.workStatusPanel.toggleAria': 'Çalışma durumu panelini aç/kapat',
   'header.workStatusPanel.hide': 'Çalışma durumunu gizle',
   'header.workStatusPanel.show': 'Çalışma durumunu göster',
+  'header.contextRail.show': 'Bağlam kenar çubuğunu göster',
+  'header.contextRail.hide': 'Bağlam kenar çubuğunu gizle',
   'chat.workStatus.mcp.authorizeOpenFailed': 'Yetkilendirme sayfası açılamadı',
   'chat.workStatus.mcp.authorizeFailed': 'Yetkilendirme başarısız',
   'mcpDropdown.toast.authorizeOpenFailed': 'Yetkilendirme sayfası açılamadı',

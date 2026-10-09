@@ -56,7 +56,7 @@ const TRASH_DROPPABLE_ID = '__draft-starter-trash__';
 // layout or changes the circle size. shrink-0 keeps it from being compressed by
 // the wrapping flex row.
 const ROUND_ICON_BUTTON_CLASS =
-    'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors';
+    'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px] border transition-colors';
 
 const PICKER_SECTIONS: { key: PinnableSection; headingKey: 'chat.draftStarters.sectionBuiltIn' | 'chat.draftStarters.sectionCommands' | 'chat.draftStarters.sectionSkills' }[] = [
     { key: 'built-in', headingKey: 'chat.draftStarters.sectionBuiltIn' },
@@ -94,7 +94,7 @@ const SortableChip: React.FC<{
                 {...attributes}
                 {...listeners}
                 onClick={() => onSubmit(item)}
-                className="group inline-flex touch-none select-none items-center gap-1.5 rounded-full border px-3 py-1.5 typography-ui-label text-muted-foreground transition-colors hover:bg-[var(--interactive-hover)] hover:text-foreground"
+                className="group inline-flex touch-none select-none items-center gap-1.5 rounded-[10px] border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-[var(--interactive-hover)] hover:text-foreground"
                 style={chipStyle}
                 title={item.shared ? t('chat.draftStarters.sharedTitle') : undefined}
             >

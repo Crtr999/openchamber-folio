@@ -645,6 +645,10 @@
       "scope": "device",
       "local": true
     },
+    "contextRailVisible": {
+      "scope": "device",
+      "local": true
+    },
     "contextRailHiddenSurfaces": {
       "scope": "device",
       "local": true

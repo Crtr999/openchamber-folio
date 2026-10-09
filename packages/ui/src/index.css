@@ -308,8 +308,7 @@ div[data-chat-input-footer="true"] {
   mask-size: 100% 100%;
 }
 
-[data-scroll-shadow="true"][data-orientation="vertical"][data-top-bottom-scroll="true"],
-.chat-scroll[data-scroll-shadow="true"][data-orientation="vertical"][data-top-scroll="true"] {
+[data-scroll-shadow="true"][data-orientation="vertical"][data-top-bottom-scroll="true"]:not(.chat-scroll) {
   mask-image: linear-gradient(
     to bottom,
     transparent 0%,
@@ -361,7 +360,8 @@ div[data-chat-input-footer="true"] {
 }
 
 [data-scroll-shadow="true"][data-orientation="vertical"][data-bottom-scroll="true"],
-.chat-scroll[data-scroll-shadow="true"][data-orientation="vertical"]:not([data-top-scroll="true"]):not([data-top-bottom-scroll="true"]) {
+/* Chat has a solid top edge in every scroll state; retain the composer fade. */
+.chat-scroll[data-scroll-shadow="true"][data-orientation="vertical"] {
   mask-image: linear-gradient(
     to bottom,
     #000 0%,
@@ -2060,3 +2060,80 @@ html.desktop-runtime .markdown-content [data-openchamber-file-link="true"] {
   -webkit-mask-image: linear-gradient(to right, black calc(100% - 14px), transparent);
   mask-image: linear-gradient(to right, black calc(100% - 14px), transparent);
 }
+
+/* ── Open Carter polish: Notion-style palette, tabs and tactile feedback ── */
+@keyframes oc-palette-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes oc-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes oc-fade-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes oc-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@keyframes oc-tab-in {
+  from { opacity: 0; transform: translateY(3px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes oc-pill-in {
+  from { opacity: 0; transform: translate(-50%, 14px) scale(0.94); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+@keyframes oc-rec-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, #ef4444 55%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, #ef4444 0%, transparent); }
+}
+.oc-palette-backdrop { animation: oc-backdrop-in 140ms ease-out both; }
+.oc-palette { animation: oc-palette-in 190ms cubic-bezier(0.2, 0.9, 0.25, 1.15) both; }
+.oc-fade-in { animation: oc-fade-in 160ms ease-out both; }
+.oc-palette-row { transition: background-color 80ms ease; }
+.oc-palette-row:active { transform: scale(0.992); }
+.oc-shimmer {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--foreground) 6%, transparent) 0%,
+    color-mix(in srgb, var(--foreground) 12%, transparent) 50%,
+    color-mix(in srgb, var(--foreground) 6%, transparent) 100%);
+  background-size: 200% 100%;
+  animation: oc-shimmer 1.3s linear infinite;
+}
+.session-tab-slot { animation: oc-tab-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards; }
+.session-tab { transition: transform 90ms ease; }
+.session-tab:active { transform: scale(0.97); }
+.session-tab-new:hover { transform: rotate(90deg); }
+.session-tab-new:active { transform: rotate(90deg) scale(0.88); }
+.oc-meeting-pill { animation: oc-pill-in 260ms cubic-bezier(0.2, 0.9, 0.25, 1.2) both; }
+.oc-rec-dot { animation: oc-rec-pulse 1.6s ease-in-out infinite; }
+.oc-wave-bar { transition: height 110ms ease-out; }
+.oc-press { transition: transform 90ms ease, background-color 120ms ease, color 120ms ease; }
+.oc-press:active { transform: scale(0.95); }
+@media (prefers-reduced-motion: reduce) {
+  .oc-palette-backdrop, .oc-palette, .oc-fade-in, .session-tab-slot, .oc-meeting-pill, .oc-rec-dot, .oc-shimmer { animation: none !important; }
+  .session-tab:active, .oc-palette-row:active, .oc-press:active { transform: none; }
+  .session-tab-new:hover, .session-tab-new:active { transform: none; }
+}
+/* Sidebar rows: a quick, tactile press. */
+[data-session-row] { transition: transform 90ms ease; }
+[data-session-row]:active { transform: scale(0.99); }
+@media (prefers-reduced-motion: reduce) { [data-session-row]:active { transform: none; } }
+
+/* Auto-hiding scrollbars (macOS style): invisible at rest, shown while an
+   element scrolls and for a moment after. `data-oc-scrolling` is set by the
+   global scroll listener in MainLayout. */
+*:not([data-oc-scrolling]) { scrollbar-color: transparent transparent; }
+*:not([data-oc-scrolling])::-webkit-scrollbar-thumb { background: transparent !important; }
+[data-oc-scrolling] { scrollbar-color: var(--oc-scrollbar-thumb, oklch(0.6 0.02 80 / 0.35)) transparent; }
+
+/* Word previews: centered paper pages on the app background. */
+.oc-docx-pages .oc-docx-wrapper { background: transparent !important; padding: 0 !important; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+.oc-docx-pages .oc-docx-wrapper > section.oc-docx { margin: 0 !important; box-shadow: 0 2px 14px rgba(0, 0, 0, 0.35); border-radius: 2px; }
+
+/* Home never shows a scrollbar (it still scrolls). */
+.oc-home-content, .oc-home-content[data-oc-scrolling] { scrollbar-width: none !important; scrollbar-gutter: auto !important; }
+.oc-home-content::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }

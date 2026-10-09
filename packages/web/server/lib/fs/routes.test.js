@@ -1,11 +1,12 @@
 import { EventEmitter } from 'events';
 import { Readable, Writable } from 'node:stream';
 import path from 'path';
-import { copyFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { copyFile, cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import * as nativeFs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mintOutsideFileGrant, registerFsRoutes } from './routes.js';
@@ -1549,9 +1550,20 @@ describe('fs stat directory error handling', () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'openchamber-fs-import-'));
     try {
       await mkdir(path.join(directory, 'fs'));
+      await mkdir(path.join(directory, 'meetings'));
+      await mkdir(path.join(directory, 'node_modules'));
+      await writeFile(path.join(directory, 'package.json'), '{"type":"module"}');
       await copyFile(new URL('./routes.js', import.meta.url), path.join(directory, 'fs/routes.mjs'));
+      await copyFile(new URL('./project-rules.js', import.meta.url), path.join(directory, 'fs/project-rules.js'));
+      await copyFile(new URL('../meetings/private-paths.js', import.meta.url), path.join(directory, 'meetings/private-paths.js'));
       await copyFile(new URL('./byte-range.js', import.meta.url), path.join(directory, 'fs/byte-range.js'));
       await copyFile(new URL('../path-realpath-cache.js', import.meta.url), path.join(directory, 'path-realpath-cache.js'));
+      // Project rules use declared runtime dependencies. Copy their real package
+      // trees, not workspace symlinks, into the isolated packaged-module fixture.
+      const require = createRequire(import.meta.url);
+      for (const dependency of ['zod', 'jsonc-parser']) {
+        await cp(path.dirname(require.resolve(`${dependency}/package.json`)), path.join(directory, 'node_modules', dependency), { recursive: true });
+      }
       expect(() => execFileSync('node', [
         '--input-type=module',
         '--eval',

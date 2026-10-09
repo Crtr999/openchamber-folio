@@ -61,3 +61,26 @@ twelve children.
 - If adding new `/api/fs/*` endpoints, add them in `routes.js` and extend this document.
 - `GET /api/fs/list` may resolve symlinks with `realpath` to read directory contents, but the response `path` and each entry `path` must stay in the caller's requested path space (`path.join(requestedPath, name)`). Returning real paths breaks file-tree expansion for directories reached through workspace symlinks.
 - `POST /api/fs/upload` accepts one `application/octet-stream` body with `path` and optional `overwrite=true` query parameters. The body streams into a same-directory temp file with a 100 MiB default cap configurable through `OPENCHAMBER_FS_UPLOAD_MAX_BYTES`; failed and oversized uploads clean up that temp file. New files commit through an atomic no-replace link, existing files return `409` unless overwrite is explicit, directory targets are rejected, and the destination parent resolves before writing so uploads cannot escape through workspace symlinks.
+
+## Local project rules
+
+## Private meeting exclusion
+
+`meetings/private-paths.js` owns process-lifetime registration of native meeting
+storage. `registerFsRoutes` refuses registered directories and descendants with
+HTTP 403 and `code: "private_meeting_path"` before generic metadata, reads,
+raw downloads, previews, uploads and mutations. Workspace overrides and file
+grants cannot lift this exclusion. Fresh canonical existing-ancestor resolution
+also covers symlink aliases and files that have not been created yet.
+
+Parent listings omit private entries and aliases. Recursive file search and
+git discovery refuse scopes containing a private root. Delete and rename also
+refuse ancestors, preserving stored records. Registration survives service
+disposal. Electron registers its actual userData storage through service
+creation; web and hosted/Capacitor mobile share this server policy. VS Code
+does not instantiate the native meeting service. This is an HTTP file API
+exclusion, not encryption or a sandbox for same-user shell/terminal commands.
+
+## Local project rules
+
+`project-rules.js` registers GET/POST `/api/fs/project-rules` with the existing project directory resolver and authenticated filesystem route surface. Targets are only local `AGENTS.md` and OpenCode project JSON/JSONC (existing `.opencode` config takes precedence). Symlinks in targets and backup paths are refused. GET returns instructions or public configuration fields, never raw configuration/provider credentials. POST checks a SHA-256 revision, serializes same-file saves, preserves JSONC comments and unrelated keys/policies, atomically replaces the file and retains a private `.openchamber-previous` sibling. Conflict responses are HTTP 409; malformed input/configuration is an explicit error. Restore swaps the previous contents back using the same revision guard. This does not edit global rules or pairing configuration.

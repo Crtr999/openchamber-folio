@@ -10,6 +10,7 @@ import { useInputStore } from '@/sync/input-store';
 import { useUIStore } from '@/stores/useUIStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import ChatEmptyState from './ChatEmptyState';
+import { HomeLandscape } from './HomeDashboard';
 import { useGlobalSyncStore } from '@/sync/global-sync-store';
 import MessageList, { type MessageListHandle } from './MessageList';
 import { createTimelineRevealGate, TIMELINE_REVEAL_CAP_MS, TimelineRevealGateContext, type TimelineRevealGate } from './timelineRevealGate';
@@ -959,7 +960,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     const workStatusPanelMountable = !isMobile
         && !isVSCode
         && chatSurfaceMode !== 'mini-chat';
-    const showWorkStatusPanel = workStatusPanelMountable && workStatusVisible;
+    const showWorkStatusPanel = workStatusPanelMountable && workStatusVisible && !draftOpen;
 
     // Offered over the chat when there is no room beside it. The panel is still
     // switched on; only the layout refuses it.
@@ -971,7 +972,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     const workStatusOverlayMountable = workStatusPanelMountable
         && workStatusPanelEnabled
         && !workStatusFits;
-    const showWorkStatusOverlay = workStatusOverlayMountable && workStatusOverlayOpen;
+    const showWorkStatusOverlay = workStatusOverlayMountable && workStatusOverlayOpen && !draftOpen;
 
     React.useEffect(() => {
         setWorkStatusPanelFits(workStatusPanelMountable && workStatusFits);
@@ -1187,7 +1188,22 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     }, [timelineController.handleActiveTurnChange]);
     const chatQuoteHighlights = useChatQuoteHighlightStore();
 
+    const searchHistoryCursorRef = React.useRef<string | null>(null);
+    const loadMissingSearchMessage = React.useCallback(async (messageId: string): Promise<boolean> => {
+        if (sessionMessages.some(record => record.info.id === messageId)) return true;
+        if (!currentSessionId || !effectiveSessionDirectory || sessionMessageLoadState.status === 'loading'
+            || sessionMessageLoadState.complete || !sessionMessageLoadState.cursor) return false;
+        const key = JSON.stringify([currentSessionKey, messageId, sessionMessageLoadState.cursor]);
+        if (searchHistoryCursorRef.current === key) return false;
+        searchHistoryCursorRef.current = key;
+        try { await sync.loadMore(currentSessionId, effectiveSessionDirectory); }
+        catch { return false; } // The existing history loader publishes its failure state.
+        // The new history snapshot re-enters hash navigation after React has rendered its turns.
+        return false;
+    }, [sessionMessages, currentSessionId, currentSessionKey, effectiveSessionDirectory, sessionMessageLoadState.status,
+        sessionMessageLoadState.complete, sessionMessageLoadState.cursor, sync]);
     const navigation = useChatTurnNavigation({
+        loadMissingMessage: loadMissingSearchMessage,
         sessionId: currentSessionId,
         turnIds: timelineController.turnIds,
         activeTurnId: timelineController.activeTurnId,
@@ -1633,10 +1649,11 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                     isDesktopExpandedInput
                         ? 'flex-1 min-h-0 bg-background'
                         : draftLayoutVisible && !useCompactDraftLayout
-                            ? 'flex-1 items-center justify-center bg-background pb-[6vh]'
+                            ? 'oc-home-content flex-1 overflow-y-auto overflow-x-hidden pb-8'
                         : !floatingComposer && 'bg-background'
                 )}
             >
+                {draftLayoutVisible && !useCompactDraftLayout && !isDesktopExpandedInput ? <HomeLandscape /> : null}
                 {!draftLayoutVisible && !isDesktopExpandedInput && sessionMessages.length > 0 && (
                     /* One zero-height anchor on the slot's top edge for
                        everything that floats above the composer, so the

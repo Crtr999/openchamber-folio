@@ -19,7 +19,7 @@ function sectionSpacingAfter(row: SessionSidebarRow, nextRow: SessionSidebarRow 
   const startsSection = nextRow?.kind === 'activity-header'
     || nextRow?.kind === 'project-header'
     || (nextRow?.kind === 'group-header' && row.kind !== 'project-header');
-  return startsSection ? 'pb-2' : undefined;
+  return startsSection ? 'pb-1.5' : undefined;
 }
 
 export function SessionSidebarRows({

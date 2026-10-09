@@ -55,9 +55,10 @@ exactly as it already does when the context panel opens.
   `WORK_STATUS_PANEL_WIDTH` of panel.
 
 `ChatContainer` additionally suppresses it in mini-chat and in expanded-input
-mode. It remains available on a new-session draft: when the draft targets a
-project or pending worktree, the panel uses that directory for project, MCP,
-and usage readouts before a session exists.
+mode. The desktop new-session homepage hides the panel and its overlay while
+the draft is open. Its composer retains project and model selection, and the
+homepage dashboard reads cached sessions, live activity, and projects without
+starting new requests. The panel returns when a session is selected or sent.
 
 Managed Chats never render or warm the Project repository section. A Chat draft
 also passes no fallback directory to the panel, so an active project's branch

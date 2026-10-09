@@ -1,3 +1,10 @@
+import { chatgptI18n } from './chatgpt.i18n';
+import { museI18n } from './muse.i18n';
+import { claudeI18n } from './claude.i18n';
+import { meetingsI18n } from './meetings.i18n';
+import { homeI18n } from './home.i18n';
+import { personalToolsI18n } from './personal-tools.i18n';
+import { workspaceStatusI18n } from './workspace-status.i18n';
 import { carterI18n } from './carter.i18n';
 import type { I18nKey } from './en';
 import { settingsDict } from './ko.settings';
@@ -15,6 +22,20 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  ...chatgptI18n['ko'],
+  ...museI18n.ko,
+  ...claudeI18n.ko,
+  ...meetingsI18n.ko,
+  'meeting.quickStart': '회의 시작',
+  'meeting.partial': '일부 저장된 회의를 읽을 수 없습니다. 목록이 불완전하며 손상된 파일은 그대로 유지됩니다.',
+  'meeting.summaryReview': '요약 모델 검토',
+  'meeting.summaryDisclosure': '이 녹취록만 {provider}/{model}에 보내는 데 동의합니다. 메모, 제목, 일정, 오디오는 제외됩니다. 비용과 구독 적용 여부는 알 수 없습니다. 채팅을 만들지 않습니다.',
+  'meeting.newRecording': '이 녹음은 종료되었습니다. 다시 녹음하려면 새 회의를 만드세요.',
+  'meeting.screenPermission': '화면 공유 권한은 시스템 오디오 캡처에만 사용됩니다. 화면 프레임을 읽거나 저장하거나 전송하지 않습니다.',
+  'header.sessionTabs.pinSidebar': '사이드바에 고정',
+  'header.sessionTabs.unpinSidebar': '사이드바에서 고정 해제',
+  ...homeI18n['ko'],
+  ...personalToolsI18n['ko'],
   "opencodeCompatibility.bundled": "OpenCode는 OpenChamber에 포함되어 있습니다. OpenCode v2를 사용하려면 OpenChamber를 업데이트하세요.",
   "opencodeCompatibility.title": "OpenCode v2가 필요합니다",
   "opencodeCompatibility.outdatedTitle": "OpenCode를 업데이트하세요",
@@ -71,6 +92,7 @@ export const dict: Record<I18nKey, string> = {
   ...mcpGridI18n.ko,
   ...pluginsGridI18n.ko,
   ...carterI18n.ko,
+  ...workspaceStatusI18n["ko"],
   'terminalView.actions.attachSelection': '선택한 출력 첨부',
   'terminalView.actions.copySelection': '선택한 출력 복사',
   'terminalView.toast.selectionCopied': '출력을 복사했습니다',
@@ -491,7 +513,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.empty.noMatches.title': '일치하는 세션 없음',
   'sessions.sidebar.empty.noMatches.description': '다른 제목, 브랜치, 폴더 또는 경로로 검색해 보세요.',
   'sessions.sidebar.activity.recentTitle': '최근',
-  'sessions.sidebar.activity.chatsTitle': '채팅',
+  'sessions.sidebar.activity.chatsTitle': '모든 채팅',
   'sessions.sidebar.activity.timelineTitle': '프로젝트',
   'sessions.sidebar.header.viewMode.label': '보기',
   'sessions.sidebar.header.viewMode.projects': '그룹 보기',
@@ -3336,6 +3358,8 @@ export const dict: Record<I18nKey, string> = {
   'header.workStatusPanel.toggleAria': '작업 상태 패널 전환',
   'header.workStatusPanel.hide': '작업 상태 숨기기',
   'header.workStatusPanel.show': '작업 상태 표시',
+  'header.contextRail.show': '컨텍스트 사이드바 표시',
+  'header.contextRail.hide': '컨텍스트 사이드바 숨기기',
   'chat.workStatus.mcp.authorizeOpenFailed': '인증 페이지를 열지 못했습니다',
   'chat.workStatus.mcp.authorizeFailed': '인증에 실패했습니다',
   'mcpDropdown.toast.authorizeOpenFailed': '인증 페이지를 열지 못했습니다',

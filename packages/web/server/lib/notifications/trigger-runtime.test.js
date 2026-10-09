@@ -9,10 +9,14 @@ import { createNotificationTriggerRuntime } from './runtime.js';
  * agent and model from the start, a user abort announces nothing, and an
  * active goal (which lives in OpenChamber's own metadata) silences the push.
  */
-const makeRuntime = ({ metadata = {} } = {}) => {
+const makeRuntime = ({ metadata = {}, seedRoot = true, settings = {}, focused = false } = {}) => {
   const emitDesktopNotification = vi.fn(() => true);
+  const broadcastUiNotification = vi.fn();
+  const sendPushToAllUiSessions = vi.fn(async () => undefined);
+  const sendApnsToAllUiSessions = vi.fn(async () => undefined);
   const runtime = createNotificationTriggerRuntime({
-    readSettingsFromDisk: async () => ({ nativeNotificationsEnabled: true, notificationMode: 'always', notifyOnCompletion: true }),
+    readSettingsFromDisk: async () => ({ nativeNotificationsEnabled: true, notificationMode: 'always', notifyOnCompletion: true, ...settings }),
+    getIsWindowFocused: () => focused,
     prepareNotificationLastMessage: async ({ message }) => message,
     buildTemplateVariables: async () => ({}),
     extractLastMessageText: () => 'done',
@@ -20,15 +24,21 @@ const makeRuntime = ({ metadata = {} } = {}) => {
     resolveNotificationTemplate: () => '',
     shouldApplyResolvedTemplateMessage: () => false,
     emitDesktopNotification,
-    broadcastUiNotification: vi.fn(),
-    sendPushToAllUiSessions: vi.fn(async () => undefined),
-    sendApnsToAllUiSessions: vi.fn(async () => undefined),
-    isAnyInteractiveClientVisible: () => true,
+    broadcastUiNotification,
+    sendPushToAllUiSessions,
+    sendApnsToAllUiSessions,
+    isAnyInteractiveClientVisible: () => false,
     buildOpenCodeUrl: (path) => `http://opencode.test${path}`,
     getOpenCodeAuthHeaders: () => ({}),
     readSessionMetadata: async () => metadata,
   });
-  return { runtime, emitDesktopNotification };
+  const originalTrigger = runtime.maybeSendPushForTrigger;
+  runtime.maybeSendPushForTrigger = async (payload) => {
+    const sessionID = payload.properties?.sessionID;
+    if (seedRoot && sessionID && sessionID !== 'ses_child') await originalTrigger({ type: 'session.created', properties: { info: { id: sessionID } } });
+    return originalTrigger(payload);
+  };
+  return { runtime, emitDesktopNotification, broadcastUiNotification, sendPushToAllUiSessions, sendApnsToAllUiSessions };
 };
 
 const stepStarted = (sessionID, id) => ({
@@ -157,6 +167,7 @@ describe('push content in enterprise mode', () => {
     process.env.OPENCHAMBER_ENTERPRISE_MODE = 'true';
     try {
       const { runtime, sendPushToAllUiSessions, sendApnsToAllUiSessions } = makePushRuntime();
+      await runtime.maybeSendPushForTrigger({ type: 'session.created', properties: { info: { id: 'ses_e' } } });
       await runtime.maybeSendPushForTrigger(stepStarted('ses_e', 'msg_e'));
       await runtime.maybeSendPushForTrigger(turnEnded('ses_e'));
 
@@ -169,6 +180,52 @@ describe('push content in enterprise mode', () => {
       delete process.env.OPENCHAMBER_ENTERPRISE_MODE;
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('full-session notification policy across delivery channels', () => {
+  it.each([undefined, 'ses_parent'])('does not dispatch unknown or child sessions: %s', async (parentID) => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('down', { status: 503 })));
+    const { runtime, emitDesktopNotification, broadcastUiNotification, sendPushToAllUiSessions, sendApnsToAllUiSessions } = makeRuntime({ seedRoot: false });
+    if (parentID) await runtime.maybeSendPushForTrigger({ type: 'session.created', properties: { info: { id: 'ses_child', parentID } } });
+    await runtime.maybeSendPushForTrigger(turnEnded('ses_child'));
+    await runtime.maybeSendPushForTrigger({ type: 'session.error', properties: { sessionID: 'ses_child', error: 'failed' } });
+    await runtime.maybeSendPushForTrigger({ type: 'form.created', properties: { sessionID: 'ses_child', form: { title: 'Question' } } });
+    await runtime.maybeSendPushForTrigger({ type: 'permission.asked', properties: { sessionID: 'ses_child', id: 'p1', action: 'read' } });
+    await new Promise(resolve => setTimeout(resolve, 650));
+    await runtime.sendGoalSettlePush({ sessionId: 'ses_child', status: 'complete', title: 'Goal complete' });
+    for (const channel of [emitDesktopNotification, broadcastUiNotification, sendPushToAllUiSessions, sendApnsToAllUiSessions]) expect(channel).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('notifies a standalone root on desktop, web push and iOS APNs', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ data: {} })));
+    const { runtime, emitDesktopNotification, broadcastUiNotification, sendPushToAllUiSessions, sendApnsToAllUiSessions } = makeRuntime({ seedRoot: false });
+    await runtime.maybeSendPushForTrigger({ type: 'session.created', properties: { info: { id: 'ses_root' } } });
+    await runtime.maybeSendPushForTrigger(turnEnded('ses_root'));
+    for (const channel of [emitDesktopNotification, broadcastUiNotification, sendPushToAllUiSessions, sendApnsToAllUiSessions]) expect(channel).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps root error and attention alerts without enabling child alerts', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ data: {} })));
+    const { runtime, emitDesktopNotification, sendApnsToAllUiSessions } = makeRuntime();
+    await runtime.maybeSendPushForTrigger({ type: 'session.error', properties: { sessionID: 'ses_root', error: 'failed' } });
+    await runtime.maybeSendPushForTrigger({ type: 'form.created', properties: { sessionID: 'ses_root', form: { title: 'Question' } } });
+    await runtime.maybeSendPushForTrigger({ type: 'permission.asked', properties: { sessionID: 'ses_root', id: 'p1', action: 'read' } });
+    await new Promise(resolve => setTimeout(resolve, 650));
+    expect(emitDesktopNotification.mock.calls.map(([payload]) => payload.kind)).toEqual(['error', 'question', 'permission']);
+    expect(sendApnsToAllUiSessions).toHaveBeenCalledTimes(3);
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps the existing focused-root notification preference', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ data: {} })));
+    const { runtime, emitDesktopNotification, sendApnsToAllUiSessions } = makeRuntime({ focused: true, settings: { notificationMode: 'hidden-only' } });
+    await runtime.maybeSendPushForTrigger(turnEnded('ses_root'));
+    expect(emitDesktopNotification).not.toHaveBeenCalled();
+    expect(sendApnsToAllUiSessions).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });
 
@@ -185,7 +242,6 @@ describe('subagent finish with subagent notifications off', () => {
       shouldApplyResolvedTemplateMessage: () => false,
       emitDesktopNotification,
       broadcastUiNotification: vi.fn(),
-      sendPushToAllUiSessions: vi.fn(async () => undefined),
       sendApnsToAllUiSessions: vi.fn(async () => undefined),
       isAnyInteractiveClientVisible: () => true,
       buildOpenCodeUrl: (path) => `http://opencode.test${path}`,

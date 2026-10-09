@@ -1,3 +1,10 @@
+import { chatgptI18n } from './chatgpt.i18n';
+import { museI18n } from './muse.i18n';
+import { claudeI18n } from './claude.i18n';
+import { meetingsI18n } from './meetings.i18n';
+import { homeI18n } from './home.i18n';
+import { personalToolsI18n } from './personal-tools.i18n';
+import { workspaceStatusI18n } from './workspace-status.i18n';
 import { carterI18n } from './carter.i18n';
 import { settingsDict } from './nl.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
@@ -14,6 +21,20 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict = {
+  ...chatgptI18n['nl'],
+  ...museI18n.nl,
+  ...claudeI18n.nl,
+  ...meetingsI18n.nl,
+  'meeting.quickStart': 'Vergadering starten',
+  'meeting.partial': 'Sommige opgeslagen vergaderingen konden niet worden gelezen. De lijst is onvolledig; beschadigde bestanden zijn niet aangepast.',
+  'meeting.summaryReview': 'Samenvattingsmodel controleren',
+  'meeting.summaryDisclosure': 'Ik keur goed dat alleen dit transcript naar {provider}/{model} gaat. Notities, titel, agenda en audio zijn uitgesloten. Kosten en abonnementsdekking zijn onbekend. Er wordt geen chat gemaakt.',
+  'meeting.newRecording': 'Deze opname is afgesloten. Maak een nieuwe vergadering om opnieuw op te nemen.',
+  'meeting.screenPermission': 'Schermdeeltoestemming wordt alleen gevraagd voor systeemaudio. Er worden geen schermbeelden gelezen, opgeslagen of verstuurd.',
+  'header.sessionTabs.pinSidebar': 'Vastzetten in zijbalk',
+  'header.sessionTabs.unpinSidebar': 'Losmaken uit zijbalk',
+  ...homeI18n['nl'],
+  ...personalToolsI18n['nl'],
   "opencodeCompatibility.bundled": "OpenCode is inbegrepen bij OpenChamber. Werk OpenChamber bij om OpenCode v2 te krijgen.",
   "opencodeCompatibility.title": "OpenCode v2 vereist",
   "opencodeCompatibility.outdatedTitle": "OpenCode bijwerken",
@@ -70,6 +91,7 @@ export const dict = {
   ...mcpGridI18n.nl,
   ...pluginsGridI18n.nl,
   ...carterI18n.nl,
+  ...workspaceStatusI18n["nl"],
   'terminalView.actions.attachSelection': 'Geselecteerde uitvoer toevoegen',
   'terminalView.actions.copySelection': 'Geselecteerde uitvoer kopiëren',
   'terminalView.toast.selectionCopied': 'Uitvoer gekopieerd',
@@ -491,7 +513,7 @@ export const dict = {
   'sessions.sidebar.empty.noMatches.description': 'Probeer een andere titel, branch, map of pad.',
   'sessions.sidebar.activity.recentTitle': 'recente',
   'sessions.sidebar.activity.timelineTitle': 'projecten',
-  'sessions.sidebar.activity.chatsTitle': 'gesprekken',
+  'sessions.sidebar.activity.chatsTitle': 'Alle gesprekken',
   'sessions.sidebar.activity.chatsEmpty': 'Nog geen gesprekken.',
   'chat.chatInput.chooseProject': 'Kies project',
   'sessions.archivePage.allDirectories': 'Alle mappen',
@@ -3336,6 +3358,8 @@ export const dict = {
   'header.workStatusPanel.toggleAria': 'Werkstatuspaneel in- of uitschakelen',
   'header.workStatusPanel.hide': 'Werkstatus verbergen',
   'header.workStatusPanel.show': 'Werkstatus tonen',
+  'header.contextRail.show': 'Contextzijbalk tonen',
+  'header.contextRail.hide': 'Contextzijbalk verbergen',
   'chat.workStatus.mcp.authorizeOpenFailed': 'Kan de autorisatiepagina niet openen',
   'chat.workStatus.mcp.authorizeFailed': 'Kan niet autoriseren',
   'chat.formCard.inputNeeded': 'Invoer nodig',

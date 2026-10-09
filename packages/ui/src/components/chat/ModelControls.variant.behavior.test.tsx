@@ -1,5 +1,5 @@
 import React, { act } from 'react';
-import { beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import { create } from 'zustand';
@@ -7,6 +7,13 @@ import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-sys
 import { getThemeById } from '@/lib/theme/themes';
 import { AUTO_MODEL_ID, AUTO_PROVIDER_ID, isAutoModel } from '@/lib/routing/autoModel';
 import { useRoutingStore } from '@/stores/useRoutingStore';
+import { opencodeClient } from '@/lib/opencode/client';
+
+let nativeCatalogRead = spyOn(opencodeClient, 'getProvidersForConfig');
+beforeEach(() => {
+  nativeCatalogRead = spyOn(opencodeClient, 'getProvidersForConfig').mockResolvedValue({ providers: [], models: [] });
+});
+afterEach(() => nativeCatalogRead.mockRestore());
 
 /**
  * Restoring a session must not invent an effort choice.
@@ -35,6 +42,7 @@ const AGENT = 'build';
 const SESSION_ID = 'ses_restore';
 
 const model = {
+  enabled: true,
   id: MODEL_ID,
   name: MODEL_ID,
   providerID: PROVIDER_ID,
@@ -382,6 +390,7 @@ describe('ModelControls effort restore', () => {
       selectionSource: 'auto',
     });
   });
+
 
   for (const missing of ['request', 'body', 'permissions', 'v2 fields']) {
     test(`renders a cached agent without ${missing}`, async () => {

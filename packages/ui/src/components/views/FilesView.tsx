@@ -75,6 +75,7 @@ import { DirectoryRequests } from './files/directoryRequests';
 import { useFileTreeUpload } from './files/useFileTreeUpload';
 import { areDirectoryNodesEqual, buildFileTreeStatusIndex } from './files/fileTreeStatus';
 import { BinaryArtifact } from './files/previews/BinaryArtifact';
+import { DocxArtifact } from './files/previews/DocxArtifact';
 import { FontArtifact } from './files/previews/FontArtifact';
 import { ImageArtifact } from './files/previews/ImageArtifact';
 import { MediaArtifact } from './files/previews/MediaArtifact';
@@ -2599,11 +2600,12 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   const isSelectedVideo = Boolean(selectedFile?.path && isVideoFile(selectedFile.path));
   const isSelectedMedia = isSelectedVideo || Boolean(selectedFile?.path && isAudioFile(selectedFile.path));
   const isSelectedFont = Boolean(selectedFile?.path && isFontFile(selectedFile.path));
+  const isSelectedDocx = Boolean(selectedFile?.path && /\.docx$/i.test(selectedFile.path));
   const isSelectedBinary = Boolean(
     selectedFile?.path
     && (isBinaryFile(selectedFile.path) || contentDetectedBinary)
   );
-  const isUnsupportedBinary = isSelectedBinary && !isSelectedImage && !isSelectedPdf && !isSelectedMedia && !isSelectedFont;
+  const isUnsupportedBinary = isSelectedBinary && !isSelectedImage && !isSelectedPdf && !isSelectedMedia && !isSelectedFont && !isSelectedDocx;
   // Everything the viewer shows as an artifact rather than as text.
   const isSelectedNonText = isSelectedBinary || (isSelectedImage && !isSvgSource);
   const pendingNavigationTargetPath = React.useMemo(
@@ -3388,7 +3390,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
 
   // PDFs, audio, video and fonts are handed to the browser as a URL it owns
   // (iframe, media element, FontFace), so they need the scoped URL token.
-  const usesRawAssetUrl = isSelectedPdf || isSelectedMedia || isSelectedFont;
+  const usesRawAssetUrl = isSelectedPdf || isSelectedMedia || isSelectedFont || isSelectedDocx;
   const pdfAssetAuthKey = selectedFile?.path
     && usesRawAssetUrl
     ? `${selectedFile.path}|${selectedFileReadOptions.allowOutsideWorkspace ? 'outside' : 'workspace'}|${fileContentRevision}`
@@ -3472,6 +3474,9 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     }
     if (isSelectedFont) {
       return <FontArtifact key={pdfPreviewNonce} src={pdfSrc} name={file.name} sizeBytes={artifactSize} />;
+    }
+    if (isSelectedDocx) {
+      return <DocxArtifact key={pdfPreviewNonce} src={pdfSrc} name={file.name} sizeBytes={artifactSize} download={downloadButton} />;
     }
     if (isUnsupportedBinary) {
       return <BinaryArtifact name={file.name} path={file.path} sizeBytes={artifactSize} download={downloadButton} />;

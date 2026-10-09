@@ -55,7 +55,7 @@ const makeStorage = (): Storage => ({
 }) as Storage;
 
 const model = (providerId: string, modelId: string, variantIds?: string[]) => ({
-  id: `${providerId}/${modelId}`,
+  id: modelId,
   modelID: modelId,
   providerID: providerId,
   name: modelId,
@@ -88,7 +88,7 @@ const providerResponse = (id: string, modelId = `${id}-model`, variantIds?: stri
   default: { providerID: id, id: modelId },
 });
 
-type TestProviderResponse = ReturnType<typeof providerResponse>;
+type TestProviderResponse = Omit<ReturnType<typeof providerResponse>, 'default'> & { default?: { providerID: string; id: string } };
 
 const testAgent = (name: string, options?: Partial<TestAgent>): Agent => ({
   id: name,
@@ -236,7 +236,7 @@ Object.defineProperty(globalThis, 'window', {
 });
 Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: makeStorage() });
 
-const { useConfigStore, selectConfigAgentsForDirectory, selectCatalogLoadedForDirectory } = await import('./useConfigStore');
+const { useConfigStore, selectConfigAgentsForDirectory, selectCatalogLoadedForDirectory, selectProvidersForDirectory } = await import('./useConfigStore');
 const { emitSyncConfigChanged, setSyncRefs } = await import('@/sync/sync-refs');
 const { useSelectionStore } = await import('@/sync/selection-store');
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
@@ -311,6 +311,26 @@ describe('useConfigStore provider persistence', () => {
     // The defaults loader has a short-lived module cache. Reset it between
     // tests through the same setter the settings page uses for a user edit.
     useConfigStore.getState().setSettingsDefaultModel(undefined);
+  });
+
+  test('directory provider inventory retains enabled empty connections and fallback skips them', async () => {
+    getProvidersForConfigImpl = async () => ({ providers: [providerInfo('empty-pool'), providerInfo('usable-pool')], models: [model('usable-pool', 'deployment-alias')] });
+    await useConfigStore.getState().loadProviders({ directory: DIRECTORY });
+    const state = useConfigStore.getState();
+    expect(selectProvidersForDirectory(state, DIRECTORY).map(item => [item.id, item.models.length])).toEqual([['empty-pool', 0], ['usable-pool', 1]]);
+    expect(state.currentProviderId).toBe('usable-pool');
+    expect(state.currentModelId).toBe('deployment-alias');
+    state.setProvider('empty-pool');
+    expect(useConfigStore.getState().currentProviderId).toBe('empty-pool');
+    expect(useConfigStore.getState().currentModelId).toBe('');
+  });
+
+  test('inactive directory retains its own no-model provider without changing the active catalog', async () => {
+    getProvidersForConfigImpl = async () => ({ providers: [providerInfo('empty-other')], models: [] });
+    const previous = useConfigStore.getState().providers;
+    await useConfigStore.getState().loadProviders({ directory: OTHER_DIRECTORY });
+    expect(selectProvidersForDirectory(useConfigStore.getState(), OTHER_DIRECTORY).map(item => [item.id, item.models.length])).toEqual([['empty-other', 0]]);
+    expect(useConfigStore.getState().providers).toBe(previous);
   });
 
   test('provider and agent discovery gaps preserve a manual model and effort', async () => {

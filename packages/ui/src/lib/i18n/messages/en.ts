@@ -1,3 +1,10 @@
+import { chatgptI18n } from './chatgpt.i18n';
+import { museI18n } from './muse.i18n';
+import { claudeI18n } from './claude.i18n';
+import { meetingsI18n } from './meetings.i18n';
+import { homeI18n } from './home.i18n';
+import { personalToolsI18n } from './personal-tools.i18n';
+import { workspaceStatusI18n } from './workspace-status.i18n';
 import { carterI18n } from './carter.i18n';
 import { settingsDict } from './en.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
@@ -14,6 +21,20 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict = {
+  ...chatgptI18n['en'],
+  ...museI18n.en,
+  ...claudeI18n.en,
+  ...meetingsI18n.en,
+  'meeting.quickStart': 'Start meeting',
+  'meeting.screenPermission': 'Screen-sharing permission is requested only to capture system audio. No screen frames are read, saved or transmitted.',
+  'meeting.partial': 'Some saved meetings could not be read. The list is incomplete; damaged files were left untouched.',
+  'meeting.summaryReview': 'Review summary model',
+  'meeting.summaryDisclosure': 'I approve sending only this transcript to {provider}/{model}. Notes, title, calendar and audio are excluded. Cost and subscription coverage are unknown. This creates no chat.',
+  'meeting.newRecording': 'This recording is closed. Create a new meeting to record again.',
+  'header.sessionTabs.pinSidebar': 'Pin to sidebar',
+  'header.sessionTabs.unpinSidebar': 'Unpin from sidebar',
+  ...homeI18n['en'],
+  ...personalToolsI18n['en'],
   "opencodeCompatibility.bundled": "OpenCode is bundled with OpenChamber. Update OpenChamber to get OpenCode v2.",
   "opencodeCompatibility.title": "OpenCode v2 required",
   "opencodeCompatibility.outdatedTitle": "Update OpenCode",
@@ -70,6 +91,7 @@ export const dict = {
   ...mcpGridI18n.en,
   ...pluginsGridI18n.en,
   ...carterI18n.en,
+  ...workspaceStatusI18n["en"],
   'terminalView.actions.attachSelection': 'Attach selected output',
   'terminalView.actions.copySelection': 'Copy selected output',
   'terminalView.toast.selectionCopied': 'Output copied',
@@ -491,7 +513,7 @@ export const dict = {
   'sessions.sidebar.empty.noMatches.description': 'Try a different title, branch, folder, or path.',
   'sessions.sidebar.activity.recentTitle': 'recent',
   'sessions.sidebar.activity.timelineTitle': 'projects',
-  'sessions.sidebar.activity.chatsTitle': 'chats',
+  'sessions.sidebar.activity.chatsTitle': 'All Chats',
   'sessions.sidebar.activity.chatsEmpty': 'No chats yet.',
   'chat.chatInput.chooseProject': 'Choose project',
   'sessions.archivePage.allDirectories': 'All directories',
@@ -3336,6 +3358,8 @@ export const dict = {
   'header.workStatusPanel.toggleAria': 'Toggle work-status panel',
   'header.workStatusPanel.hide': 'Hide work status',
   'header.workStatusPanel.show': 'Show work status',
+  'header.contextRail.show': 'Show context sidebar',
+  'header.contextRail.hide': 'Hide context sidebar',
   'chat.workStatus.mcp.authorizeOpenFailed': 'Could not open the authorization page',
   'chat.workStatus.mcp.authorizeFailed': 'Authorization failed',
   'chat.formCard.inputNeeded': 'Input needed',

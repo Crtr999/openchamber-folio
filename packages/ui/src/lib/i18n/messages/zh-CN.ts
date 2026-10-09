@@ -1,3 +1,10 @@
+import { chatgptI18n } from './chatgpt.i18n';
+import { museI18n } from './muse.i18n';
+import { claudeI18n } from './claude.i18n';
+import { meetingsI18n } from './meetings.i18n';
+import { homeI18n } from './home.i18n';
+import { personalToolsI18n } from './personal-tools.i18n';
+import { workspaceStatusI18n } from './workspace-status.i18n';
 import { carterI18n } from './carter.i18n';
 import type { I18nKey } from './en';
 import { settingsDict } from './zh-CN.settings';
@@ -15,6 +22,20 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  ...chatgptI18n['zh-CN'],
+  ...museI18n['zh-CN'],
+  ...claudeI18n['zh-CN'],
+  ...meetingsI18n['zh-CN'],
+  'meeting.quickStart': '开始会议',
+  'meeting.partial': '部分已保存会议无法读取。列表不完整，损坏文件保持不变。',
+  'meeting.summaryReview': '审阅摘要模型',
+  'meeting.summaryDisclosure': '我同意仅将此转录发送至 {provider}/{model}。不包含笔记、标题、日历和音频。费用和订阅覆盖范围未知。不会创建聊天。',
+  'meeting.newRecording': '此录制已结束。请创建新会议以再次录制。',
+  'meeting.screenPermission': '请求屏幕共享权限仅用于捕获系统音频。不读取、保存或传输屏幕画面。',
+  'header.sessionTabs.pinSidebar': '固定到侧边栏',
+  'header.sessionTabs.unpinSidebar': '从侧边栏取消固定',
+  ...homeI18n['zh-CN'],
+  ...personalToolsI18n['zh-CN'],
   "opencodeCompatibility.bundled": "OpenCode 随 OpenChamber 一起提供。请更新 OpenChamber 以获取 OpenCode v2。",
   "opencodeCompatibility.title": "需要 OpenCode v2",
   "opencodeCompatibility.outdatedTitle": "请更新 OpenCode",
@@ -71,6 +92,7 @@ export const dict: Record<I18nKey, string> = {
   ...mcpGridI18n['zh-CN'],
   ...pluginsGridI18n['zh-CN'],
   ...carterI18n['zh-CN'],
+  ...workspaceStatusI18n["zh-CN"],
   'terminalView.actions.attachSelection': '附加所选输出',
   'terminalView.actions.copySelection': '复制所选输出',
   'terminalView.toast.selectionCopied': '已复制输出',
@@ -491,7 +513,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.empty.noMatches.title': '没有匹配的会话',
   'sessions.sidebar.empty.noMatches.description': '请尝试其他标题、分支、文件夹或路径。',
   'sessions.sidebar.activity.recentTitle': '最近',
-  'sessions.sidebar.activity.chatsTitle': '聊天',
+  'sessions.sidebar.activity.chatsTitle': '所有聊天',
   'sessions.sidebar.activity.timelineTitle': '项目',
   'sessions.sidebar.header.viewMode.label': '视图',
   'sessions.sidebar.header.viewMode.projects': '分组',
@@ -3337,6 +3359,8 @@ export const dict: Record<I18nKey, string> = {
   'header.workStatusPanel.toggleAria': '切换工作状态面板',
   'header.workStatusPanel.hide': '隐藏工作状态',
   'header.workStatusPanel.show': '显示工作状态',
+  'header.contextRail.show': '显示上下文侧边栏',
+  'header.contextRail.hide': '隐藏上下文侧边栏',
   'chat.workStatus.mcp.authorizeOpenFailed': '无法打开授权页面',
   'chat.workStatus.mcp.authorizeFailed': '授权失败',
   'mcpDropdown.toast.authorizeOpenFailed': '无法打开授权页面',

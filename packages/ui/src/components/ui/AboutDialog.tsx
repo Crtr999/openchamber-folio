@@ -147,7 +147,8 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
           <OpenChamberLogo width={64} height={64} />
 
           <div className="space-y-1">
-            <h2 className="text-lg font-semibold">OpenChamber</h2>
+            <h2 className="text-lg font-semibold">Open Carter</h2>
+            <p className="typography-ui-label font-medium text-foreground/80">Version 1.0</p>
             <div className="space-y-0.5 typography-meta text-muted-foreground">
               {displayVersion && (
                 <p>{t('aboutDialog.openChamberVersionLabel', { version: displayVersion })}</p>
@@ -214,7 +215,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
           </div>
 
           <p className="typography-meta text-muted-foreground/60 pt-2">
-            {t('aboutDialog.footerNote')}
+            Carter&rsquo;s personal OS · built on OpenChamber
           </p>
         </div>
       </DialogContent>

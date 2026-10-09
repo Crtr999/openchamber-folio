@@ -1,6 +1,9 @@
 import { unwrapOpenCodeResponse } from '../opencode/response-envelope.js';
 import { createSessionActivityProbe } from '../opencode/session-activity.js';
 import { isEnterpriseMode } from '../enterprise-mode.js';
+import { z } from 'zod';
+
+const notificationSessionSchema = z.object({ id: z.string().min(1), parentID: z.string().min(1).nullish() });
 
 
 export const createNotificationTriggerRuntime = (deps) => {
@@ -271,14 +274,11 @@ export const createNotificationTriggerRuntime = (deps) => {
       if (!response.ok) {
         return undefined;
       }
-      const session = unwrapOpenCodeResponse(await response.json().catch(() => null));
-      if (!session || typeof session !== 'object') {
+      const parsed = notificationSessionSchema.safeParse(unwrapOpenCodeResponse(await response.json().catch(() => null)));
+      if (!parsed.success || parsed.data.id !== sessionId) {
         return undefined;
       }
-
-      const parentID = typeof session.parentID === 'string' && session.parentID.length > 0
-        ? session.parentID
-        : null;
+      const parentID = parsed.data.parentID ?? null;
       setCachedSessionParentId(sessionId, directory, parentID);
       return parentID;
     } catch {
@@ -307,6 +307,7 @@ export const createNotificationTriggerRuntime = (deps) => {
     const props = payload.properties;
     const info = props?.info;
     const sessionId =
+      ((payload.type === 'session.created' || payload.type === 'session.updated') ? info?.id : undefined) ??
       info?.sessionID ??
       info?.sessionId ??
       props?.sessionID ??
@@ -422,6 +423,8 @@ export const createNotificationTriggerRuntime = (deps) => {
       // but the execution can still drain steering input after it. Readiness
       // is announced from the execution's terminal `session.idle` instead.
       if (info?.role === 'assistant' && info?.finish === 'stop' && sessionId && payload.properties?.turnEnded === true) {
+        // Full sessions only. Unknown metadata is not proof of a root session.
+        if (await fetchSessionParentId(sessionId, notificationDirectory) !== null) return;
         payload = { ...payload, properties: { ...payload.properties, info } };
         const settings = await readSettingsFromDisk();
 
@@ -522,6 +525,7 @@ export const createNotificationTriggerRuntime = (deps) => {
       }
 
       if (info?.role === 'assistant' && info?.finish === 'error' && sessionId) {
+        if (await fetchSessionParentId(sessionId, notificationDirectory) !== null) return;
         const settings = await readSettingsFromDisk();
         if (settings.notifyOnError === false) return;
 
@@ -602,6 +606,7 @@ export const createNotificationTriggerRuntime = (deps) => {
 
       const timer = setTimeout(async () => {
         pushQuestionDebounceTimers.delete(sessionId);
+        if (await fetchSessionParentId(sessionId, notificationDirectory) !== null) return;
 
         const settings = await readSettingsFromDisk();
         if (settings.notifyOnQuestion === false) {
@@ -729,6 +734,7 @@ export const createNotificationTriggerRuntime = (deps) => {
 
       const timer = setTimeout(async () => {
         pushPermissionDebounceTimers.delete(sessionId);
+        if (await fetchSessionParentId(sessionId, notificationDirectory) !== null) return;
 
         if (await (getIsSessionAutoAccepting?.(sessionId, notificationDirectory, requestId)
           ?? isSessionAutoAccepting(sessionId, notificationDirectory))) {
@@ -814,6 +820,7 @@ export const createNotificationTriggerRuntime = (deps) => {
   // full text; APNs with the generic per-type title and the session name as
   // body, so the relay never sees content).
   const sendGoalSettlePush = async ({ sessionId, directory, status, title, body }) => {
+    if (await fetchSessionParentId(sessionId, directory) !== null) return;
     let sessionName = '';
     try {
       const base = buildOpenCodeUrl(`/api/session/${encodeURIComponent(sessionId)}`, '');
@@ -848,6 +855,7 @@ export const createNotificationTriggerRuntime = (deps) => {
   };
 
   return {
+    isRootNotificationSession: async (sessionId, directory) => await fetchSessionParentId(sessionId, directory) === null,
     maybeSendPushForTrigger,
     setAutoAcceptSession,
     setGetIsWindowFocused,

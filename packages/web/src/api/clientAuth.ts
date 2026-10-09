@@ -8,26 +8,27 @@ import type {
   RemoteClientRevokeResult,
 } from '@openchamber/ui/lib/api/types';
 import { runtimeFetch } from '@openchamber/ui/lib/runtime-fetch';
+import { remoteClientListSchema } from '@openchamber/ui/lib/api/client-auth-schema';
 
 const jsonOrNull = async <T>(response: Response): Promise<T | null> => {
   return (await response.json().catch(() => null)) as T | null;
 };
 
-export const createWebClientAuthAPI = (): ClientAuthAPI => ({
+export const createWebClientAuthAPI = (request: typeof runtimeFetch = runtimeFetch): ClientAuthAPI => ({
   async listClients(): Promise<RemoteClientRecord[]> {
-    const response = await runtimeFetch('/api/client-auth/clients', {
+    const response = await request('/api/client-auth/clients', {
       method: 'GET',
       headers: { Accept: 'application/json' },
     });
-    const payload = await jsonOrNull<{ clients?: RemoteClientRecord[]; error?: string }>(response);
-    if (!response.ok || !payload) {
+    if (!response.ok) {
+      const payload = await jsonOrNull<{ error?: string }>(response);
       throw new Error(payload?.error || response.statusText || 'Failed to load remote clients');
     }
-    return Array.isArray(payload.clients) ? payload.clients : [];
+    return remoteClientListSchema.parse(await response.json()).clients;
   },
 
   async createClient(input = {}): Promise<RemoteClientCreateResult> {
-    const response = await runtimeFetch('/api/client-auth/clients', {
+    const response = await request('/api/client-auth/clients', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ label: input.label ?? '' }),
@@ -40,7 +41,7 @@ export const createWebClientAuthAPI = (): ClientAuthAPI => ({
   },
 
   async createPairingSession(input = {}): Promise<PairingSessionCreateResult> {
-    const response = await runtimeFetch('/api/client-auth/pairing/sessions', {
+    const response = await request('/api/client-auth/pairing/sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
@@ -59,7 +60,7 @@ export const createWebClientAuthAPI = (): ClientAuthAPI => ({
   },
 
   async listPendingPairings(): Promise<PendingPairingRecord[]> {
-    const response = await runtimeFetch('/api/client-auth/pairing/sessions', {
+    const response = await request('/api/client-auth/pairing/sessions', {
       method: 'GET',
       headers: { Accept: 'application/json' },
     });
@@ -71,7 +72,7 @@ export const createWebClientAuthAPI = (): ClientAuthAPI => ({
   },
 
   async getPairingTransports(): Promise<{ local: string | null; lan: string | null; relayAvailable: boolean }> {
-    const response = await runtimeFetch('/api/client-auth/pairing/transports', {
+    const response = await request('/api/client-auth/pairing/transports', {
       method: 'GET',
       headers: { Accept: 'application/json' },
     });
@@ -83,7 +84,7 @@ export const createWebClientAuthAPI = (): ClientAuthAPI => ({
   },
 
   async cancelPairing(id: string): Promise<{ cancelled: boolean }> {
-    const response = await runtimeFetch(`/api/client-auth/pairing/sessions/${encodeURIComponent(id)}`, {
+    const response = await request(`/api/client-auth/pairing/sessions/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: { Accept: 'application/json' },
     });
@@ -95,7 +96,7 @@ export const createWebClientAuthAPI = (): ClientAuthAPI => ({
   },
 
   async revokeClient(id: string): Promise<RemoteClientRevokeResult> {
-    const response = await runtimeFetch(`/api/client-auth/clients/${encodeURIComponent(id)}`, {
+    const response = await request(`/api/client-auth/clients/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: { Accept: 'application/json' },
     });
@@ -107,7 +108,7 @@ export const createWebClientAuthAPI = (): ClientAuthAPI => ({
   },
 
   async purgeRevokedClients(): Promise<RemoteClientPurgeRevokedResult> {
-    const response = await runtimeFetch('/api/client-auth/clients', {
+    const response = await request('/api/client-auth/clients', {
       method: 'DELETE',
       headers: { Accept: 'application/json' },
     });

@@ -1,5 +1,48 @@
 # Session Sidebar
 
+## Claude website entry
+
+The local Electron sidebar's `shell/ClaudeFolder.tsx` resumes the singleton Claude
+website, displaying its live current-page title and explicitly pinned URL/title
+links. Those links persist locally, not as native transcripts or account/team
+history. They navigate the existing guest and can be removed locally. History
+and new-chat/account-switch controls remain in Claude's full website sidebar,
+with an explicit local-links notice. Web, VS Code, hosted mobile, Capacitor and remote
+Electron do not expose it. See the views documentation for retention and isolation.
+
+## Sidebar ownership
+
+Header native-session overflow and right-click menus expose Pin to sidebar and
+Unpin from sidebar through `HeaderSessionPinMenuItem`. The item subscribes to the
+same `useSessionPinnedStore` as sidebar rows and resolves the target session's
+authoritative directory again on activation. It never selects an inactive tab
+or uses the active session's directory. The store's runtime/directory/session
+key and existing Pinned projection remain unchanged. The single-session header
+uses the same item when tabs are disabled. Menus retain arrow and Ctrl+N/P
+navigation; keyboard focus reveals the native tab's action controls.
+
+Local Electron website tabs have overflow and right-click menus too. ChatGPT
+pinning requires a ready snapshot containing the current conversation path.
+Muse and Claude save only their existing observed URL/title metadata, excluding
+provider roots; these links appear in their existing website folders, not the
+native Pinned session list. They remain local saved pages, not mirrored history.
+See [account integration findings](../../views/account-integration-findings.md)
+for account-history and external-task limits.
+
+In the grouped sidebar, Scheduled task icons and Pinned session leading markers
+align with their heading text. Scheduled rows use a 26px local left inset; Pinned
+rows add 20px around the existing 6px marker gutter. Indentation wraps the whole
+session row, preserving its right-edge actions, focus/menu ownership and child
+depths. Timeline keeps its deliberate iconless, flush heading/row layout. Hosted
+and Capacitor mobile retain their separate session-sheet renderer.
+
+Local website folders share `shell/WebsiteFolderHeader.tsx`. The provider logo
+occupies the same leading slot as normal sidebar headers. Hover or keyboard focus
+replaces it with the disclosure button in place; Enter or Space expands it. The
+label resumes the singleton website independently of expansion. Selected rows use
+the selection tokens. ChatGPT keeps its add/tools controls and website history;
+Muse keeps locally saved pages; Claude keeps its current-page resume entry.
+
 Sidebar code is organized by the business object it owns. Shared contracts are
 kept at this root in `types.ts` and `utils.tsx`.
 
@@ -186,11 +229,10 @@ whose only matches moved renders nothing. Track / Done captures the runtime key 
 click (`setSessionWorkState`), so a server switch mid-request writes nothing to
 the new server.
 
-Row actions revealed on hover are the same three in both views: Track / Done
-(eye in the muted action color like its neighbours / check in
-`status.success`, one icon size up because the glyph draws small), quick
-archive/delete, the menu. Pin/unpin lives in the menu only. Touch layouts (`alwaysShowActions`)
-keep Track / Done in the menu. At rest a row in work shows a grey check only
+Row actions revealed on hover include quick pin/unpin, quick archive/delete,
+and the menu (plus open-in-editor in VS Code). Track / Done remains in the menu;
+touch layouts (`alwaysShowActions`) keep quick pin in the menu as well. At rest a
+row in work shows a grey check only
 while Jev's done hint is current (`isDoneSuggested`); the composer shows the
 same hint as a top row (`components/chat/SessionDoneHintRow.tsx`). The
 whole-row tooltip in the projects view shows the current recap. The mobile
@@ -267,7 +309,14 @@ renders `projects`.
 
 ## Search
 
-Dedicated search fields in the sidebar, mobile session list, and archive submit
+The desktop sidebar search trigger and shortcut now open `ChatSearchPanel`, the
+existing active-runtime keyword search for message content and attachment names.
+The header no longer has a duplicate trigger, and the sidebar no longer renders
+its unrelated local title-filter input. Closing the floating panel does not
+change sidebar collapse or grouping state. Owning search behavior and limits are
+documented in `components/sections/DOCUMENTATION.md`.
+
+Dedicated search fields in the mobile session list and archive submit
 only on Enter. `SessionSearchInput` owns draft text locally; list owners receive
 only committed queries, so typing does not invalidate the session tree. Clearing
 the field resets the applied query immediately. IME confirmation and held Enter
@@ -391,3 +440,9 @@ it on the project-root header and on sessions in linked worktrees. Recent shows 
 session with an active action in its own directory. Archived buckets do not show action
 indicators. Indicators stay inside the existing row/header action-padding boundary, so
 hover, keyboard focus, and always-visible action buttons move them left without hiding them.
+
+The sidebar Search chats panel performs rolling message-content searches. See the sections documentation for bounded paging, cache ownership and matching-message navigation.
+
+Local Electron windows show the expandable ChatGPT website history folder with conversation rows, new-chat actions and tools. Its snapshot is loaded sidebar navigation, not an account-wide inventory. Pins persist locally and do not change website pins. Native ChatGPT remains a separate OpenCode project. Muse has an expandable website folder with Resume Muse followed by explicitly pinned pages. These local links use observed navigation metadata, not fabricated conversation IDs or account-wide history. Removing a pin deletes only that local link. The website owns history, goals, memory and artifacts. Resume and the agent chooser preserve the same retained website guest, never a native model; selecting a saved page navigates that guest to the saved URL. The complete website remains available and displays the history-verification limit. See the views documentation for URL validation and persistence. No Muse DOM selectors or conversation routes are guessed. Existing native sessions and provider configuration remain untouched. Web, VS Code, hosted mobile, Capacitor and remote desktop do not expose these entries.
+
+The native ChatGPT workspace uses its local `AGENTS.md` for app identity and a named `opencarter` reference for the canonical source. `OPEN_CARTER.md` at that source root maps personal additions and inspection paths. OpenCode V2 currently accepts but does not resolve the config `instructions` array, so active context belongs in `AGENTS.md`. References retain normal external-directory and edit permissions.

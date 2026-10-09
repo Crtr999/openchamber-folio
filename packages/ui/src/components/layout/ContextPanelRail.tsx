@@ -1,4 +1,5 @@
 import React from 'react';
+import { OpenRouterBalanceBadge } from './OpenRouterBalanceBadge';
 import {
   DndContext,
   MouseSensor,
@@ -94,7 +95,7 @@ const ContextPanelRailItem: React.FC<RailItemProps> = ({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={cn('relative', isDragging && 'z-10 opacity-70')}
+      className={cn('relative shrink-0', isDragging && 'z-10 opacity-70')}
     >
       <Tooltip delayDuration={RAIL_TOOLTIP_DELAY_MS}>
         <TooltipTrigger asChild>
@@ -266,6 +267,7 @@ export const ContextPanelRail: React.FC = () => {
   );
 
   const guestSurfaces = useGuestSurfaces();
+  const railExtras = guestSurfaces;
   const guestBadges = useGuestBadgeStore((state) => state.countByGuest);
   const clearGuestBadge = useGuestBadgeStore((state) => state.clearBadge);
   const tabs = panelState?.tabs ?? EMPTY_TABS;
@@ -283,9 +285,9 @@ export const ContextPanelRail: React.FC = () => {
       tabs,
       linearConnected,
       githubConnected,
-      extras: guestSurfaces,
+      extras: railExtras,
     });
-  }, [contextRailHiddenSurfaces, contextRailOrder, githubConnected, guestSurfaces, linearConnected, planModeEnabled, screenWidth, tabs]);
+  }, [contextRailHiddenSurfaces, contextRailOrder, githubConnected, railExtras, linearConnected, planModeEnabled, screenWidth, tabs]);
 
   // A surface whose integration disconnected closes rather than lingering as
   // an active panel with no rail icon.
@@ -311,15 +313,15 @@ export const ContextPanelRail: React.FC = () => {
       return;
     }
 
-    const orderedIds = sortContextSurfaces(useUIStore.getState().contextRailOrder, guestSurfaces).map((surface) => surface.id);
-    const fromIndex = orderedIds.indexOf(active.id as (typeof orderedIds)[number]);
-    const toIndex = orderedIds.indexOf(over.id as (typeof orderedIds)[number]);
+    const orderedIds = sortContextSurfaces(useUIStore.getState().contextRailOrder, railExtras).map((surface) => surface.id);
+    const fromIndex = orderedIds.findIndex(id => id === active.id);
+    const toIndex = orderedIds.findIndex(id => id === over.id);
     if (fromIndex === -1 || toIndex === -1) {
       return;
     }
 
     setContextRailOrder(arrayMove(orderedIds, fromIndex, toIndex));
-  }, [guestSurfaces, setContextRailOrder]);
+  }, [railExtras, setContextRailOrder]);
 
   if (!directoryKey) {
     return null;
@@ -328,8 +330,9 @@ export const ContextPanelRail: React.FC = () => {
   return (
     <nav
       aria-label={t('contextRail.aria.rail')}
-      className="flex h-full w-11 flex-shrink-0 flex-col items-center gap-1 bg-background py-2"
+      className="flex h-full w-11 flex-shrink-0 flex-col items-center gap-1 overflow-y-auto bg-background py-2"
     >
+      <OpenRouterBalanceBadge />
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={surfaces.map((surface) => surface.id)} strategy={verticalListSortingStrategy}>
           {surfaces.map((surface, index) => {

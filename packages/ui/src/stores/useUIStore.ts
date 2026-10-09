@@ -13,7 +13,7 @@ import type { ProjectRef } from '@/lib/projectContextApi';
 import type { PermissionMode } from './utils/permissionAutoAccept';
 import { directoryMayHaveActiveProjectAction, useTerminalStore } from '@/stores/useTerminalStore';
 import { useFilesViewTabsStore } from './useFilesViewTabsStore';
-import { isVSCodeRuntime } from '@/lib/desktop';
+import { isElectronShell, isVSCodeRuntime } from '@/lib/desktop';
 import { isContextPanelMode, type ContextPanelMode } from '@/lib/surfaces/modes';
 import { getRuntimeKey, isTransientRuntimeKey } from '@/lib/runtime-switch';
 import { sanitizeWorkStatusSectionOrder, type WorkStatusPanelSectionId } from '@/components/chat/work-status/sections';
@@ -25,7 +25,6 @@ export type { ContextPanelMode };
 export const clampContextEditorTreeWidth = (width: number): number =>
   Math.min(480, Math.max(200, Math.round(width)));
 
-const contextPanelModeSchema = z.enum(['diff', 'walkthrough', 'file', 'context', 'plan', 'chat', 'browser', 'git', 'pr', 'linear', 'notes', 'terminal']);
 const persistedPanelWidthsSchema = z.object({
   widthByMode: z.record(z.string(), z.number().finite().optional().catch(undefined)).catch({}),
   widthFractionByMode: z.record(z.string(), z.number().positive().max(1).optional().catch(undefined)).catch({}),
@@ -742,7 +741,8 @@ const sanitizeContextPanelByDirectory = (
     const widthByMode: Partial<Record<ContextPanelMode, number>> = {};
     const widthFractionByMode: Partial<Record<ContextPanelMode, number>> = {};
     const savedWidths = persistedPanelWidthsSchema.parse(rawState);
-    for (const mode of contextPanelModeSchema.options) {
+    for (const mode of new Set([...Object.keys(savedWidths.widthByMode), ...Object.keys(savedWidths.widthFractionByMode)])) {
+      if (!isContextPanelMode(mode)) continue;
       const pixels = savedWidths.widthByMode[mode];
       const fraction = savedWidths.widthFractionByMode[mode];
       if (pixels !== undefined) widthByMode[mode] = clampContextPanelWidth(pixels);
@@ -750,7 +750,7 @@ const sanitizeContextPanelByDirectory = (
     }
 
     next[directory] = {
-      isOpen: candidate.isOpen === true,
+      isOpen: candidate.isOpen === true && activeTabId !== null && clampedTabs.some(tab => tab.id === activeTabId),
       expanded: candidate.expanded === true,
       tabs: clampedTabs,
       activeTabId: resolveActiveContextPanelTabID(clampedTabs, resolvedActiveTabId),
@@ -793,6 +793,8 @@ interface UIStore {
   sidebarWidth: number;
   contextPanelByDirectory: Record<string, ContextPanelDirectoryState>;
   contextRailOrder: string[];
+  /** Device-local visibility of the entire rail and panel, independent of open tabs. */
+  contextRailVisible: boolean;
   /** Surface ids the user hid from the context rail; stored as the hidden set
       so surfaces added later appear for everyone. */
   contextRailHiddenSurfaces: string[];
@@ -854,6 +856,9 @@ interface UIStore {
   isSessionCreateDialogOpen: boolean;
   isScheduledTasksDialogOpen: boolean;
   isArchivePageOpen: boolean;
+  isChatGPTPageOpen: boolean;
+  isMusePageOpen: boolean;
+  isClaudePageOpen: boolean;
   isUsageStatsPageOpen: boolean;
   openGuestPageId: string | null;
   worktreesPageProjectId: string | null;
@@ -994,7 +999,7 @@ interface UIStore {
   maxLastMessageLength: number; // chars — truncate {last_message} when summarization is off
 
   showTerminalQuickKeysOnDesktop: boolean;
-  /** Header session tabs (web/desktop), opt-in. Off keeps the plain session title. */
+  /** Header session tabs. Desktop enables them by default; other runtimes opt in. */
   sessionTabsEnabled: boolean;
   persistChatDraft: boolean;
   showOpenCodeUpdateNotifications: boolean;
@@ -1060,6 +1065,7 @@ interface UIStore {
   setSidebarOpen: (open: boolean) => void;
   setSidebarWidth: (width: number) => void;
   setContextRailOrder: (order: string[]) => void;
+  setContextRailVisible: (visible: boolean) => void;
   toggleContextEditorTree: () => void;
   toggleContextEditor: () => void;
   setContextEditorTreeWidth: (width: number) => void;
@@ -1113,10 +1119,13 @@ interface UIStore {
   setSessionCreateDialogOpen: (open: boolean) => void;
   setScheduledTasksDialogOpen: (open: boolean) => void;
   setArchivePageOpen: (open: boolean) => void;
+  setChatGPTPageOpen: (open: boolean) => void;
+  setMusePageOpen: (open: boolean) => void;
+  setClaudePageOpen: (open: boolean) => void;
   setUsageStatsPageOpen: (open: boolean) => void;
   setOpenGuestPage: (id: string | null) => void;
   setWorktreesPageProjectId: (projectId: string | null) => void;
-  /** Close every full-page surface (Scheduled, Archive, Usage, Worktrees, Multi-run). */
+  /** Close every full-page surface, including website workspaces. */
   closeMainSurfaces: () => void;
   setSettingsDialogOpen: (open: boolean) => void;
   setNewWorktreeDialogOpen: (open: boolean) => void;
@@ -1287,6 +1296,7 @@ export const useUIStore = create<UIStore>()(
         sidebarWidth: LEFT_SIDEBAR_DEFAULT_WIDTH,
         contextPanelByDirectory: {},
         contextRailOrder: [],
+        contextRailVisible: true,
         contextRailHiddenSurfaces: [],
         contextEditorTreeVisible: true,
         contextEditorVisible: true,
@@ -1318,6 +1328,9 @@ export const useUIStore = create<UIStore>()(
         isSessionCreateDialogOpen: false,
         isScheduledTasksDialogOpen: false,
         isArchivePageOpen: false,
+        isChatGPTPageOpen: false,
+        isMusePageOpen: false,
+        isClaudePageOpen: false,
         isUsageStatsPageOpen: false,
         openGuestPageId: null,
         worktreesPageProjectId: null,
@@ -1417,7 +1430,7 @@ export const useUIStore = create<UIStore>()(
         maxLastMessageLength: 250,
 
         showTerminalQuickKeysOnDesktop: false,
-        sessionTabsEnabled: false,
+        sessionTabsEnabled: isElectronShell(),
         persistChatDraft: true,
         showOpenCodeUpdateNotifications: true,
         agentControlToolEnabled: true,
@@ -1484,6 +1497,10 @@ export const useUIStore = create<UIStore>()(
           set({ contextRailOrder: sanitized });
         },
 
+        setContextRailVisible: (visible) => {
+          set((state) => state.contextRailVisible === visible ? state : { contextRailVisible: visible });
+        },
+
         // The editor and the tree can each be hidden, never both at once:
         // hiding one while the other is hidden brings the other back.
         toggleContextEditorTree: () => {
@@ -1532,7 +1549,7 @@ export const useUIStore = create<UIStore>()(
             }
           };
 
-          if (panelState?.isOpen && activeTab?.mode === mode) {
+          if (state.contextRailVisible && panelState?.isOpen && activeTab?.mode === mode) {
             clearTerminalTarget();
             state.closeContextPanel(normalizedDirectory);
             return;
@@ -1593,6 +1610,7 @@ export const useUIStore = create<UIStore>()(
             return {
               contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20),
               contextEditorVisible: showsFile || state.contextEditorVisible,
+              contextRailVisible: options?.reveal !== false || state.contextRailVisible,
             };
           });
         },
@@ -1745,7 +1763,7 @@ export const useUIStore = create<UIStore>()(
             const showsFile = targetTab.mode === 'file' && Boolean(targetTab.targetPath);
 
             if (current.activeTabId === normalizedTabID && current.isOpen) {
-              return showsFile ? { contextEditorVisible: true } : state;
+              return { contextRailVisible: true, contextEditorVisible: showsFile || state.contextEditorVisible };
             }
 
             const byDirectory = {
@@ -1764,6 +1782,7 @@ export const useUIStore = create<UIStore>()(
             return {
               contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20),
               contextEditorVisible: showsFile || state.contextEditorVisible,
+              contextRailVisible: true,
             };
           });
         },
@@ -2088,36 +2107,54 @@ export const useUIStore = create<UIStore>()(
 
         setScheduledTasksDialogOpen: (open) => {
           set(open
-            ? { isScheduledTasksDialogOpen: true, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
+            ? { isScheduledTasksDialogOpen: true, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isMusePageOpen: false, isClaudePageOpen: false }
             : { isScheduledTasksDialogOpen: false });
         },
 
         setArchivePageOpen: (open) => {
           set(open
-            ? { isArchivePageOpen: true, isUsageStatsPageOpen: false, isScheduledTasksDialogOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
+            ? { isArchivePageOpen: true, isUsageStatsPageOpen: false, isScheduledTasksDialogOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isMusePageOpen: false, isClaudePageOpen: false }
             : { isArchivePageOpen: false });
         },
 
         setUsageStatsPageOpen: (open) => {
           set(open
-            ? { isUsageStatsPageOpen: true, isArchivePageOpen: false, isScheduledTasksDialogOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
+            ? { isUsageStatsPageOpen: true, isArchivePageOpen: false, isScheduledTasksDialogOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isMusePageOpen: false, isClaudePageOpen: false }
             : { isUsageStatsPageOpen: false });
         },
 
         setWorktreesPageProjectId: (projectId) => {
           set(projectId
-            ? { worktreesPageProjectId: projectId, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, runOverviewKey: null, openGuestPageId: null }
+            ? { worktreesPageProjectId: projectId, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isMusePageOpen: false, isClaudePageOpen: false }
             : { worktreesPageProjectId: null });
         },
 
         setOpenGuestPage: (id) => {
-          set(id ? { openGuestPageId: id, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null }
-            : { openGuestPageId: null });
+          set(id ? { openGuestPageId: id, isChatGPTPageOpen: false, isMusePageOpen: false, isClaudePageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null }
+            : { openGuestPageId: null, isChatGPTPageOpen: false, isMusePageOpen: false, isClaudePageOpen: false });
+        },
+
+        setChatGPTPageOpen: (open) => {
+          set(open
+            ? { isChatGPTPageOpen: true, isMusePageOpen: false, isClaudePageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
+            : { isChatGPTPageOpen: false });
+        },
+
+        setMusePageOpen: (open) => {
+          set(open
+            ? { isMusePageOpen: true, isChatGPTPageOpen: false, isClaudePageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
+            : { isMusePageOpen: false });
+        },
+
+        setClaudePageOpen: (open) => {
+          set(open
+            ? { isClaudePageOpen: true, isMusePageOpen: false, isChatGPTPageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
+            : { isClaudePageOpen: false });
         },
 
         closeMainSurfaces: () => {
           const state = get();
-          if (!state.isScheduledTasksDialogOpen && !state.isArchivePageOpen && !state.isUsageStatsPageOpen && !state.worktreesPageProjectId && !state.runOverviewKey && !state.openGuestPageId) {
+          if (!state.isScheduledTasksDialogOpen && !state.isArchivePageOpen && !state.isUsageStatsPageOpen && !state.worktreesPageProjectId && !state.runOverviewKey && !state.openGuestPageId && !state.isChatGPTPageOpen && !state.isMusePageOpen && !state.isClaudePageOpen) {
             return;
           }
           set({
@@ -2127,6 +2164,9 @@ export const useUIStore = create<UIStore>()(
             worktreesPageProjectId: null,
             runOverviewKey: null,
             openGuestPageId: null,
+            isChatGPTPageOpen: false,
+            isMusePageOpen: false,
+            isClaudePageOpen: false,
           });
         },
 
@@ -2705,7 +2745,7 @@ export const useUIStore = create<UIStore>()(
         // opening it closes the other surfaces and vice versa.
         setRunOverviewKey: (runKey) => {
           set(runKey
-            ? { runOverviewKey: runKey, isSessionSwitcherOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, openGuestPageId: null }
+            ? { runOverviewKey: runKey, isSessionSwitcherOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, openGuestPageId: null, isChatGPTPageOpen: false, isMusePageOpen: false, isClaudePageOpen: false }
             : { runOverviewKey: null });
         },
 
@@ -2939,12 +2979,18 @@ export const useUIStore = create<UIStore>()(
       {
         name: 'ui-store',
         storage: createDeferredSafeJSONStorage(),
-        version: 21,
+        version: 25,
         migrate: (persistedState, version) => {
           if (!persistedState || typeof persistedState !== 'object') {
             return persistedState;
           }
           const state = persistedState as Record<string, unknown>;
+
+          // Missing preferences retain the existing visible default, including on web.
+          state.contextRailVisible = z.boolean().catch(true).parse(state.contextRailVisible);
+
+          // v21 -> v22: personal desktop's header now owns open website tabs.
+          if (version < 22 && isElectronShell()) state.sessionTabsEnabled = true;
 
           // v20 -> v21: enable telemetry by default; preserve explicit choices.
           if (version < 21 && state.workStatusHiddenSectionsExplicit !== true) {
@@ -3181,9 +3227,12 @@ export const useUIStore = create<UIStore>()(
           state.contextRailHiddenSurfaces = Array.isArray(state.contextRailHiddenSurfaces)
             ? (state.contextRailHiddenSurfaces as unknown[]).filter((id): id is string => typeof id === 'string' && id.trim() !== '')
             : [];
+          // Retire billing-only rail keys without revealing unrelated panes.
+          state.contextRailHiddenSurfaces = z.array(z.string()).parse(state.contextRailHiddenSurfaces).filter(id => !id.startsWith('provider:'));
           state.contextRailOrder = Array.isArray(state.contextRailOrder)
             ? (state.contextRailOrder as unknown[]).filter((id): id is string => typeof id === 'string' && id.trim() !== '')
             : [];
+          state.contextRailOrder = z.array(z.string()).parse(state.contextRailOrder).filter(id => !id.startsWith('provider:'));
 
           return state;
         },
@@ -3193,6 +3242,7 @@ export const useUIStore = create<UIStore>()(
           sidebarWidth: state.sidebarWidth,
           contextPanelByDirectory: state.contextPanelByDirectory,
           contextRailOrder: state.contextRailOrder,
+          contextRailVisible: state.contextRailVisible,
           contextRailHiddenSurfaces: state.contextRailHiddenSurfaces,
           contextEditorTreeVisible: state.contextEditorTreeVisible,
           contextEditorVisible: state.contextEditorVisible,

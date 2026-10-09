@@ -1,7 +1,9 @@
+import { registerProjectRulesRoutes } from './project-rules.js';
 import { createRealpathCache } from '../path-realpath-cache.js';
 import { resolveByteRange } from './byte-range.js';
 import nodeFsPromises from 'node:fs/promises';
 import nodePath from 'node:path';
+import { isPrivateMeetingPath } from '../meetings/private-paths.js';
 
 const EXEC_JOB_TTL_MS = 30 * 60 * 1000;
 const OUTSIDE_FILE_GRANT_TTL_MS = 10 * 60 * 1000;
@@ -38,6 +40,9 @@ export const mintOutsideFileGrant = async (targetPath, {
     throw new Error('Path is required');
   }
   const canonicalPath = await fsPromises.realpath(raw);
+  if (await isPrivateMeetingPath(canonicalPath)) {
+    throw new Error('Private meeting files are not available through filesystem APIs');
+  }
   const stats = await fsPromises.stat(canonicalPath);
   if (!stats.isFile()) {
     throw new Error('Outside file grants require a file path');
@@ -539,7 +544,7 @@ const runCommandInDirectory = ({ shell, shellFlag, command, resolvedCwd, spawn, 
   });
 };
 
-export const registerFsRoutes = (app, dependencies) => {
+export const registerFsRoutes = (routeApp, dependencies) => {
   const {
     os,
     path,
@@ -554,6 +559,41 @@ export const registerFsRoutes = (app, dependencies) => {
     openchamberUserConfigRoot,
     managedChatsRoot,
   } = dependencies;
+  // Apply the exclusion before workspace overrides, metadata reads or mutations.
+  // Wrapping registration also covers project-rules and future generic FS routes.
+  const registerGuardedRoute = (method, route, handler) => {
+    routeApp[method](route, async (req, res) => {
+      try {
+        const request = req ?? {};
+        const includeAncestors = ['/api/fs/delete', '/api/fs/rename', '/api/fs/git-dirs'].includes(route);
+        const targets = [
+          request.query?.path, request.query?.directory,
+          request.body?.path, request.body?.oldPath, request.body?.newPath,
+          request.body?.destinationPath, request.body?.cwd, request.body?.directory,
+        ].flat().filter((value) => typeof value === 'string' && value.trim());
+        if (route instanceof RegExp && request.params?.[0]) targets.push(path.resolve('/', request.params[0]));
+        if (route === '/api/fs/list' && targets.length === 0) targets.push(os.homedir());
+        if (route === '/api/fs/project-rules') {
+          const scope = await resolveProjectDirectory(request);
+          if (scope.directory) targets.push(scope.directory);
+        }
+        for (const target of targets) {
+          if (await isPrivateMeetingPath(path.resolve(normalizeDirectoryPath(target.trim())), { includeAncestors })) {
+            return res.status(403).json({ error: 'Private meeting files are not available through filesystem APIs', code: 'private_meeting_path' });
+          }
+        }
+      } catch {
+        // A failed canonical security check is not permission to proceed.
+        return res.status(403).json({ error: 'Unable to authorize filesystem path', code: 'private_meeting_path' });
+      }
+      return handler(req, res);
+    });
+  };
+  const app = {
+    get: (route, handler) => registerGuardedRoute('get', route, handler),
+    post: (route, handler) => registerGuardedRoute('post', route, handler),
+  };
+  registerProjectRulesRoutes(app, resolveProjectDirectory);
   // Chat worktrees may live outside every project workspace; both managed
   // roots stay valid filesystem targets.
   const chatsRoot = typeof managedChatsRoot === 'string' && managedChatsRoot.trim()
@@ -1658,6 +1698,9 @@ export const registerFsRoutes = (app, dependencies) => {
     try {
       requestedPath = path.resolve(normalizeDirectoryPath(rawPath));
       resolvedPath = await realpathCache.resolve(requestedPath);
+      if (await isPrivateMeetingPath(resolvedPath)) {
+        return res.status(403).json({ error: 'Private meeting files are not available through filesystem APIs', code: 'private_meeting_path' });
+      }
 
       const stats = await fsPromises.stat(resolvedPath);
       if (!stats.isDirectory()) {
@@ -1718,6 +1761,7 @@ export const registerFsRoutes = (app, dependencies) => {
       const entries = await Promise.all(
         dirents.map(async (dirent) => {
           const physicalEntryPath = path.join(resolvedPath, dirent.name);
+          if (await isPrivateMeetingPath(physicalEntryPath)) return null;
           if (respectGitignore && ignoredPaths.has(physicalEntryPath)) {
             return null;
           }

@@ -13,7 +13,7 @@ interface UseProviderLogoReturn {
 // the hook fall back to the remote logo URL it already supports.
 const loadLocalLogoModules = (): Record<string, string> => {
     try {
-        return import.meta.glob<string>('../assets/provider-logos/*.svg', {
+        return import.meta.glob<string>('../assets/provider-logos/*.{svg,png}', {
             eager: true,
             import: 'default',
         });
@@ -30,6 +30,7 @@ const PRELOADED_LOGO_SRCS = new Set<string>();
 const LOGO_ALIAS = new Map<string, string>([
     ['codex', 'openai'],
     ['chatgpt', 'openai'],
+    ['openrouter-zdr', 'openrouter'],
     ['claude', 'anthropic'],
     ['cline-pass', 'cline'],
     ['gemini', 'google'],
@@ -99,7 +100,7 @@ export const preloadProviderLogos = (providerIds: readonly (string | null | unde
 };
 
 for (const [path, url] of Object.entries(localLogoModules)) {
-    const match = path.match(/provider-logos\/([^/]+)\.svg$/i);
+    const match = path.match(/provider-logos\/([^/]+)\.(?:svg|png)$/i);
     if (match?.[1] && url) {
         LOCAL_PROVIDER_LOGO_MAP.set(match[1].toLowerCase(), url);
     }

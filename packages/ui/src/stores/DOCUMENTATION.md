@@ -1,5 +1,27 @@
 # UI Stores
 
+## Personal website navigation and header tabs
+
+`useClaudeStore` owns explicit homepage/reload/saved-link requests and live
+exact-origin URL/title metadata. Explicit pins persist in the validated,
+deduplicated device-local `open-carter.claude.saved-pages.v1` snapshot. No query,
+fragment or credentials enter saved URLs. Opening a saved page requires snapshot
+membership. Runtime reset preserves saved links; removal changes no website data.
+Links are not scoped to a Claude account or team and are not a history sync.
+Requests have monotonic identities across resets.
+Opening without an action resumes the existing guest. `isClaudePageOpen` belongs
+to `useUIStore`'s mutually exclusive main pages and is not persisted. Runtime
+switches clear these fields, not the isolated Chromium login partition. Claude
+owns account history and subscription data; none is copied into native sessions.
+
+The header shares `session-tabs-store` order for session IDs and the singleton IDs
+`website:chatgpt`, `website:muse`, `website:claude`. Website IDs render only in local
+Electron and never multiply for website history or saved pages. Closing removes
+only the tab and resumes a neighbour, or opens a draft when no neighbour exists.
+It never archives, deletes or creates a session. Unknown IDs stay stored but hidden
+until loaded. Desktop UI persistence v22 enables tabs for existing installs once;
+later explicit choices remain respected. Other runtimes retain their opt-in default.
+
 ## Purpose
 
 `packages/ui/src/stores` contains app-level Zustand stores for persistent UI state, runtime state, and feature caches.
@@ -116,6 +138,8 @@ Examples:
 - `useUpdateStore.ts`
 
 These stores coordinate visible app state, navigation, selected context-panel tabs, dialogs, and lightweight feature flags. `useUIStore.activeSurface` selects the primary mobile view and the few desktop views that are promoted out of the context panel. It is not a desktop tab selection. Linear panel list filters (status, assignee, team, priority) live here too: the Linear rail surface remounts on switch, so those filters restore from this store rather than component state. `resetLinearIssueListFilters` restores those four defaults together; search stays local to the rail. The team filter is the one that is not a plain preference: a Linear team belongs to one workspace, and each OpenChamber instance has its own Linear login, so it is persisted per instance in `linearIssueListTeamIdByRuntime` and the flat `linearIssueListTeamId` is derived from it by `applyLinearIssueListFiltersForRuntime` — on an instance switch and when the rail mounts, since rehydration can run before the runtime endpoint is known. Carried across, a team id filters the new instance's list down to nothing. `linearIssueFocus` is a one-shot identifier so work-status can open a specific issue in that panel; it is not persisted.
+
+`useMuseStore` owns explicit Muse navigation/reload requests with monotonic identities, live page metadata and locally saved page links. Opening without a request preserves the retained website. Only explicitly pinned, observed exact-origin URLs without credentials, queries or fragments enter the validated `open-carter.muse.saved-pages.v1` snapshot. Opening a saved page requires membership in that snapshot. Runtime reset clears pending requests and live metadata, not saved links or Chromium login storage. The standalone website owns account history, memory and conversations; the store never infers chat IDs or reads message bodies. The views documentation owns the unavailable-history fallback and persistence behavior. Legacy local Muse pin storage is left untouched and is not migrated into observed links.
 
 Context-panel session chats mount only the active chat iframe. After installing
 its message listener, the iframe requests its authoritative visibility from the
@@ -245,6 +269,15 @@ not adopt or edit these project settings.
 `loadSessionDefaults` publishes preferences independently of OpenCode health and catalog requests. Cold directory activation starts providers and agents concurrently. Agent selection uses the latest committed preferences without waiting for providers or issuing a second settings read. Explicit preference edits update a draft immediately, and late settings responses preserve newer edits. Agent-pinned and OpenCode-config model identifiers can be selected before their catalog entries arrive.
 
 Provider and agent catalogs carry separate successful-load flags in directory snapshots, including successful empty responses. Pickers become interactive when their own catalog is available. A known selected identifier can be displayed earlier. The composer keeps a loading label until it knows the choice or has the inputs to establish an empty selection; providers arriving alone cannot reveal an empty agent picker.
+
+`selectProvidersForDirectory` retains enabled connected registry providers,
+including connections with `models: []`. The official adapter joins integration
+connections and enabled runtime-model evidence; activation alone is not connection
+evidence. The normal native model chooser consumes this
+inventory. Model defaults skip empty providers when finding an initial fallback,
+and use catalog model IDs, not upstream deployment names. Inventory membership
+alone never authorizes a send. OpenCode owns provider policy and request admission;
+there is no separate credit-pool send guard.
 
 Settings reads retain overlapping local mutations until the read settles, including writes that finish before the older GET returns and toggles that cancel a pending write. Both the returned document and GET cache use that reconciled result. An older GET cannot replace newer server-value knowledge used to deduplicate writes.
 
@@ -625,3 +658,7 @@ After meaningful Git/PR store changes, verify manually:
 4. Worktree sessions still show branch labels in header.
 5. Expanded sidebar projects/worktrees can show PR state without requiring prior selection.
 6. Hidden surfaces do not reintroduce live background work.
+
+ChatGPT workspace visibility remains ephemeral in useUIStore.isChatGPTPageOpen and preserves OpenCode selections. useChatGPTStore owns optional website navigation requests, the partial website sidebar snapshot and local tabs. Monotonic request IDs survive resets. Logout, detected account changes and runtime switches clear account metadata and tabs. Same-account read failure retains prior rows with an unavailable state. Only local pin paths persist, with schema validation; pins appear only for paths in the active website snapshot. Website content is never stored here. The existing browser partition owns login persistence. There is no ChatGPT header quota badge or badge-owned polling. Shared Usage settings and session cost/token displays retain their existing owners.
+
+Native ChatGPT conversations use the ordinary project, session and config stores, independently of useChatGPTStore. Their entry point is `lib/chatgpt/native.ts`; the session sidebar documentation owns the dedicated project contract.

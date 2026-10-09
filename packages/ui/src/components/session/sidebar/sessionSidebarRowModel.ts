@@ -19,11 +19,11 @@ export type SessionSidebarActivityItem = {
   getSecondaryMeta?: (sessionId: string) => SessionSidebarActivityItem['secondaryMeta'];
 };
 
-export type SessionSidebarActivityKey = 'work' | 'chats' | 'active-now' | 'timeline';
+export type SessionSidebarActivityKey = 'pinned' | 'work' | 'chats' | 'active-now' | 'timeline';
 
 // 'timeline-chat' is a Chats row inside the timeline view: one line, no left
 // gutter, status and pin on the right like the three-line timeline rows.
-export type SessionSidebarRenderContext = 'project' | 'recent' | 'timeline' | 'timeline-chat';
+export type SessionSidebarRenderContext = 'project' | 'recent' | 'pinned' | 'timeline' | 'timeline-chat';
 
 export type SessionSidebarViewMode = 'projects' | 'timeline';
 
@@ -106,6 +106,8 @@ export type SessionSidebarRowModelArgs = {
    */
   workItems?: readonly SessionSidebarActivityItem[];
   workSessionIds?: ReadonlySet<string>;
+  pinnedItems?: readonly SessionSidebarActivityItem[];
+  pinnedItemIds?: ReadonlySet<string>;
   showRecentSection: boolean;
   foldersMap: SessionFoldersMap;
   groupSearchDataByGroup: WeakMap<SessionGroup, GroupSearchData>;
@@ -188,6 +190,7 @@ export const countSessionSearchMatches = (nodes: readonly SessionNode[], normali
 
 const EMPTY_FOLDERS: readonly SessionFolder[] = [];
 const EMPTY_WORK_SESSION_IDS: ReadonlySet<string> = new Set();
+const EMPTY_PINNED_ITEM_IDS: ReadonlySet<string> = new Set();
 const SESSION_ESTIMATE = 32;
 const TIMELINE_SESSION_ESTIMATE = 64;
 const TIMELINE_CHATS_INITIAL_LIMIT = 3;
@@ -281,6 +284,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
   const search = args.mode === 'search';
   const pinned = args.pinnedSessionIds instanceof Set ? args.pinnedSessionIds : new Set(args.pinnedSessionIds);
   const inWork = args.workSessionIds ?? EMPTY_WORK_SESSION_IDS;
+  const inPinned = args.pinnedItemIds ?? EMPTY_PINNED_ITEM_IDS;
   let searchMatchCount = 0;
 
   const authoritativeRoots = [
@@ -398,7 +402,9 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
   const groupSearchMatches = (group: SessionGroup): number => {
     const searchData = args.groupSearchDataByGroup.get(group);
     if (searchData?.hasMatch !== true) return 0;
-    const movedToWork = inWork.size > 0 ? searchData.filteredNodes.filter((node) => inWork.has(node.session.id)) : [];
+    const movedToWork = inWork.size > 0 || inPinned.size > 0
+      ? searchData.filteredNodes.filter((node) => inWork.has(node.session.id) || inPinned.has(node.session.id))
+      : [];
     const sessionMatches = Math.max(0, searchData.matchedSessionCount - countSessionSearchMatches(movedToWork, args.normalizedQuery));
     return sessionMatches + searchData.folderNameMatchCount + (searchData.groupMatches ? 1 : 0);
   };
@@ -417,7 +423,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
       searchMatchCount += matches;
     }
     const sourceNodes = (search ? searchData?.filteredNodes ?? [] : group.sessions)
-      .filter((node) => !inWork.has(node.session.id))
+      .filter((node) => !inWork.has(node.session.id) && !inPinned.has(node.session.id))
       .sort((left, right) => compareNodes(left, right, pinned, args.sessionOrderIndex));
     const indexed = indexNodes(sourceNodes);
     const selectionPoolOffset = selectionDescendantIds.length;
@@ -636,6 +642,12 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     }
   };
 
+  const pinnedItems = args.pinnedItems ?? [];
+  if (pinnedItems.length > 0) {
+    const collapsed = appendActivityHeader('pinned');
+    if (!collapsed) appendActivityItems(pinnedItems, 'activity:pinned', timelineMode ? 'timeline' : 'pinned', false, (item) => countSessionTreeQueryMatches(item.node, args.normalizedQuery));
+  }
+
   if (args.chatGroup) {
     if (!search || groupSearchMatches(args.chatGroup) > 0) {
       const collapsed = appendActivityHeader('chats');
@@ -657,7 +669,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
   }
 
   if (timelineMode) {
-    const timelineItems = (args.timelineItems ?? []).filter((item) => !inWork.has(item.node.session.id));
+    const timelineItems = (args.timelineItems ?? []).filter((item) => !inWork.has(item.node.session.id) && !inPinned.has(item.node.session.id));
     if (timelineItems.length > 0) {
       const collapsed = appendActivityHeader('timeline');
       if (!collapsed) appendActivityItems(timelineItems, 'activity:timeline', 'timeline', false);
@@ -666,7 +678,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
 
   if (!timelineMode && args.showRecentSection) {
     for (const recentSection of args.recentSections) {
-      const section = { ...recentSection, items: recentSection.items.filter((item) => !inWork.has(item.node.session.id)) };
+      const section = { ...recentSection, items: recentSection.items.filter((item) => !inWork.has(item.node.session.id) && !inPinned.has(item.node.session.id)) };
       if (section.items.length === 0) continue;
       const collapsed = appendActivityHeader('active-now');
       if (collapsed) continue;

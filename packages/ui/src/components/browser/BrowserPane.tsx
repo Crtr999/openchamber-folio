@@ -348,18 +348,20 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
       const ui = useUIStore.getState();
       const panelKey = normalizeContextPanelDirectoryKey(directory);
       const before = ui.contextPanelByDirectory[panelKey];
-      const wasShowing = Boolean(before?.isOpen && before.activeTabId === tabID);
+      const railWasVisible = ui.contextRailVisible;
+      const wasShowing = Boolean(railWasVisible && before?.isOpen && before.activeTabId === tabID);
       if (!wasShowing) ui.setActiveContextPanelTab(directory, tabID);
       const restorePanel = () => {
         if (wasShowing || !before) return;
         const now = useUIStore.getState();
         const current = now.contextPanelByDirectory[panelKey];
         // The user took over the panel meanwhile: their choice stands.
-        if (!current?.isOpen || current.activeTabId !== tabID) return;
+        if (!now.contextRailVisible || !current?.isOpen || current.activeTabId !== tabID) return;
         if (before.activeTabId && before.activeTabId !== tabID) {
           now.setActiveContextPanelTab(directory, before.activeTabId);
         }
         if (!before.isOpen) now.closeContextPanel(directory);
+        if (!railWasVisible) now.setContextRailVisible(false);
       };
       try {
         const surfaceDeadline = Date.now() + 1_200;

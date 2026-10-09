@@ -5,6 +5,7 @@ import {
   getVisibleContextRailSurfaces,
   WALKTHROUGH_MIN_WIDTH,
 } from './registry';
+import { isContextPanelMode } from './modes';
 
 const baseOptions = {
   railOrder: [],
@@ -17,6 +18,14 @@ const baseOptions = {
 } as const;
 
 describe('getVisibleContextRailSurfaces', () => {
+  test('retired billing provider modes never appear on the rail or become panel modes', () => {
+    const surfaces = getVisibleContextRailSurfaces({ ...baseOptions, railOrder: ['provider:azure', 'git', 'provider:openrouter'] });
+    expect(surfaces[0]?.id).toBe('git');
+    expect(surfaces.some(surface => surface.id.startsWith('provider:'))).toBe(false);
+    for (const id of ['openrouter', 'openai', 'azure', 'mistral', 'agentrouter']) {
+      expect(isContextPanelMode(`provider:${id}`)).toBe(false);
+    }
+  });
   test('hides the plan surface while plan mode is disabled', () => {
     const surfaces = getVisibleContextRailSurfaces({ ...baseOptions, planModeEnabled: false });
     expect(surfaces.some((surface) => surface.id === 'plan')).toBe(false);

@@ -25,8 +25,7 @@ import {
 
 recordEarlyStartupMark('electron.entry');
 
-// Set the product name early so electron-log derives its log directory as
-// ~/Library/Logs/OpenChamber Personal/ (not ~/Library/Logs/@openchamber/electron/).
+// Keep the existing storage and Keychain identity when the displayed app name changes.
 app.setName('OpenChamber Personal');
 if (process.platform === 'linux') {
   app.setDesktopName('openchamber.desktop');

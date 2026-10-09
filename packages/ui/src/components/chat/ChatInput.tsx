@@ -81,7 +81,7 @@ import { GitHubIssuePickerDialog } from '@/components/session/GitHubIssuePickerD
 import { GitHubPrPickerDialog } from '@/components/session/GitHubPrPickerDialog';
 import { LinearIssuePickerDialog } from '@/components/session/LinearIssuePickerDialog';
 import { Icon } from "@/components/icon/Icon";
-import { DraftPresetChips } from './DraftPresetChips';
+import { HomeDashboard, HomeGreeting, HomeQuickActions } from './HomeDashboard';
 import { useChatSearchDirectory } from '@/hooks/useChatSearchDirectory';
 import { useGuestAttachItems, useGuestCommands } from '@/hooks/useGuestSurfaces';
 import { useGuestDialogStore } from '@/lib/guests/dialog-store';
@@ -329,20 +329,6 @@ const recordLinkedReferences = (
 
 const hasUserMessages = (sessionId: string, directory?: string) => {
     return getSyncMessages(sessionId, directory).some((message) => message.role === 'user');
-};
-
-const renderDraftTitle = (title: string, projectLabel: string | null): React.ReactNode => {
-    if (!projectLabel) return title;
-    const projectIndex = title.indexOf(projectLabel);
-    if (projectIndex === -1) return title;
-
-    return (
-        <>
-            {title.slice(0, projectIndex)}
-            <span className="font-medium">{projectLabel}</span>
-            {title.slice(projectIndex + projectLabel.length)}
-        </>
-    );
 };
 
 const MemoModelControls = React.memo(ModelControls);
@@ -743,7 +729,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const isMobileExpanded = isExpandedInput && isMobile;
     const isComposerExpanded = isDesktopExpanded || isMobileExpanded;
     // Rounder composer on mobile (touch UI reads better with a softer corner).
-    const chatInputRadius = isMobile ? '1.5rem' : 'var(--radius-xl)';
+    const chatInputRadius = isMobile ? '1.5rem' : '10px';
     const useCompactChatPlaceholder = isMobile || isNarrowComposer;
 
     React.useEffect(() => {
@@ -3468,7 +3454,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const {
         projects: draftProjects,
         selectedDraftProject,
-        draftProjectLabel,
         selectedDraftDirectory,
         selectedDraftBranchLabel,
         selectedDraftBranchIsKnown,
@@ -3679,7 +3664,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         editorRef: composerRef,
     });
 
-    const footerPaddingClass = isMobile ? 'px-1.5 py-1.5' : (isVSCode ? 'px-1.5 py-1' : 'px-2.5 py-1.5');
+    const footerPaddingClass = isMobile ? 'px-1.5 py-1.5' : (isVSCode ? 'px-1.5 py-1' : 'px-2 py-1.5');
     const buttonSizeClass = isMobile ? 'h-8 w-8' : (isVSCode ? 'h-5 w-5' : 'h-6 w-6');
     const sendIconSizeClass = isMobile ? 'h-4 w-4' : (isVSCode ? 'h-3.5 w-3.5' : 'h-4 w-4');
     const stopIconSizeClass = isMobile ? 'h-6 w-6' : (isVSCode ? 'h-4 w-4' : 'h-5 w-5');
@@ -3780,18 +3765,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             style={isMobile && inputBarOffset > 0 ? { marginBottom: `${inputBarOffset}px` } : undefined}
         >
             {showDesktopDraftPresentation ? (
-                <div className={cn('chat-input-column mb-7 text-center', draftPresentationClassName)}>
-                    <h1 className="text-balance text-2xl font-normal tracking-tight text-foreground md:text-3xl">
-                        {renderDraftTitle(
-                            draftProjectLabel
-                                ? t('chat.emptyState.draftTitleWithProject', { project: draftProjectLabel })
-                                : t('chat.emptyState.draftTitle'),
-                            draftProjectLabel,
-                        )}
-                    </h1>
+                <div className={cn('chat-input-column mb-4 text-center', draftPresentationClassName)}>
+                    <HomeGreeting />
                 </div>
             ) : null}
             <div className={cn('chat-input-column relative overflow-visible', isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
+                {showDesktopDraftPresentation ? (
+                    <HomeQuickActions stacked className={cn('absolute bottom-1 left-full ml-2 hidden xl:flex', draftPresentationClassName)} />
+                ) : null}
                 {/* Comment mode shows only its own shell: the normal composer's
                     furniture (chips, banners, draft selectors) stays in state
                     and returns unchanged when the comment exits. */}
@@ -3941,7 +3922,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     className={cn(
                         "flex flex-col relative overflow-visible",
                         isComposerExpanded && 'flex-1 min-h-0',
-                        "border border-border/80 focus-within:border-interactive-selection-foreground/35",
+                        "border border-[var(--interactive-border)] focus-within:border-interactive-selection-foreground/35",
                         // The box floats over the transcript, so it is glass.
                         'oc-glass-composer',
                         isDragging && "ring-2 ring-primary ring-offset-2"
@@ -4057,12 +4038,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                                 boundSelector={isMobile ? '[data-composer-bound]' : undefined}
                                 boundGapPx={MOBILE_COMPOSER_BOUND_GAP_PX}
                                 className={cn(
-                                    'min-h-[52px] px-3 relative z-10',
+                                    'min-h-[46px] px-3 relative z-10',
                                     isComposerExpanded
-                                        ? cn('h-full min-h-0', isMobile ? 'py-2.5' : 'py-4')
+                                        ? cn('h-full min-h-0', isMobile ? 'py-2.5' : 'py-3')
                                         : isMobile
                                             ? 'pt-4 pb-2.5'
-                                            : 'pt-4 pb-2',
+                                            : 'pt-2.5 pb-2',
                                     inputMode === 'shell' ? 'font-mono' : 'typography-markdown md:typography-ui-label',
                                 )}
                             />
@@ -4163,10 +4144,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 ) : null}
             </div>
             {showDesktopDraftPresentation ? (
-                <DraftPresetChips
-                    onSubmit={(starter) => submitPresetPrompt(starter.submitText, starter.ref.type)}
-                    className={cn('chat-input-column mt-4', draftPresentationClassName)}
-                />
+                <div className={draftPresentationClassName}>
+                    <HomeDashboard />
+                </div>
             ) : null}
             {/* The agent's requests outrank the queue: BTW, then a permission,
                 then the form, then the queue, then the suggestion. */}

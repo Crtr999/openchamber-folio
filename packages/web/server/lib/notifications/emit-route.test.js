@@ -6,7 +6,7 @@ import { createPluginNotificationEmitter, registerNotificationEmitRoutes } from 
 const PLUGIN_TOKEN = 'Bearer plugin-token';
 const UI_TOKEN = 'Bearer ui-token';
 
-const createApp = ({ settings = { nativeNotificationsEnabled: true, notificationMode: 'hidden-only' }, now = () => 0 } = {}) => {
+const createApp = ({ settings = { nativeNotificationsEnabled: true, notificationMode: 'hidden-only' }, now = () => 0, isRootNotificationSession } = {}) => {
   const delivered = [];
   const app = express();
   const emitter = createPluginNotificationEmitter({
@@ -14,6 +14,7 @@ const createApp = ({ settings = { nativeNotificationsEnabled: true, notification
     emitDesktopNotification: () => false,
     broadcastUiNotification: (payload, options) => delivered.push({ payload, options }),
     now,
+    isRootNotificationSession,
   });
   const routes = registerNotificationEmitRoutes(app, {
     express,
@@ -30,6 +31,15 @@ const createApp = ({ settings = { nativeNotificationsEnabled: true, notification
 };
 
 describe('POST /api/notifications/emit', () => {
+  it('filters child-session plugin notices without hiding unscoped system notices or roots', async () => {
+    const { app, delivered } = createApp({ isRootNotificationSession: async (id) => id === 'ses_root' });
+    const post = (body) => request(app).post('/api/notifications/emit').set('Authorization', PLUGIN_TOKEN).send(body);
+    const child = await post({ title: 'Child finished', sessionId: 'ses_child' });
+    expect(child.body).toEqual({ delivered: false, reason: 'not-root-session' });
+    await post({ title: 'Root finished', sessionId: 'ses_root' }).expect(200);
+    await post({ title: 'System notice' }).expect(200);
+    expect(delivered.map(({ payload }) => payload.title)).toEqual(['Root finished', 'System notice']);
+  });
   it('delivers a plugin notification without a UI session', async () => {
     const { app, delivered } = createApp();
     const response = await request(app)

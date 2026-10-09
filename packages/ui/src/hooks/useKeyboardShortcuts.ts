@@ -2,7 +2,7 @@ import React from 'react';
 import { isVimEditorEventTarget } from '@/lib/editorFocus';
 import { isTerminalEventTarget } from '@/lib/terminalFocus';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { activateAdjacentSessionTab, activateSessionTabByIndex, closeSessionTabAndActivateNeighbour } from '@/lib/sessionTabs';
+import { activateAdjacentSessionTab, activateSessionTabByIndex, closeSessionTabAndActivateNeighbour, getActiveWebsiteTabId } from '@/lib/sessionTabs';
 import { navigateSessionHistory } from '@/lib/sessionNavigationHistory';
 import { useSelectionStore } from '@/sync/selection-store';
 import * as sessionActions from '@/sync/session-actions';
@@ -185,8 +185,9 @@ export const useKeyboardShortcuts = () => {
     },
     close_session_tab: () => {
       if (isVSCodeRuntime() || !useUIStore.getState().sessionTabsEnabled) return false;
-      if (currentSessionId) {
-        closeSessionTabAndActivateNeighbour(currentSessionId);
+      const activeTabId = getActiveWebsiteTabId() ?? currentSessionId;
+      if (activeTabId) {
+        closeSessionTabAndActivateNeighbour(activeTabId);
       }
     },
     new_chat: () => {

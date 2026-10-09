@@ -1,5 +1,5 @@
 import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -17,6 +17,19 @@ import { CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { createContextPart } from '@/lib/messages/contextParts';
+
+// These routing tests dispatch only to their local SDK stubs. Preflight reads
+// also stay local now that every native send validates the official catalog.
+let nativeCatalogRead = spyOn(opencodeClient, 'getProvidersForConfig');
+let nativeAgentRead = spyOn(opencodeClient, 'listAgents');
+beforeEach(() => {
+  nativeCatalogRead = spyOn(opencodeClient, 'getProvidersForConfig').mockResolvedValue({
+    providers: [{ id: 'provider-a', name: 'Fixture', activation: 'enabled', package: '@fixture/provider' }],
+    models: [{ id: 'model-a', modelID: 'model-a', providerID: 'provider-a', name: 'Fixture', enabled: true, status: 'active', variants: [], time: { released: 0 }, cost: [], limit: { context: 1000, output: 100 }, capabilities: { tools: true, input: ['text'], output: ['text'] } }],
+  });
+  nativeAgentRead = spyOn(opencodeClient, 'listAgents').mockResolvedValue(['build', 'plan'].map(name => ({ name, id: name, displayName: name, mode: 'primary', hidden: false, permissions: [], request: { settings: {}, headers: {}, body: {} } })));
+});
+afterEach(() => { nativeCatalogRead.mockRestore(); nativeAgentRead.mockRestore(); });
 
 /**
  * Unit tests for session worktree routing through the authoritative store.

@@ -1,3 +1,10 @@
+import { chatgptI18n } from './chatgpt.i18n';
+import { museI18n } from './muse.i18n';
+import { claudeI18n } from './claude.i18n';
+import { meetingsI18n } from './meetings.i18n';
+import { homeI18n } from './home.i18n';
+import { personalToolsI18n } from './personal-tools.i18n';
+import { workspaceStatusI18n } from './workspace-status.i18n';
 import { carterI18n } from './carter.i18n';
 import type { I18nKey } from './en';
 import { settingsDict } from './zh-TW.settings';
@@ -15,6 +22,20 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  ...chatgptI18n['zh-TW'],
+  ...museI18n['zh-TW'],
+  ...claudeI18n['zh-TW'],
+  ...meetingsI18n['zh-TW'],
+  'meeting.quickStart': '開始會議',
+  'meeting.partial': '部分已儲存會議無法讀取。清單不完整，損壞檔案保持不變。',
+  'meeting.summaryReview': '審閱摘要模型',
+  'meeting.summaryDisclosure': '我同意僅將此逐字稿傳送至 {provider}/{model}。不包含筆記、標題、行事曆和音訊。費用及訂閱涵蓋範圍未知。不會建立聊天。',
+  'meeting.newRecording': '此錄製已結束。請建立新會議以再次錄製。',
+  'meeting.screenPermission': '要求螢幕分享權限僅用於擷取系統音訊。不讀取、儲存或傳輸螢幕畫面。',
+  'header.sessionTabs.pinSidebar': '釘選至側邊欄',
+  'header.sessionTabs.unpinSidebar': '從側邊欄取消釘選',
+  ...homeI18n['zh-TW'],
+  ...personalToolsI18n['zh-TW'],
   "opencodeCompatibility.bundled": "OpenCode 隨 OpenChamber 一起提供。請更新 OpenChamber 以取得 OpenCode v2。",
   "opencodeCompatibility.title": "需要 OpenCode v2",
   "opencodeCompatibility.outdatedTitle": "請更新 OpenCode",
@@ -71,6 +92,7 @@ export const dict: Record<I18nKey, string> = {
   ...mcpGridI18n['zh-TW'],
   ...pluginsGridI18n['zh-TW'],
   ...carterI18n['zh-TW'],
+  ...workspaceStatusI18n["zh-TW"],
   'terminalView.actions.attachSelection': '附加所選輸出',
   'terminalView.actions.copySelection': '複製所選輸出',
   'terminalView.toast.selectionCopied': '已複製輸出',
@@ -504,7 +526,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.empty.noMatches.title': '沒有符合的會話',
   'sessions.sidebar.empty.noMatches.description': '請嘗試其他標題、分支、資料夾或路徑。',
   'sessions.sidebar.activity.recentTitle': '最近',
-  'sessions.sidebar.activity.chatsTitle': '聊天',
+  'sessions.sidebar.activity.chatsTitle': '所有聊天',
   'sessions.sidebar.activity.timelineTitle': '專案',
   'sessions.sidebar.header.viewMode.label': '檢視',
   'sessions.sidebar.header.viewMode.projects': '分組',
@@ -3336,6 +3358,8 @@ export const dict: Record<I18nKey, string> = {
   'header.workStatusPanel.toggleAria': '切換工作狀態面板',
   'header.workStatusPanel.hide': '隱藏工作狀態',
   'header.workStatusPanel.show': '顯示工作狀態',
+  'header.contextRail.show': '顯示脈絡側邊欄',
+  'header.contextRail.hide': '隱藏脈絡側邊欄',
   'chat.workStatus.mcp.authorizeOpenFailed': '無法開啟授權頁面',
   'chat.workStatus.mcp.authorizeFailed': '授權失敗',
   'mcpDropdown.toast.authorizeOpenFailed': '無法開啟授權頁面',

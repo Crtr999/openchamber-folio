@@ -23,6 +23,8 @@ type ProjectIconObjectUrlRequest = {
 const projectIconObjectUrlCache = new Map<string, ProjectIconObjectUrlCacheEntry>();
 
 export const PROJECT_ICONS: Array<{ key: string; Icon: IconName; label: string }> = [
+  { key: 'chatgpt', Icon: 'chat-3', label: 'ChatGPT' },
+  { key: 'muse', Icon: 'lightbulb', label: 'Muse' },
   { key: 'code',       Icon: 'code-box',      label: 'Code' },
   { key: 'terminal',   Icon: 'terminal-box',   label: 'Terminal' },
   { key: 'rocket',     Icon: 'rocket',        label: 'Rocket' },

@@ -154,6 +154,8 @@ ipcRenderer.on('openchamber:emit', (_evt, payload) => {
   if (!event) {
     return;
   }
+  // Meeting ids and lifecycle belong only to the trusted application document.
+  if (event === 'desktop:meeting-lifecycle' && (!isLocalPage || window.top !== window)) return;
 
   dispatchNativeEvent(event, payload.detail);
 });
@@ -187,6 +189,12 @@ const desktopBridge = {
   // the path string crosses the bridge; shared UI gates use on the local page.
   pathForFile: (file) => webUtils.getPathForFile(file),
 };
+
+if (isLocalPage && window.top === window) {
+  window.addEventListener('openchamber:runtime-endpoint-will-change', () => {
+    ipcRenderer.send('openchamber:meeting-runtime-changing');
+  });
+}
 
 if (isLocalPage) {
   desktopBridge.pickThemeFile = () => ipcRenderer.invoke('openchamber:invoke', 'desktop_pick_theme_file', {});

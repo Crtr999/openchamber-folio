@@ -14,7 +14,6 @@ import { getDeferredSafeStorage } from '@/stores/utils/safeStorage';
 import { useGitStore, useGitAllBranches, useGitRepoStatusMap } from '@/stores/useGitStore';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { NewWorktreeDialog } from './NewWorktreeDialog';
-import { useSessionSearchEffects } from './sidebar/shell/useSessionSearchEffects';
 import { useSessionProjectViewState } from './sidebar/projects/useSessionProjectViewState';
 import { useProjectRepoStatus } from './sidebar/projects/useProjectRepoStatus';
 import { ProjectEditDialog } from '@/components/layout/ProjectEditDialog';
@@ -81,16 +80,13 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
   streamPerfCount(`ui.session_sidebar.render.${mobileVariant ? 'mobile' : 'desktop'}`);
   streamPerfCount(`ui.session_sidebar.render.${isVisible ? 'visible' : 'hidden'}`);
   const { t } = useI18n();
-  const [isSessionSearchOpen, setIsSessionSearchOpen] = React.useState(false);
   const [sessionSearchQuery, setSessionSearchQuery] = React.useState('');
   const resetSessionSearch = React.useCallback(() => {
     setSessionSearchQuery('');
-    setIsSessionSearchOpen(false);
   }, []);
   // Reported by the session list below: the header cannot see what matched.
-  const [searchMatchCount, setSearchMatchCount] = React.useState(0);
+  const [, setSearchMatchCount] = React.useState(0);
   const sessionSearchContainerRef = React.useRef<HTMLDivElement | null>(null);
-  const sessionSearchInputRef = React.useRef<HTMLInputElement | null>(null);
   const [editingProjectDialogId, setEditingProjectDialogId] = React.useState<string | null>(null);
   const safeStorage = React.useMemo(() => getDeferredSafeStorage(), []);
   const [projectRepoStatus, setProjectRepoStatus] = React.useState<Map<string, boolean | null>>(new Map());
@@ -149,13 +145,6 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
   const hasSessionSearchQuery = normalizedSessionSearchQuery.length > 0;
 
 
-  useSessionSearchEffects({
-    enabled: isVisible,
-    isSessionSearchOpen,
-    setIsSessionSearchOpen,
-    sessionSearchInputRef,
-    sessionSearchContainerRef,
-  });
 
   const gitBranches = useGitAllBranches(isVisible);
 
@@ -500,7 +489,6 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
     projectRootBranches,
     resolvedWorktreeTopologyKey,
     unresolvedWorktreeProjectPaths,
-    isSessionSearchOpen,
     sessionSearchQuery,
     editingProjectDialogId,
     updateDialogOpen,
@@ -652,13 +640,7 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
         }}
         headerActionIconClass={headerActionIconClass}
         headerActionButtonClass={headerActionButtonClass}
-        isSessionSearchOpen={isSessionSearchOpen}
-        setIsSessionSearchOpen={setIsSessionSearchOpen}
-        sessionSearchInputRef={sessionSearchInputRef}
-        sessionSearchQuery={sessionSearchQuery}
-        setSessionSearchQuery={setSessionSearchQuery}
-        hasSessionSearchQuery={hasSessionSearchQuery}
-        searchMatchCount={searchMatchCount}
+        searchEnabled={isVisible}
         collapseAllProjects={projectView.actions.collapseAllProjects}
         expandAllProjects={projectView.actions.expandAllProjects}
       />

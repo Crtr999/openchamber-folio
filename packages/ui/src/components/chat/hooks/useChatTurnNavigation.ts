@@ -15,7 +15,7 @@ const parseChatHashTarget = (hashValue: string): ChatHashTarget | null => {
         return { kind: 'turn', id: turnMatch[1] };
     }
 
-    const messageMatch = value.match(/^message-(.+)$/);
+    const messageMatch = value.match(/^(?:search-)?message-(.+)$/);
     if (messageMatch?.[1]) {
         return { kind: 'message', id: messageMatch[1] };
     }
@@ -75,6 +75,7 @@ interface UseChatTurnNavigationOptions {
     scrollToTurn: (turnId: string, options?: { behavior?: ScrollBehavior }) => Promise<boolean>;
     scrollToMessage: (messageId: string, options?: { behavior?: ScrollBehavior }) => Promise<boolean>;
     resumeToBottom: () => void;
+    loadMissingMessage?: (messageId: string) => Promise<boolean>;
 }
 
 export interface ChatTurnNavigation {
@@ -91,6 +92,7 @@ export const useChatTurnNavigation = ({
     scrollToTurn,
     scrollToMessage,
     resumeToBottom,
+    loadMissingMessage,
 }: UseChatTurnNavigationOptions): ChatTurnNavigation => {
     const turnIdsRef = React.useRef(turnIds);
     const activeTurnIdRef = React.useRef(activeTurnId);
@@ -168,7 +170,8 @@ export const useChatTurnNavigation = ({
             return;
         }
 
-        const applyHash = () => {
+        let alive = true;
+        const applyHash = async () => {
             const target = parseChatHashTarget(window.location.hash);
             if (!target) {
                 return;
@@ -179,15 +182,20 @@ export const useChatTurnNavigation = ({
                 return;
             }
 
-            void scrollToMessageId(target.id, { behavior: 'auto', updateHash: false });
+            const hash = window.location.hash;
+            if (hash.startsWith('#search-message-') && loadMissingMessage && !await loadMissingMessage(target.id)) return;
+            if (!alive || window.location.hash !== hash) return;
+            const revealed = await scrollToMessageId(target.id, { behavior: 'auto', updateHash: false });
+            if (alive && revealed && window.location.hash === hash && hash.startsWith('#search-message-')) setHash(null);
         };
 
-        applyHash();
+        void applyHash();
         window.addEventListener('hashchange', applyHash);
         return () => {
+            alive = false;
             window.removeEventListener('hashchange', applyHash);
         };
-    }, [sessionId, scrollToMessageId, scrollToTurnId, turnIds.length]);
+    }, [sessionId, scrollToMessageId, scrollToTurnId, turnIds.length, loadMissingMessage]);
 
     return {
         scrollToTurnId,

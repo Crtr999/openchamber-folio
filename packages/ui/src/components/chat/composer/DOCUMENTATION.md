@@ -17,6 +17,11 @@ animation. Do not restore separate draft and session composer branches:
 remounting the editor loses focus and interrupts the transition. Keep the
 existing mobile fixed-position rules unchanged.
 
+The full Home draft renders widgets directly beneath the composer, without the
+starter-chip row or its add button. Stored global and project starters remain
+untouched; compact drafts keep their existing starter UI. The scenic top inset
+and widget divider resizing are unchanged.
+
 `ComposerFloatingPanel` is the shared frame for `BtwPanel`, `PermissionDock`,
 `FormDock` and `QueuedMessageChips`. They mount inside the composer form, outside both the
 full editor and collapsed mobile pill, with one absolute `bottom-full`
@@ -605,6 +610,14 @@ recording in flight when comment mode opens is discarded by that swap.
 The comment editor reuses `ComposerEditor` with `dataChatInput="comment"` so
 the `data-chat-input="true"` helpers (`focusChatInput`, shortcut guards) keep
 meaning "the prompt editor".
+
+## Native model selection
+
+`ModelControls` keeps the existing native model, agent and effort picker. There
+is no separate credit-pool chooser or billing-dependent send admission. Connected
+provider models come from OpenCode; provider credentials and configuration are
+unchanged. Build, Plan and configured agents keep their ordinary selection path.
+ChatGPT uses its native project; Muse and Claude retain their website views.
 
 ## Testing
 
