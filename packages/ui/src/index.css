@@ -2180,3 +2180,43 @@ html.desktop-runtime .markdown-content [data-openchamber-file-link="true"] {
   [data-slot="dialog-content"][data-starting-style] { scale: none; translate: none; }
   .oc-task-landed, .oc-task-done, .oc-saved-tick, [data-checked] > svg, [data-checked] > span > svg { animation: none !important; }
 }
+
+/* ── Morph language (inspired by "one surface that reshapes") ── */
+@keyframes oc-pill-in {
+  0% { opacity: 0; translate: -50% 16px; scale: 0.6 0.8; filter: blur(4px); }
+  60% { opacity: 1; scale: 1.04 1; filter: blur(0); }
+  100% { opacity: 1; translate: -50% 0; scale: 1; }
+}
+@keyframes oc-pill-out {
+  0% { opacity: 1; scale: 1; translate: -50% 0; }
+  100% { opacity: 0; scale: 0.35 0.7; translate: -50% 6px; filter: blur(4px); }
+}
+.oc-pill-toast { translate: -50% 0; animation: oc-pill-in 360ms cubic-bezier(0.2, 0.9, 0.25, 1.15) both; }
+.oc-pill-toast.oc-pill-toast-out { animation: oc-pill-out 380ms cubic-bezier(0.4, 0, 0.7, 0.2) both; }
+
+/* Lines that build in one after another. */
+@keyframes oc-line-in { from { opacity: 0; translate: 0 5px; filter: blur(2px); } to { opacity: 1; translate: 0 0; filter: blur(0); } }
+.oc-stream > * { animation: oc-line-in 300ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.oc-stream > *:nth-child(1) { animation-delay: 0ms; } .oc-stream > *:nth-child(2) { animation-delay: 45ms; }
+.oc-stream > *:nth-child(3) { animation-delay: 90ms; } .oc-stream > *:nth-child(4) { animation-delay: 135ms; }
+.oc-stream > *:nth-child(5) { animation-delay: 180ms; } .oc-stream > *:nth-child(6) { animation-delay: 225ms; }
+.oc-stream > *:nth-child(7) { animation-delay: 270ms; } .oc-stream > *:nth-child(8) { animation-delay: 315ms; }
+.oc-stream > *:nth-child(9) { animation-delay: 360ms; } .oc-stream > *:nth-child(10) { animation-delay: 405ms; }
+.oc-stream > *:nth-child(n+11) { animation-delay: 450ms; }
+
+/* Meeting tabs swap with a slight turn, like a card flipping to its next face. */
+@keyframes oc-face-in { from { opacity: 0; transform: perspective(900px) rotateY(-7deg) translateX(10px); } to { opacity: 1; transform: none; } }
+.oc-face-in { animation: oc-face-in 280ms cubic-bezier(0.2, 0.9, 0.25, 1.05) both; transform-origin: left center; }
+
+/* Calendar prompt unfolds from a dot near the top right. */
+@keyframes oc-unfold { from { clip-path: circle(10px at calc(100% - 22px) 22px); opacity: 0.6; } to { clip-path: circle(150% at calc(100% - 22px) 22px); opacity: 1; } }
+.oc-reminder { animation: oc-unfold 420ms cubic-bezier(0.2, 0.9, 0.25, 1) both; }
+
+/* Today card rows tick away. */
+@keyframes oc-row-done { 0% { opacity: 1; } 60% { opacity: 0.5; } 100% { opacity: 0; height: 0; padding-top: 0; padding-bottom: 0; margin: 0; } }
+.oc-row-done { animation: oc-row-done 520ms ease-in 220ms both; overflow: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  .oc-pill-toast, .oc-pill-toast.oc-pill-toast-out, .oc-stream > *, .oc-face-in, .oc-reminder, .oc-row-done { animation: none !important; }
+}
+.oc-palette.oc-palette-morph { animation: none; }

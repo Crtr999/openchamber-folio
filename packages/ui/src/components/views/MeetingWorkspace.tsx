@@ -16,6 +16,8 @@ import { MeetingTranscript } from './MeetingTranscript';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { copyTextToClipboard } from '@/lib/clipboard';
+import { bottomPillRect, morphFrom, morphInto } from '@/lib/motion';
+import { showPill } from '@/lib/pill';
 import { createHomeTask, exportMeetingToNotion } from '@/lib/personal-home';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionTabsStore } from '@/stores/useSessionTabsStore';
@@ -87,7 +89,7 @@ function Waveform({ level, live, className }: { level: number; live: boolean; cl
 /** Light Markdown for summaries: headings, bullets, checkboxes and bold. */
 function SummaryText({ text }: { text: string }) {
     const inline = (line: string) => line.split(/(\*\*[^*]+\*\*)/g).map((part, index) => part.startsWith('**') && part.endsWith('**') ? <strong key={index} className="font-semibold text-foreground">{part.slice(2, -2)}</strong> : part);
-    return <div className="space-y-1.5 text-[13.5px] leading-relaxed text-foreground/90">
+    return <div className="oc-stream space-y-1.5 text-[13.5px] leading-relaxed text-foreground/90">
         {text.split('\n').map((raw, index) => {
             const line = raw.trimEnd();
             if (!line.trim()) return <div key={index} className="h-1.5" />;
@@ -409,7 +411,35 @@ export function MeetingWorkspace() {
         event.preventDefault(); setTab(tabs[next]);
         event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
     };
-    const openWorkspace = (target: Meeting | null, focusTab?: Tab) => { setSelected(target); if (focusTab) setTab(focusTab); setOpen(true); };
+    const morphOriginRef = React.useRef<DOMRect | null>(null);
+    const openWorkspace = (target: Meeting | null, focusTab?: Tab, origin?: DOMRect | null) => {
+        morphOriginRef.current = origin ?? null;
+        setSelected(target); if (focusTab) setTab(focusTab); setOpen(true);
+    };
+    // The pill grows into the meeting window; with a recording running, the window shrinks back into the pill.
+    React.useEffect(() => {
+        if (!open || !morphOriginRef.current) return;
+        const origin = morphOriginRef.current;
+        morphOriginRef.current = null;
+        let frames = 0;
+        const tick = () => {
+            const node = document.querySelector<HTMLElement>('.oc-meeting-dialog');
+            if (node) { morphFrom(node, origin, 380); return; }
+            if (++frames < 6) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+    }, [open]);
+    const closing = React.useRef(false);
+    const closeWorkspace = () => {
+        if (closing.current) return;
+        if (!['idle', 'error'].includes(meetingCapture.getSnapshot().phase)) {
+            closing.current = true;
+            void morphInto(document.querySelector<HTMLElement>('.oc-meeting-dialog'), bottomPillRect(), 240)
+                .finally(() => { closing.current = false; setOpen(false); });
+            return;
+        }
+        setOpen(false);
+    };
 
     const ready = Boolean(readiness?.available);
     const startControls = (target: Meeting | null) => <div className="space-y-2.5">
@@ -455,7 +485,7 @@ export function MeetingWorkspace() {
     const sendToNotion = (target: Meeting) => {
         setNotionState({ id: target.id, state: 'saving' });
         exportMeetingToNotion(target.title, meetingMarkdown(target, locale, labels()))
-            .then(() => setNotionState({ id: target.id, state: 'saved' }))
+            .then(() => { setNotionState({ id: target.id, state: 'saved' }); showPill(t('meeting.ui.notionPill', { title: target.title })); })
             .catch((cause: unknown) => setNotionState({ id: target.id, state: 'error', message: cause instanceof Error ? cause.message.replace(/^Error:\s*/, '') : String(cause) }));
     };
 
@@ -463,7 +493,7 @@ export function MeetingWorkspace() {
         if (open) return null;
         if (active) {
             return <div className={cn(pillClass, 'gap-1 border-border/80 py-1 pl-1.5 pr-1')}>
-                <button type="button" onClick={() => openWorkspace(capture.meeting, 'transcript')} className="oc-press flex min-w-0 items-center gap-2 rounded-full px-2 py-1 hover:bg-interactive-hover" title={capture.meeting?.title}>
+                <button type="button" onClick={(event) => openWorkspace(capture.meeting, 'transcript', event.currentTarget.parentElement?.getBoundingClientRect())} className="oc-press flex min-w-0 items-center gap-2 rounded-full px-2 py-1 hover:bg-interactive-hover" title={capture.meeting?.title}>
                     <span className={cn('size-2 shrink-0 rounded-full', capture.phase === 'paused' ? 'bg-amber-400' : 'oc-rec-dot bg-red-500')} />
                     <span className="font-mono text-[12.5px] tabular-nums text-foreground">{capture.phase === 'starting' ? '…' : clock(elapsed)}</span>
                     <Waveform level={level} live={capture.phase === 'recording'} className={capture.phase === 'paused' ? 'text-amber-400' : 'text-red-400'} />
@@ -510,7 +540,7 @@ export function MeetingWorkspace() {
 
     return <>
         {pill}
-        <Dialog open={open} onOpenChange={setOpen}><DialogContent showCloseButton={false} className="flex h-[min(760px,86dvh)] w-[min(1080px,94vw)] max-w-none flex-row gap-0 overflow-hidden p-0 sm:max-w-none">
+        <Dialog open={open} onOpenChange={(next) => { if (next) setOpen(true); else closeWorkspace(); }}><DialogContent showCloseButton={false} className="oc-meeting-dialog flex h-[min(760px,86dvh)] w-[min(1080px,94vw)] max-w-none flex-row gap-0 overflow-hidden p-0 sm:max-w-none">
             <DialogTitle className="sr-only">{t('meeting.workspace')}</DialogTitle>
             <DialogDescription className="sr-only">{supported ? t('meeting.modelRequired') : t('meeting.unsupported')}</DialogDescription>
             {!supported ? <div className="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center">
@@ -545,7 +575,7 @@ export function MeetingWorkspace() {
                     </div>
                 </aside>
                 <main className="relative flex min-w-0 flex-1 flex-col">
-                    <button type="button" aria-label={t('meeting.ui.close')} onClick={() => setOpen(false)} className="oc-press absolute right-3 top-3 z-10 flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-interactive-hover hover:text-foreground"><Icon name="close" className="size-4" /></button>
+                    <button type="button" aria-label={t('meeting.ui.close')} onClick={closeWorkspace} className="oc-press absolute right-3 top-3 z-10 flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-interactive-hover hover:text-foreground"><Icon name="close" className="size-4" /></button>
                     {!meeting ? <div key="empty" className="oc-fade-in flex flex-1 flex-col justify-center overflow-y-auto px-10 py-8 md:px-16">
                         <div className="mb-5 flex size-12 items-center justify-center rounded-2xl bg-red-500/10 text-red-400"><Icon name="mic" className="size-6" /></div>
                         <h2 className="text-[26px] font-bold tracking-tight text-foreground">{t('meeting.ui.emptyTitle')}</h2>
@@ -614,7 +644,7 @@ export function MeetingWorkspace() {
                             </button> : null}
                             {tab === 'notes' ? <span className="ml-auto self-center pb-1 text-[11px] text-muted-foreground">{saveState === 'saving' ? t('meeting.ui.saving') : saveState === 'saved' ? t('meeting.ui.saved') : saveState === 'error' ? <span className="text-destructive">{t('meeting.ui.saveFailed')}</span> : null}</span> : null}
                         </div>
-                        <div role="tabpanel" id={`meeting-panel-${tab}`} aria-labelledby={`meeting-tab-${tab}`} tabIndex={0} className="min-h-0 flex-1 overflow-y-auto px-10 py-5 md:px-14">
+                        <div key={tab} role="tabpanel" id={`meeting-panel-${tab}`} aria-labelledby={`meeting-tab-${tab}`} tabIndex={0} className="oc-face-in min-h-0 flex-1 overflow-y-auto px-10 py-5 md:px-14">
                             {tab === 'notes' ? <textarea aria-label={t('meeting.notes')} placeholder={t('meeting.ui.notesPlaceholder')} maxLength={100000} value={notes}
                                 onChange={(event) => { const next = new Map(drafts); next.set(meeting.id, event.target.value); setDrafts(next); setSaveState('idle'); }}
                                 onBlur={() => { const draft = drafts.get(meeting.id); if (draft !== undefined && draft !== meeting.notes) saveNotes(meeting.id, draft); }}
@@ -639,7 +669,7 @@ export function MeetingWorkspace() {
                                                         let added = 0;
                                                         try {
                                                             for (const item of items) { await createHomeTask(item); added += 1; setTaskState({ id: meeting.id, state: 'adding', count: added }); }
-                                                            setTaskState({ id: meeting.id, state: 'added', count: added });
+                                                            setTaskState({ id: meeting.id, state: 'added', count: added }); showPill(t('meeting.ui.tasksAdded', { count: added }));
                                                             window.dispatchEvent(new CustomEvent('open-carter:tasks-changed'));
                                                         } catch (cause) {
                                                             setTaskState({ id: meeting.id, state: 'error', count: added, message: cause instanceof Error ? cause.message.replace(/^Error:\s*/, '') : String(cause) });

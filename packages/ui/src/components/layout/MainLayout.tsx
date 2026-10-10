@@ -14,6 +14,9 @@ import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { CommandPalette } from '../ui/CommandPalette';
 import { NotionSearchPalette } from './NotionSearchPalette';
+import { PillToaster } from './PillToaster';
+import { openTodayCard } from '@/lib/searchPalette';
+import { personalHomeSupported } from '@/lib/personal-home';
 import { HelpDialog } from '../ui/HelpDialog';
 import { OpenCodeStatusDialog } from '../ui/OpenCodeStatusDialog';
 import { SessionSidebar } from '@/components/session/SessionSidebar';
@@ -71,6 +74,24 @@ const installAutoHideScrollbars = () => {
 
 export const MainLayout: React.FC = () => {
     React.useEffect(() => installAutoHideScrollbars(), []);
+    // The first time the app is opened (or brought forward) each day, the Today
+    // card greets you: today's meetings and what is due. Once per day; Esc closes it.
+    React.useEffect(() => {
+        if (!personalHomeSupported()) return;
+        const KEY = 'open-carter:today-shown';
+        const dayKey = () => new Date().toLocaleDateString('en-CA');
+        const maybeShow = () => {
+            if (document.visibilityState !== 'visible') return;
+            let last: string | null = null;
+            try { last = window.localStorage.getItem(KEY); } catch { /* storage optional */ }
+            if (last === dayKey()) return;
+            try { window.localStorage.setItem(KEY, dayKey()); } catch { /* storage optional */ }
+            openTodayCard();
+        };
+        const first = window.setTimeout(maybeShow, 2500);
+        window.addEventListener('focus', maybeShow);
+        return () => { window.clearTimeout(first); window.removeEventListener('focus', maybeShow); };
+    }, []);
     // A soft fade each time the main view changes (chat ↔ chat, chat ↔ Home,
     // surfaces). Opacity only, so fixed popovers inside never shift.
     const mainViewRef = React.useRef<HTMLElement | null>(null);
@@ -193,6 +214,7 @@ export const MainLayout: React.FC = () => {
             >
                 <CommandPalette />
                 <NotionSearchPalette />
+                <PillToaster />
                 <HelpDialog />
                 <OpenCodeStatusDialog />
                 <RunAutoFusion />

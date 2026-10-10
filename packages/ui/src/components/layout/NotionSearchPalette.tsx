@@ -15,7 +15,9 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { NEW_TAB_PALETTE_EVENT, openNewHeaderTab } from '@/lib/sessionTabs';
 import { openMeetingWorkspace } from '@/lib/meetings/workspace';
-import { ADVANCED_SEARCH_EVENT, SEARCH_PALETTE_EVENT } from '@/lib/searchPalette';
+import { ADVANCED_SEARCH_EVENT, SEARCH_PALETTE_EVENT, TODAY_EVENT } from '@/lib/searchPalette';
+import { collapseAway, morphFrom, reshapeFrom } from '@/lib/motion';
+import { TodayCard } from './TodayCard';
 
 /**
  * Notion-style quick search. One palette serves two doors:
@@ -105,6 +107,10 @@ function Kbd({ children }: { children: React.ReactNode }) {
 export function NotionSearchPalette() {
   const { t, locale } = useI18n();
   const [open, setOpen] = React.useState(false);
+  const [view, setView] = React.useState<'list' | 'today'>('list');
+  const [morphOpen, setMorphOpen] = React.useState(false);
+  const originRef = React.useRef<DOMRect | null>(null);
+  const beforeReshapeRef = React.useRef<DOMRect | null>(null);
   const [mode, setMode] = React.useState<Mode>('search');
   const [query, setQuery] = React.useState('');
   const [selectedIndex, setSelectedIndex] = React.useState(0);
@@ -136,15 +142,38 @@ export function NotionSearchPalette() {
   // close button abandons it.
   const close = React.useCallback(() => {
     abortRef.current?.abort(); abortRef.current = null;
-    setOpen(false); setQuery(''); setMatches([]); setSearching(false); setSearchedQuery('');
+    setOpen(false); setQuery(''); setMatches([]); setSearching(false); setSearchedQuery(''); setView('list'); setMorphOpen(false);
   }, []);
+  // Switch between the list and the Today card; the panel reshapes between them.
+  const switchView = React.useCallback((next: 'list' | 'today') => {
+    beforeReshapeRef.current = panelRef.current?.getBoundingClientRect() ?? null;
+    setView(next);
+  }, []);
+  React.useLayoutEffect(() => {
+    const before = beforeReshapeRef.current;
+    beforeReshapeRef.current = null;
+    if (before) reshapeFrom(panelRef.current, before);
+  }, [view]);
+  // Grow out of the control that opened the palette (the + button).
+  React.useLayoutEffect(() => {
+    if (!open) return;
+    const origin = originRef.current;
+    originRef.current = null;
+    if (origin) morphFrom(panelRef.current, origin);
+  }, [open]);
 
   React.useEffect(() => {
-    const showSearch = () => { setMode('search'); setOpen(true); setSelectedIndex(0); };
-    const showNewTab = () => { setMode('newTab'); setOpen(true); setSelectedIndex(0); };
+    const showSearch = () => { setMode('search'); setView('list'); setOpen(true); setSelectedIndex(0); };
+    const showNewTab = () => {
+      originRef.current = document.querySelector('.session-tab-new')?.getBoundingClientRect() ?? null;
+      setMorphOpen(Boolean(originRef.current));
+      setMode('newTab'); setView('list'); setOpen(true); setSelectedIndex(0);
+    };
+    const showToday = () => { setMode('search'); setView('today'); setOpen(true); };
     window.addEventListener(SEARCH_PALETTE_EVENT, showSearch);
     window.addEventListener('openchamber:sidebar-session-search', showSearch);
     window.addEventListener(NEW_TAB_PALETTE_EVENT, showNewTab);
+    window.addEventListener(TODAY_EVENT, showToday);
     // ⌘T opens a new tab, like a browser or Notion.
     const shortcut = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== 't') return;
@@ -158,6 +187,7 @@ export function NotionSearchPalette() {
       window.removeEventListener(SEARCH_PALETTE_EVENT, showSearch);
       window.removeEventListener('openchamber:sidebar-session-search', showSearch);
       window.removeEventListener(NEW_TAB_PALETTE_EVENT, showNewTab);
+      window.removeEventListener(TODAY_EVENT, showToday);
       window.removeEventListener('keydown', shortcut);
       unsubscribe();
     };
@@ -212,6 +242,7 @@ export function NotionSearchPalette() {
     const sessions = activeSessions.filter((session) => !session.parentID && !session.time.archived);
     const out: Row[] = [];
     const actions: Row[] = [];
+    actions.push({ kind: 'action', id: 'action:today', icon: 'calendar', label: t('today.action'), run: () => { setQuery(''); switchView('today'); } });
     if (mode === 'newTab') {
       actions.push({ kind: 'action', id: 'action:new-chat', icon: 'chat-new', label: t('palette.notion.startChat'), hint: '↵', run: () => { close(); } });
     }
@@ -250,7 +281,7 @@ export function NotionSearchPalette() {
       if (out.length > 80) break;
     }
     return out;
-  }, [activeSessions, close, matches, mode, query, t]);
+  }, [activeSessions, close, matches, mode, query, switchView, t]);
 
   React.useEffect(() => { setSelectedIndex((index) => Math.min(index, Math.max(0, rows.length - 1))); }, [rows.length]);
   React.useEffect(() => { setSelectedIndex(0); }, [query, mode]);
@@ -302,6 +333,11 @@ export function NotionSearchPalette() {
 
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (event.nativeEvent.isComposing) return;
+    if (view === 'today') {
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); void collapseAway(panelRef.current).then(close); }
+      else if (event.key === 'Backspace' && !query) { event.preventDefault(); switchView('list'); }
+      return;
+    }
     if (event.key === 'ArrowDown') { event.preventDefault(); setSelectedIndex((index) => (rows.length ? (index + 1) % rows.length : 0)); }
     else if (event.key === 'ArrowUp') { event.preventDefault(); setSelectedIndex((index) => (rows.length ? (index - 1 + rows.length) % rows.length : 0)); }
     else if (event.key === 'Enter') { event.preventDefault(); openRow(selected, event.metaKey || event.ctrlKey); }
@@ -321,7 +357,7 @@ export function NotionSearchPalette() {
       return <div className="oc-fade-in space-y-3 p-5">
         <div className="flex size-10 items-center justify-center rounded-lg bg-muted/60"><Icon name={selected.icon} className="size-5 text-foreground" /></div>
         <h3 className="text-[17px] font-semibold leading-snug text-foreground">{selected.label}</h3>
-        <p className="text-[12.5px] leading-relaxed text-muted-foreground">{selected.id === 'action:meeting' ? t('palette.notion.meetingHint') : selected.id === 'action:meetings' ? t('palette.notion.meetingLibraryHint') : selected.id === 'action:home' ? t('palette.notion.homeHint') : t('palette.notion.chatHint')}</p>
+        <p className="text-[12.5px] leading-relaxed text-muted-foreground">{selected.id === 'action:today' ? t('today.hint') : selected.id === 'action:meeting' ? t('palette.notion.meetingHint') : selected.id === 'action:meetings' ? t('palette.notion.meetingLibraryHint') : selected.id === 'action:home' ? t('palette.notion.homeHint') : t('palette.notion.chatHint')}</p>
       </div>;
     }
     if (selected.kind === 'match') {
@@ -354,14 +390,14 @@ export function NotionSearchPalette() {
       aria-modal="true"
       aria-label={mode === 'newTab' ? t('palette.notion.newTabPlaceholder') : t('palette.notion.searchPlaceholder')}
       onKeyDown={onKeyDown}
-      className={cn('oc-palette flex max-h-[min(640px,80dvh)] w-full flex-col overflow-hidden rounded-xl border border-border/80 bg-[var(--surface-elevated,var(--background))] shadow-[0_24px_80px_-12px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.03)]', showPreview ? 'max-w-[900px]' : 'max-w-[620px]')}
+      className={cn('oc-palette flex max-h-[min(640px,80dvh)] w-full flex-col overflow-hidden rounded-xl border border-border/80 bg-[var(--surface-elevated,var(--background))] shadow-[0_24px_80px_-12px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.03)]', view === 'today' ? 'max-w-[560px]' : showPreview ? 'max-w-[900px]' : 'max-w-[620px]', morphOpen && 'oc-palette-morph')}
     >
       <div className="flex items-center gap-2.5 border-b border-border/60 px-4 py-3">
         <Icon name="search" className="size-[18px] shrink-0 text-muted-foreground" />
         <input
           ref={inputRef}
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => { if (view === 'today') switchView('list'); setQuery(event.target.value); }}
           placeholder={mode === 'newTab' ? t('palette.notion.newTabPlaceholder') : t('palette.notion.searchPlaceholder')}
           aria-label={mode === 'newTab' ? t('palette.notion.newTabPlaceholder') : t('palette.notion.searchPlaceholder')}
           className="min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted-foreground/70"
@@ -389,7 +425,7 @@ export function NotionSearchPalette() {
           <Icon name="equalizer-2" className="size-4" />
         </button>
       </div>
-      <div className="flex min-h-0 flex-1">
+      {view === 'today' ? <TodayCard onClose={(after) => { void collapseAway(panelRef.current).then(() => { close(); after?.(); }); }} /> : <div className="flex min-h-0 flex-1">
         <div ref={listRef} role="listbox" className="min-h-[300px] min-w-0 flex-1 overflow-y-auto py-1.5" onPointerMove={() => { pointerMovedRef.current = true; }}>
           {trimmed && rows.length === 0 && !contentPending ? <div className="px-4 py-10 text-center text-[13px] text-muted-foreground">{t('palette.notion.noResults', { query: trimmed })}</div> : null}
           {rows.map((row, index) => {
@@ -439,11 +475,12 @@ export function NotionSearchPalette() {
           </> : null}
         </div>
         {showPreview ? <div className="hidden w-[340px] shrink-0 overflow-y-auto border-l border-border/60 bg-muted/[0.12] md:block">{renderPreview()}</div> : null}
-      </div>
+      </div>}
       <div className="flex items-center gap-4 border-t border-border/60 px-4 py-2 text-[11px] text-muted-foreground">
+        {view === 'today' ? <span className="flex items-center gap-1.5"><Kbd>⌫</Kbd>{t('today.back')}</span> : <>
         <span className="flex items-center gap-1.5"><Kbd>↑</Kbd><Kbd>↓</Kbd>{t('palette.notion.navigate')}</span>
         <span className="flex items-center gap-1.5"><Kbd>↵</Kbd>{t('palette.notion.open')}</span>
-        <span className="flex items-center gap-1.5"><Kbd>⌘</Kbd><Kbd>↵</Kbd>{t('palette.notion.openNewTab')}</span>
+        <span className="flex items-center gap-1.5"><Kbd>⌘</Kbd><Kbd>↵</Kbd>{t('palette.notion.openNewTab')}</span></>}
         <span className="ml-auto flex items-center gap-1.5"><Kbd>esc</Kbd>{t('palette.notion.close')}</span>
       </div>
     </div>

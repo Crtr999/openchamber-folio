@@ -5,6 +5,7 @@ import { useI18n } from '@/lib/i18n';
 import { meetingsSupported } from '@/lib/meetings/contract';
 import { meetingCapture } from '@/lib/meetings/capture';
 import { openMeetingWorkspace } from '@/lib/meetings/workspace';
+import { bottomPillRect, morphInto } from '@/lib/motion';
 import { personalHomeSupported, readHomeCalendar, type HomeCalendarEvent } from '@/lib/personal-home';
 
 // Calendar-driven meeting prompts. Apple Calendar is read every few minutes;
@@ -32,6 +33,7 @@ export function MeetingReminders() {
     const [events, setEvents] = React.useState<HomeCalendarEvent[]>([]);
     const [prompt, setPrompt] = React.useState<HomeCalendarEvent | null>(null);
     const [now, setNow] = React.useState(() => Date.now());
+    const cardRef = React.useRef<HTMLDivElement | null>(null);
 
     React.useEffect(() => {
         if (!enabled) return;
@@ -90,7 +92,7 @@ export function MeetingReminders() {
     const start = Date.parse(prompt.start);
     const minutes = Math.round((start - now) / 60_000);
     const when = minutes > 0 ? t('meeting.reminder.startsIn', { minutes }) : minutes === 0 ? t('meeting.reminder.startingNow') : t('meeting.reminder.started', { minutes: -minutes });
-    return <div role="alertdialog" aria-label={prompt.title} className="oc-reminder app-region-no-drag fixed right-5 top-16 z-[56] w-[320px] rounded-xl border border-border/80 bg-[var(--surface-elevated,var(--background))] p-3.5 shadow-[0_16px_48px_-12px_rgba(0,0,0,0.6)]">
+    return <div ref={cardRef} role="alertdialog" aria-label={prompt.title} className="oc-reminder app-region-no-drag fixed right-5 top-16 z-[56] w-[320px] rounded-xl border border-border/80 bg-[var(--surface-elevated,var(--background))] p-3.5 shadow-[0_16px_48px_-12px_rgba(0,0,0,0.6)]">
         <div className="flex items-start gap-3">
             <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-400"><Icon name="calendar" className="size-4.5" /></div>
             <div className="min-w-0 flex-1">
@@ -102,7 +104,7 @@ export function MeetingReminders() {
         </div>
         <div className="mt-3 flex justify-end gap-2">
             <Button size="sm" variant="ghost" className="oc-press h-8" onClick={() => setPrompt(null)}>{t('meeting.reminder.notNow')}</Button>
-            <Button size="sm" className="oc-press h-8 gap-1.5" onClick={() => { const event = prompt; setPrompt(null); openMeetingWorkspace({ title: event.title, calendarEventId: event.id, autoStart: true }); }}>
+            <Button size="sm" className="oc-press h-8 gap-1.5" onClick={() => { const event = prompt; void morphInto(cardRef.current, bottomPillRect(), 260).finally(() => { setPrompt(null); openMeetingWorkspace({ title: event.title, calendarEventId: event.id, autoStart: true }); }); }}>
                 <Icon name="mic" className="size-3.5" />{t('meeting.reminder.record')}
             </Button>
         </div>
