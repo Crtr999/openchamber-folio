@@ -162,6 +162,7 @@ export function MeetingWorkspace() {
     const [saveState, setSaveState] = React.useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const [autoSummary, setAutoSummary] = React.useState<AutoSummary>(null);
     const [pillDismissed, setPillDismissed] = React.useState(false);
+    const [justSaved, setJustSaved] = React.useState<Meeting | null>(null);
     const [errorDismissedFor, setErrorDismissedFor] = React.useState<string | null>(null);
     const [copied, setCopied] = React.useState<Tab | null>(null);
     const [titleDraft, setTitleDraft] = React.useState<{ id: string; value: string } | null>(null);
@@ -298,6 +299,18 @@ export function MeetingWorkspace() {
         if (open && was !== capture.phase && (capture.phase === 'idle' || capture.phase === 'error') && was !== 'idle' && was !== 'error') void refresh();
     }, [capture.phase, open, refresh]);
 
+    // A short "saved" moment after a recording stops cleanly.
+    const savedPhase = React.useRef(capture.phase);
+    React.useEffect(() => {
+        const was = savedPhase.current;
+        savedPhase.current = capture.phase;
+        if (was === 'stopping' && capture.phase === 'idle' && !capture.error && capture.meeting) {
+            setJustSaved(capture.meeting);
+            const timer = window.setTimeout(() => setJustSaved(null), 6000);
+            return () => window.clearTimeout(timer);
+        }
+    }, [capture.phase, capture.error, capture.meeting]);
+
     // Automatic summary once a recording stops (after the first reviewed one).
     const autoRan = React.useRef(new Set<string>());
     const previousPhase = React.useRef(capture.phase);
@@ -431,7 +444,9 @@ export function MeetingWorkspace() {
     };
     // Bring the meeting into a fresh chat on Home, ready to discuss.
     const discussInChat = (target: Meeting) => {
-        const content = meetingMarkdown(target, locale, labels());
+        const full = meetingMarkdown(target, locale, labels());
+        // Very long meetings are trimmed so the composer stays fast; the summary and notes come first.
+        const content = full.length > 60_000 ? `${full.slice(0, 60_000)}\n…(${t('meeting.ui.trimmed')})` : full;
         setOpen(false);
         useSessionTabsStore.getState().cancelNewTab();
         useUIStore.getState().closeMainSurfaces();
@@ -470,6 +485,14 @@ export function MeetingWorkspace() {
                 <span className="min-w-0 truncate text-[12px] text-foreground" title={captureError}>{captureError}</span>
                 <Button size="xs" variant="ghost" onClick={() => openWorkspace(capture.meeting)}>{t('meeting.ui.open')}</Button>
                 <button type="button" aria-label={t('meeting.ui.dismiss')} onClick={() => setPillDismissed(true)} className="oc-press flex size-6 items-center justify-center rounded-full text-muted-foreground hover:bg-interactive-hover"><Icon name="close" className="size-3.5" /></button>
+            </div>;
+        }
+        if (justSaved && !autoSummary) {
+            const saved = justSaved;
+            return <div className={cn(pillClass, 'gap-2 border-emerald-500/30 py-1.5 pl-2.5 pr-1.5')}>
+                <span className="oc-saved-tick flex size-5 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400"><Icon name="check" className="size-3.5" /></span>
+                <span className="text-[12.5px] text-foreground">{t('meeting.ui.savedPill', { count: saved.segments.length })}</span>
+                <Button size="xs" variant="ghost" onClick={() => { setJustSaved(null); setSelected(saved); setTab('transcript'); setOpen(true); }}>{t('meeting.ui.open')}</Button>
             </div>;
         }
         if (autoSummary) {

@@ -71,6 +71,30 @@ const installAutoHideScrollbars = () => {
 
 export const MainLayout: React.FC = () => {
     React.useEffect(() => installAutoHideScrollbars(), []);
+    // A soft fade each time the main view changes (chat ↔ chat, chat ↔ Home,
+    // surfaces). Opacity only, so fixed popovers inside never shift.
+    const mainViewRef = React.useRef<HTMLElement | null>(null);
+    React.useEffect(() => {
+        const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        if (reduce) return;
+        let animation: Animation | null = null;
+        const play = () => {
+            const node = mainViewRef.current;
+            if (!node?.animate) return;
+            animation?.cancel();
+            animation = node.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 200, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+        };
+        const viewKey = () => {
+            const session = useSessionUIStore.getState();
+            const ui = useUIStore.getState();
+            return `${session.currentSessionId ?? 'home'}|${ui.isChatGPTPageOpen}|${ui.isMusePageOpen}|${ui.isClaudePageOpen}`;
+        };
+        let last = viewKey();
+        const check = () => { const next = viewKey(); if (next !== last) { last = next; play(); } };
+        const offSession = useSessionUIStore.subscribe(check);
+        const offUi = useUIStore.subscribe(check);
+        return () => { offSession(); offUi(); animation?.cancel(); };
+    }, []);
     // Every launch opens on Home. A session restored during startup (before the
     // user has clicked or typed anything) is swapped for Home; tabs stay intact.
     React.useEffect(() => {
@@ -199,7 +223,7 @@ export const MainLayout: React.FC = () => {
                                         work-status panel measures this rather than the chat,
                                         which the context panel animates. */}
                                     <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden" data-page-scroll-lock="true" data-chat-area="true">
-                                        <main className="flex-1 overflow-hidden bg-background relative" data-page-scroll-lock="true">
+                                        <main ref={mainViewRef} className="flex-1 overflow-hidden bg-background relative" data-page-scroll-lock="true">
                                             <div className={cn('absolute inset-0', isSurfacePageOpen && 'invisible')}>
                                                 <ErrorBoundary><ChatView active={!isSettingsDialogOpen && !isSurfacePageOpen} /></ErrorBoundary>
                                             </div>

@@ -1,6 +1,8 @@
 /** Strings for this fork's small additions (OpenRouter balance badge, Scheduled section in the sidebar).
  * Balance status/setup and sidebar headings are localized; other legacy strings use English. */
 const en = {
+  'meeting.ui.savedPill': 'Meeting saved · {count} lines transcribed',
+  'meeting.ui.trimmed': 'transcript trimmed for length; the full version is in Meeting notes',
   'meeting.ui.actionItems': '{count} action items in this summary',
   'meeting.ui.addTasks': 'Add to To-Do',
   'meeting.ui.tasksAdded': 'Added {count} to To-Do',

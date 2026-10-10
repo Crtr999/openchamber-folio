@@ -84,7 +84,9 @@ export function MeetingReminders() {
         if (prompt && now - Date.parse(prompt.start) > GRACE_MS * 2) setPrompt(null);
     }, [now, prompt]);
 
-    if (!enabled || !prompt) return null;
+    // Once a recording is running the question is answered.
+    const recording = !['idle', 'error'].includes(meetingCapture.getSnapshot().phase);
+    if (!enabled || !prompt || recording) return null;
     const start = Date.parse(prompt.start);
     const minutes = Math.round((start - now) / 60_000);
     const when = minutes > 0 ? t('meeting.reminder.startsIn', { minutes }) : minutes === 0 ? t('meeting.reminder.startingNow') : t('meeting.reminder.started', { minutes: -minutes });

@@ -68,8 +68,18 @@ export const HomeTaskBoard: React.FC<BoardProps> = ({ board, disabled, pendingPa
     React.useEffect(() => {
         const completed = previousPending.current;
         previousPending.current = pendingPage;
-        if (!completed || pendingPage || document.activeElement !== document.body) return;
+        if (!completed || pendingPage) return;
         const card = [...(boardRef.current?.querySelectorAll<HTMLElement>('[data-home-task]') ?? [])].find((item) => item.dataset.homeTask === completed);
+        // A small reward when a task lands: a pop, and a green glow when it is done.
+        if (card) {
+            const column = card.closest<HTMLElement>('[data-home-status]')?.dataset.homeStatus ?? '';
+            const cls = /done|complete|finish|archiv/i.test(column) ? 'oc-task-done' : 'oc-task-landed';
+            card.classList.remove('oc-task-done', 'oc-task-landed');
+            void card.offsetWidth;
+            card.classList.add(cls);
+            window.setTimeout(() => card.classList.remove(cls), 900);
+        }
+        if (document.activeElement !== document.body) return;
         card?.querySelector<HTMLButtonElement>('[data-home-task-move]')?.focus();
     }, [pendingPage]);
     const sensors = useSensors(useSensor(MouseSensor, { activationConstraint: { distance: 8 } }), useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }));

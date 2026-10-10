@@ -2137,3 +2137,46 @@ html.desktop-runtime .markdown-content [data-openchamber-file-link="true"] {
 /* Home never shows a scrollbar (it still scrolls). */
 .oc-home-content, .oc-home-content[data-oc-scrolling] { scrollbar-width: none !important; scrollbar-gutter: auto !important; }
 .oc-home-content::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+
+/* ── Open Carter 1.0 finish: firm presses, springy popups, rewarding moments ── */
+/* Every button presses in. `scale` (not transform) so Tailwind translates and
+   drag transforms are untouched. */
+:where(button, [role="button"], [data-slot="button"], a[href]):not(:disabled):not([aria-disabled="true"]) {
+  transition-property: color, background-color, border-color, opacity, box-shadow, scale;
+  transition-duration: 120ms;
+  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+:where(button, [role="button"], [data-slot="button"]):not(:disabled):not([aria-disabled="true"]):not([role="option"]):not([data-session-row] *):not(.oc-palette-row):active { scale: 0.96; transition-duration: 60ms; }
+:where([data-slot="button"]):focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-base, #e8a54b) 55%, transparent); }
+
+/* Dialogs settle with a slight spring. */
+[data-slot="dialog-content"] { transition-timing-function: cubic-bezier(0.2, 0.9, 0.25, 1.12) !important; transition-duration: 200ms !important; }
+[data-slot="dialog-content"][data-starting-style] { scale: 0.96; translate: 0 6px; }
+[data-slot="dialog-content"][data-ending-style] { scale: 0.98; transition-duration: 120ms !important; }
+
+/* Menus and popovers pop instead of appearing. */
+[data-slot="dropdown-menu-content"], [role="menu"] { transform-origin: var(--transform-origin, top left); }
+[data-slot="dropdown-menu-content"][data-starting-style], [role="menu"][data-starting-style] { opacity: 0; scale: 0.96; }
+
+/* Tasks: a pop when a card lands, and a green glow when it is done. */
+@keyframes oc-task-land { 0% { scale: 0.94; } 60% { scale: 1.03; } 100% { scale: 1; } }
+@keyframes oc-task-glow {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, #22c55e 55%, transparent); }
+  100% { box-shadow: 0 0 0 10px color-mix(in srgb, #22c55e 0%, transparent); }
+}
+.oc-task-landed { animation: oc-task-land 320ms cubic-bezier(0.2, 0.9, 0.3, 1.3); }
+.oc-task-done { animation: oc-task-land 360ms cubic-bezier(0.2, 0.9, 0.3, 1.3), oc-task-glow 700ms ease-out; border-radius: 10px; }
+
+/* Checkboxes snap when ticked. */
+@keyframes oc-check-pop { 0% { scale: 0.7; } 60% { scale: 1.18; } 100% { scale: 1; } }
+[data-checked] > svg, [data-checked] > span > svg { animation: oc-check-pop 220ms cubic-bezier(0.2, 0.9, 0.3, 1.4); }
+
+/* The meeting "saved" moment. */
+@keyframes oc-saved-tick { 0% { scale: 0; rotate: -30deg; } 70% { scale: 1.25; rotate: 0deg; } 100% { scale: 1; } }
+.oc-saved-tick { animation: oc-saved-tick 380ms cubic-bezier(0.2, 0.9, 0.3, 1.4) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  :where(button, [role="button"], [data-slot="button"]):active { scale: none !important; }
+  [data-slot="dialog-content"][data-starting-style] { scale: none; translate: none; }
+  .oc-task-landed, .oc-task-done, .oc-saved-tick, [data-checked] > svg, [data-checked] > span > svg { animation: none !important; }
+}
