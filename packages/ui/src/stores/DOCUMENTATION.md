@@ -15,7 +15,7 @@ switches clear these fields, not the isolated Chromium login partition. Claude
 owns account history and subscription data; none is copied into native sessions.
 
 The header shares `session-tabs-store` order for session IDs and the singleton IDs
-`website:chatgpt`, `website:muse`, `website:claude`. Website IDs render only in local
+`website:chatgpt`, `website:claude`. Website IDs render only in local
 Electron and never multiply for website history or saved pages. Closing removes
 only the tab and resumes a neighbour, or opens a draft when no neighbour exists.
 It never archives, deletes or creates a session. Unknown IDs stay stored but hidden
@@ -138,8 +138,6 @@ Examples:
 - `useUpdateStore.ts`
 
 These stores coordinate visible app state, navigation, selected context-panel tabs, dialogs, and lightweight feature flags. `useUIStore.activeSurface` selects the primary mobile view and the few desktop views that are promoted out of the context panel. It is not a desktop tab selection. Linear panel list filters (status, assignee, team, priority) live here too: the Linear rail surface remounts on switch, so those filters restore from this store rather than component state. `resetLinearIssueListFilters` restores those four defaults together; search stays local to the rail. The team filter is the one that is not a plain preference: a Linear team belongs to one workspace, and each OpenChamber instance has its own Linear login, so it is persisted per instance in `linearIssueListTeamIdByRuntime` and the flat `linearIssueListTeamId` is derived from it by `applyLinearIssueListFiltersForRuntime` — on an instance switch and when the rail mounts, since rehydration can run before the runtime endpoint is known. Carried across, a team id filters the new instance's list down to nothing. `linearIssueFocus` is a one-shot identifier so work-status can open a specific issue in that panel; it is not persisted.
-
-`useMuseStore` owns explicit Muse navigation/reload requests with monotonic identities, live page metadata and locally saved page links. Opening without a request preserves the retained website. Only explicitly pinned, observed exact-origin URLs without credentials, queries or fragments enter the validated `open-carter.muse.saved-pages.v1` snapshot. Opening a saved page requires membership in that snapshot. Runtime reset clears pending requests and live metadata, not saved links or Chromium login storage. The standalone website owns account history, memory and conversations; the store never infers chat IDs or reads message bodies. The views documentation owns the unavailable-history fallback and persistence behavior. Legacy local Muse pin storage is left untouched and is not migrated into observed links.
 
 Context-panel session chats mount only the active chat iframe. After installing
 its message listener, the iframe requests its authoritative visibility from the

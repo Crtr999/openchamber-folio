@@ -85,7 +85,7 @@ const WidgetColumns: React.FC<{ section: HomeLayoutSection; widgets: Widgets; dr
 const HomeWidget: React.FC<{ item: HomeLayoutItem; section: string; widget: Widgets[HomeLayoutItem['id']]; onResize: () => void }> = ({ item, section, widget, onResize }) => {
     const { t } = useI18n();
     const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: item.id, data: { kind: 'widget', section, column: item.column } });
-    return <div ref={setNodeRef} data-home-widget={item.id} style={{ transform: CSS.Translate.toString(transform), transition }} className={cn('oc-home-card', item.wide && 'oc-home-wide', isDragging && 'oc-home-dragging')}>
+    return <div ref={setNodeRef} data-home-widget={item.id} style={{ transform: CSS.Translate.toString(transform), transition: isDragging ? 'none' : transition }} className={cn('oc-home-card', item.wide && 'oc-home-wide', isDragging && 'oc-home-dragging')}>
         <div className="oc-home-widget-controls">
             <Button type="button" ref={setActivatorNodeRef} variant="ghost" size="icon" {...attributes} {...listeners}
                 className="size-6 touch-none select-none cursor-grab text-muted-foreground active:cursor-grabbing"

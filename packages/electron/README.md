@@ -28,6 +28,11 @@ window options live in `early-startup.mjs` so the early window and any later
 main window are built from one definition; both bundles import that module at
 runtime rather than inlining it, or the handoff would see two copies.
 
+The early splash and the shared HTML fallback use the same 64px mark and three
+quiet loading dots. Their opacity animation stops in under five seconds and is
+disabled under reduced motion. Both keep the saved theme colours; there is no
+minimum splash duration and the visual treatment does not delay startup.
+
 Login-shell environment discovery starts as soon as `main.mjs` runs and
 proceeds asynchronously, so shell startup files run while the window comes up.
 Startup callers share one probe and await its result before reading
@@ -82,6 +87,8 @@ IPC results if its endpoint changes while the read is pending.
 | `startup-url-selection.mjs` | Pure bundled/HMR startup probe and loopback connection-limit policy |
 | `shell-environment.mjs` | Asynchronous login-shell environment discovery and shared one-shot probe |
 | `preload.mjs` | Safe bridge from the rendered UI to Electron IPC |
+| `local-team-bridge.mjs` | Strict team-action input parsing and stable unavailable responses; callers must first pass the trusted local main-frame gate |
+| `desktop_personal_teaching` / `desktop_teaching_skill` | Local-main-frame-only CarterBot recording, replay, model-selected skill drafting, reviewed installation and real test-chat dispatch. The web-owned broker reads global MCP connection settings; the `open-carter-teaching` guest gets only an ephemeral HttpOnly cookie and no native privileges. Drafts stay under userData/private-teaching. Capture cleanup and compiler cancellation run on close, runtime change and normal quit. See the personal-workspace documentation for approvals and failure behavior. |
 | `ssh-manager.mjs` | SSH host import, connection lifecycle, tunnel/port forwarding helpers |
 | `scripts/electron-dev.mjs` | Desktop dev launcher with Vite HMR support |
 | `scripts/ensure-electron.mjs` | Verifies the installed Electron binary is complete and repairs it via the postinstall under Bun |
@@ -232,6 +239,10 @@ Use an explicit override when testing a different OpenCode CLI build or when a u
 | `OPENCHAMBER_DESKTOP_USER_DATA_DIR` | Test hook used by `profile:startup`: moves the Electron profile (single-instance lock, Chromium caches) so a measured launch does not share it with the installed app |
 | `OPENCODE_HOST` / `OPENCODE_PORT` / `OPENCODE_SKIP_START` | Connect Desktop to an external OpenCode server instead of starting one locally |
 
+Packaged launches using `OPENCHAMBER_DESKTOP_USER_DATA_DIR` skip automatic
+login-item registration. An isolated QA bundle must not replace the installed
+app's login item or change its opt-out.
+
 ## Native Features Owned Here
 
 - Floating Mini Chat windows.
@@ -270,9 +281,9 @@ Use an explicit override when testing a different OpenCode CLI build or when a u
 
 ### Isolated personal websites
 
-Muse and Claude use separate durable sessions, `persist:open-carter-muse` and
-`persist:open-carter-claude`. `website-guest-security.mjs` denies permission
-requests, permission checks and device access on both. Main checks attachment
+Claude uses a separate durable session, `persist:open-carter-claude`.
+`website-guest-security.mjs` denies permission
+requests, permission checks and device access on it. Main checks attachment
 before guest creation, including the early splash window: the parent must be
 trusted local application content using the local API runtime, and the initial
 source must match the partition's exact official HTTPS origin. Remote parents
@@ -391,6 +402,28 @@ bun run lint
 
 ## Personal homepage
 
+Home's task widget also offers AI Tasks, separate from Daily To-Do. The user can
+create a private database with the required workflow or connect an existing one.
+Creation does not enable execution. Setup separately opts into sending task
+descriptions to the configured OpenCode model and final answers back to Notion.
+The coordinator checks every 15 minutes while the desktop app runs. It starts
+one Ready for AI card at a time, records the chat before dispatch, and saves the
+answer into the original card before marking Done. It never enrolls permission
+auto-accept. Each card selects an existing project folder and runs under its
+model and manager, with normal approvals. Only a validated read-only Explore
+profile can be delegated to in this first slice; wider specialists stay denied.
+Run details retain pre-chat failures, results, and real parent/child chat links.
+Needs you records failed or blocked answers. Pausing stops pickups, not existing
+chat completion. The tracking file and encrypted connection stay local.
+The in-process web server owns the coordinator and drains it on shutdown;
+durable claims and result markers recover on reopening. No cloud deployment or
+Notion credential transfer occurs automatically.
+An ambiguous database creation requires checking Notion and pasting its URL,
+never automatically creating another database. See
+`packages/web/server/lib/ai-tasks/DOCUMENTATION.md` for dispatch and writeback rules.
+Web, remote desktop, VS Code, hosted mobile and Capacitor have no native board
+controls. Enterprise mode blocks both setup and every Notion request.
+
 Home widgets fill the available workspace. Each column stacks its widgets independently so a tall board does not leave holes beneath shorter widgets. Handles reorder within or across columns with mouse, touch or keyboard. Drag the divider between adjacent columns to adjust their widths continuously. Focus the divider and use Left/Right, Shift for larger steps, or Home/End to reach the limits. Escape cancels an active resize. Columns keep a 240px minimum and stack below 640px of dashboard space. Full width / Column width changes each widget span. Order, spans and fractional width preferences persist locally in `openchamber.personalHome.layout.v2`; existing v1 and v2 layouts migrate to equal columns without changing order or spans. Resize previews stay in memory until released; a failed save leaves the on-screen layout usable and shows an error. Reset layout restores the initial arrangement. This presentation setting does not move Notion pages or events. Hosted MCP update arguments follow its advertised `data` wrapper, and page links normalize to IDs before writes. Calendar accepts ISO times with or without fractional seconds, and the event picker displays calendar names.
 
 Desktop draft mode displays a landscape, live work, recent chats and native personal panels. Existing project/session/rules navigation stays in the sidebar; selecting or sending a chat returns to the ordinary chat workspace. Mobile and VS Code retain the compact draft.
@@ -412,8 +445,6 @@ The shared chat transcript keeps a solid top edge beneath the header and retains
 The personal ChatGPT workspace uses the existing signed-in browser partition. Integrated mode hides the website sidebar and mirrors its loaded conversation/project navigation under the optional ChatGPT website history folder. The website still owns Chat/Work, messages, models, plugins and memory. Full ChatGPT restores the website sidebar. Local pins and chat tabs belong to Open Carter. The DOM adapter is restricted to the exact ChatGPT HTTPS origin and reads navigation metadata without cookies, tokens or application stores. It introduces no IPC, provider API connection or OpenCode context export. Native page isolation and permissions are unchanged. No ChatGPT quota badge or badge-owned polling runs in the header.
 
 Home’s ChatGPT choice uses the normal OpenCode session UI through `lib/chatgpt/native.ts`; see the session sidebar documentation for its dedicated project contract. The website workspace remains a separate full-history option.
-
-Muse appears beside ChatGPT only in local Electron windows. It opens the complete standalone `https://muse.ai/` website in `persist:open-carter-muse`, separate from ChatGPT's cookies. The website owns account memory, goals, history and artifacts. The expandable Muse folder contains a resume action and explicitly pinned website pages using observed exact-origin URL/title metadata. Queries, fragments and credentials cannot be saved. No DOM adapter, account-history mirror or native model substitution runs. Selecting Muse again retains the current page and draft; Full Muse focuses that complete website without reloading it. Popup links stay in the existing webview through the main-process handler. Existing OpenCode projects and provider configuration remain untouched. The view explains that account-history mirroring is unverified. The browser controller's partition guard prevents it from inspecting the separately signed-in Muse guest.
 
 Home widgets follow the composer directly, with no starter-chip row or add button; saved starters remain intact for compact drafts.
 

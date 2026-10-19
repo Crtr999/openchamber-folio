@@ -27,7 +27,9 @@ All methods return promises except the warning snapshot:
   list rather than yielding partial success.
 - `start(id)`, `pause(id)`, `resume(id)` and `stop(id)` return the updated record.
   Only one meeting can record or pause at a time. Closed states are `stopped`
-  and `interrupted`. Closed meetings cannot restart.
+  and `interrupted`. `start(id)` also reopens a closed meeting (for example after
+  a quit, sleep or crash): it returns to `recording`, keeps all saved text and
+  notes, and new chunks must start after the last saved text of the same source.
 - `transcribeChunk(id, {source, startMs, endMs, pcm16k})` returns the updated
   record. `source` is `microphone` or `system`. `pcm16k` is a normalized number
   array or Float32Array containing mono 16 kHz samples, at most 90 seconds.

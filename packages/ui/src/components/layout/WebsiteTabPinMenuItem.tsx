@@ -3,7 +3,6 @@ import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { isChatGPTChatPath } from '@/lib/chatgpt/website';
 import { useChatGPTStore } from '@/stores/useChatGPTStore';
-import { useMuseStore } from '@/stores/useMuseStore';
 import { useClaudeStore } from '@/stores/useClaudeStore';
 import type { SessionTabMenuComponents } from './SessionTabsStrip';
 
@@ -40,14 +39,6 @@ function SavedPagePinMenuItem({ Item, pageUrl, pageTitle, savedPages, toggleSave
   </Item>;
 }
 
-function MusePinMenuItem({ Item }: ItemProps) {
-  const state = useMuseStore();
-  return <SavedPagePinMenuItem Item={Item} {...state} toggleSavedPage={() => {
-    const current = useMuseStore.getState();
-    if (current.pageUrl === state.pageUrl && current.pageTitle === state.pageTitle) current.toggleSavedPage();
-  }} />;
-}
-
 function ClaudePinMenuItem({ Item }: ItemProps) {
   const state = useClaudeStore();
   return <SavedPagePinMenuItem Item={Item} {...state} toggleSavedPage={() => {
@@ -58,7 +49,6 @@ function ClaudePinMenuItem({ Item }: ItemProps) {
 
 export function WebsiteTabPinMenuItem({ tabId, Item }: ItemProps & { tabId: string }) {
   if (tabId === 'website:chatgpt') return <ChatGPTPinMenuItem Item={Item} />;
-  if (tabId === 'website:muse') return <MusePinMenuItem Item={Item} />;
   if (tabId === 'website:claude') return <ClaudePinMenuItem Item={Item} />;
   return null;
 }

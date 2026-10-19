@@ -136,7 +136,8 @@ environment:
 ### Neler değişir
 
 - Model sağlayıcıları yalnızca OpenCode yapılandırmanızdan gelir. OpenChamber'da sağlayıcı bağlamak, bir sağlayıcıda oturum açmak, anahtar eklemek ya da özel sağlayıcı oluşturmak kapalıdır; var olan hesapları kaldırmak veya aralarında geçiş yapmak çalışmaya devam eder. Bu yalnızca uygulama üzerinden girişi kapatır; asıl kilit aşağıda anlatılan OpenCode politikasıdır.
-- **Notion / Home:** Kuruluşunuzun politikası Notion’ı engelliyor.
+- **Notion / Home:** Kuruluşunuzun politikası Notion’ı, yapay zekâ görevlerinin başlatılmasını ve sonuçların kaydedilmesini engelliyor.
+- **CarterBot:** Kayıt, oynatma, beceri oluşturma, yükleme ve testler devre dışıdır. Mevcut bir kayıt durdurulabilir.
 - Toplantı özetleri, onay verilse bile kapalıdır. Masaüstünde toplantı kaydı, yerel yazıya dökme ve özel yerel notlar kullanılabilir.
 - Yerel sağlayıcı faturalandırma yenilemesi, yeni faturalandırma anahtarları, yönetim oturumu açma ve abonelik bağlama kapalıdır. Önceden alınan tutarlar eski bilgi olarak korunur, sıfıra dönüştürülmez.
 - [Sınıflandırma sağlayıcıları (Jev)](/classification-providers/) kapalı kalır; birinin Ayarlar'a yazdığı özel bir uç nokta da buna dahildir. Güvenlik ağı ve Auto sunulmaz, oturumlar da yalnızca elle devam edenlere geçer. Jev'i kendi altyapınız üzerinden kullanmak için politika dosyasındaki `jev` ile ya da `OPENCHAMBER_JEV_URL` ile bir uç nokta sabitleyin (ayrıca `OPENCHAMBER_JEV_MODEL` ve gerekiyorsa `OPENCHAMBER_JEV_API_KEY`). Bu uç nokta varsayılan olur, yine de kapatılabilir ve başka bir şey seçilemez.

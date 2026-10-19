@@ -1,5 +1,4 @@
 import { chatgptI18n } from './chatgpt.i18n';
-import { museI18n } from './muse.i18n';
 import { claudeI18n } from './claude.i18n';
 import { meetingsI18n } from './meetings.i18n';
 import { homeI18n } from './home.i18n';
@@ -25,7 +24,6 @@ export const dict = {
   ...personalWorkspaceI18n.tr,
   'workspace.officePreview': 'Yalnızca metin ve gömülü görüntüler. Özgün düzen, grafikler, animasyonlar ve canlı hesaplamalar gösterilmez.',
   ...chatgptI18n['tr'],
-  ...museI18n.tr,
   ...claudeI18n.tr,
   ...meetingsI18n.tr,
   'meeting.quickStart': 'Toplantı başlat',
@@ -2423,6 +2421,7 @@ export const dict = {
   'chat.chatInput.toast.largeTextPaste.inline': 'Satır içi yapıştır',
   'chat.chatInput.toast.addedFileMentions': '{count} dosya bahsi eklendi',
   'chat.chatInput.toast.attachFileFailed': 'Dosya eklenemedi',
+  'chat.chatInput.toast.processingVideo': 'Video işleniyor…',
   'chat.chatInput.toast.attachNamedFailed': '{name} eklenemedi',
   'chat.chatInput.toast.unsupportedAttachmentModalities': '{model}, {files} için gereken {modalities} girişini desteklemiyor. Mesajı yine de gönderebilirsiniz ancak bu ekler yok sayılabilir.',
   'chat.chatInput.toast.someFilesSkipped': 'Bazı dosyalar atlandı:\\n{summary}',

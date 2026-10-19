@@ -113,6 +113,25 @@ describe('private local meetings', () => {
     expect((await fixture.service.get(meeting.id)).segments).toEqual(result.segments);
   });
 
+  it('reopens an interrupted or stopped meeting and appends to the saved transcript', async () => {
+    const fixture = await setup();
+    const meeting = await recording(fixture);
+    await fixture.service.chunk(meeting.id, chunk('microphone', 0));
+    const interrupted = await fixture.service.interrupt({ id: meeting.id, reason: 'quit' });
+    expect(interrupted.status).toBe('interrupted');
+    const resumed = await fixture.service.start(meeting.id);
+    expect(resumed.status).toBe('recording');
+    expect(resumed.interruptionReason).toBeNull();
+    // The timeline continues after the saved text; earlier time is rejected.
+    await expect(fixture.service.chunk(meeting.id, chunk('microphone', 0))).rejects.toMatchObject({ code: 'invalid_audio' });
+    const appended = await fixture.service.chunk(meeting.id, chunk('microphone', 5000));
+    expect(appended.segments).toHaveLength(2);
+    expect((await fixture.service.stop(meeting.id)).status).toBe('stopped');
+    expect((await fixture.service.start(meeting.id)).status).toBe('recording');
+    expect((await fixture.service.get(meeting.id)).segments).toHaveLength(2);
+    await fixture.service.dispose();
+  });
+
   it('does not download or use hosted STT when a local model is missing', async () => {
     const fixture = await setup({ installed: false });
     const meeting = await fixture.service.create();

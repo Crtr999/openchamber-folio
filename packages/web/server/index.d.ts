@@ -1,9 +1,12 @@
 import type { Express } from "express";
 import type { Server } from "http";
+import type { AiTaskConnection, AiTaskCoordinator, TeamConnection, TeamRuntime } from './lib/ai-tasks/runtime.js';
 
 export interface WebUiServerController {
   expressApp: Express;
   httpServer: Server;
+  getAiTasks: () => AiTaskCoordinator | null;
+  getTeam: () => TeamRuntime | null;
   getPort: () => number | null;
   getOpenCodePort: () => number | null;
   isReady: () => boolean;
@@ -35,6 +38,10 @@ export interface StartWebUiServerOptions {
   desktopUpdater?: DesktopUpdater;
   /** App-owned built-in resources outside Electron's ASAR archive. */
   builtInExtensionsDir?: string;
+  /** Optional host-approved Notion adapter. No credential transfer is performed. */
+  aiTaskConnection?: AiTaskConnection;
+  /** Optional trusted local host team state and native demand observer. No HTTP controls are installed. */
+  teamConnection?: TeamConnection;
 }
 
 export declare function startWebUiServer(

@@ -17,9 +17,13 @@ an unused or pending grant; resume does not revive it.
 The worklet mixes channels to mono and averages into 16 kHz PCM off the renderer
 thread. Each source has a 10-second bounded buffer and is cut at the first
 half-second pause once it holds three seconds, so text arrives phrase by phrase.
-Chunks with no sound are never sent. Up to eight chunks, including the one being
+Chunks with no sound are never sent. Up to thirty chunks, including the one being
 transcribed, may be pending. Transcription is serial with a 120-second deadline.
-Backpressure fails visibly rather than dropping chunks or growing memory. A
+A phrase that fails to transcribe is skipped and counted, and recording
+continues; three failures in a row, a fatal native state, or a 30-chunk backlog
+fail visibly rather than silently losing audio or growing memory. Closing the
+window to the tray does not end a recording, and an active recording holds an
+app-suspension power blocker so a hidden window is not throttled. A
 device-list change such as headphones connecting is not a failure; an ended
 track or processor error is. Failures carry a short content-free reason beside
 the generic message. Pause and normal stop flush the worklet tail and drain chunks
@@ -56,8 +60,10 @@ and dialog dismissal. Explicit Save writes only that meeting. Runtime switching
 clears local drafts and selection. Authoritative read failure keeps the prior
 list; damaged-record warnings mark partial results, including an all-damaged
 list. Source labels are localized from source codes, never presented as speakers.
-Stopped and interrupted recordings are closed; another recording needs a new
-meeting.
+Stopped and interrupted recordings can be resumed with Resume transcribing, which
+appends to the same transcript. The capture timeline starts at the end of the
+saved text. Shortly after launch, a recording that ended unexpectedly in the last
+six hours is offered back once from a pill; dismissing it is remembered.
 
 Summary discovery runs only after a click on a closed meeting. No-model prepare
 lists configured provider choices without uploading content. Choosing a model

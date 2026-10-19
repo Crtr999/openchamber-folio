@@ -1,5 +1,5 @@
+import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
-import { museI18n } from './muse.i18n';
 import { claudeI18n } from './claude.i18n';
 import { meetingsI18n } from './meetings.i18n';
 import { homeI18n } from './home.i18n';
@@ -23,10 +23,10 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...friendsI18n['zh-TW'],
   ...personalWorkspaceI18n['zh-TW'],
   'workspace.officePreview': '僅顯示文字及嵌入影像，不呈現原始版面配置、圖表、動畫或即時計算。',
   ...chatgptI18n['zh-TW'],
-  ...museI18n['zh-TW'],
   ...claudeI18n['zh-TW'],
   ...meetingsI18n['zh-TW'],
   'meeting.quickStart': '開始會議',
@@ -2461,6 +2461,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.chatInput.toast.largeTextPaste.inline': '直接貼上',
   'chat.chatInput.toast.addedFileMentions': '已加入 {count} 個檔案提及',
   'chat.chatInput.toast.attachFileFailed': '附加檔案失敗',
+  'chat.chatInput.toast.processingVideo': '正在處理影片…',
   'chat.chatInput.toast.attachNamedFailed': '附加 {name} 失敗',
   'chat.chatInput.toast.unsupportedAttachmentModalities': '{model} 不支援 {files} 所需的 {modalities} 輸入。你仍可傳送訊息，但這些附件可能會被忽略。',
   'chat.chatInput.toast.someFilesSkipped': '部分檔案被跳過：\n{summary}',

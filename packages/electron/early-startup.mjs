@@ -276,14 +276,30 @@ const buildStartupSplashHtml = () => {
       .stack {
         display: grid;
         justify-items: center;
+        gap: 20px;
         /* The window is on screen in the theme colour before this document
-           paints; the logo eases in over the same 0.3s the application's own
-           splash takes to ease out. */
-        animation: splash-logo-in 0.3s ease-out both;
+           paints; the logo uses the same short fade as the HTML fallback. */
+        animation: splash-logo-in 0.18s ease-out both;
+      }
+      .stack > svg { width: 64px; height: 64px; }
+      .startup-progress { display: flex; gap: 5px; }
+      .startup-progress > span {
+        width: 4px; height: 4px; border-radius: 50%;
+        background: var(--splash-stroke); opacity: 0.45;
+        animation: startup-dot 1.1s ease-in-out 4;
+      }
+      .startup-progress > span:nth-child(2) { animation-delay: 0.12s; }
+      .startup-progress > span:nth-child(3) { animation-delay: 0.24s; }
+      @keyframes startup-dot {
+        0%, 100% { opacity: 0.3; }
+        45% { opacity: 0.85; }
       }
       @keyframes splash-logo-in {
         from { opacity: 0; }
         to { opacity: 1; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .stack, .startup-progress > span { animation: none; }
       }
     </style>
   </head>
@@ -330,6 +346,7 @@ const buildStartupSplashHtml = () => {
           <path d="M-8 -4 L8 -4 L8 12 L-8 12 Z" fill="var(--splash-logo-fill)" fill-opacity="0.4"/>
         </g>
       </svg>
+      <div class="startup-progress" aria-hidden="true"><span></span><span></span><span></span></div>
     </div>
   </body>
   </html>`;

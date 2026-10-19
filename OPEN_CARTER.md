@@ -8,6 +8,33 @@ The personal Home dashboard combines running work, pinned/recent chats, projects
 
 Daily habits can be checked off through the existing Notion integration. Weekday habit scheduling and an in-app habit-list editor were deferred by Carter. Inspect the current implementation rather than promising those features.
 
+Home no longer mounts the ChatGPT task card or its focus-triggered reads.
+The retained read-only automation reader reads ChatGPT/Codex automations from
+`~/.codex/automations/<id>/automation.toml` and shows each job's name, its
+human schedule in the Mac's local zone, its ACTIVE/PAUSED status and its thread
+id. `packages/electron/chatgpt-automations.mjs` owns the read (strict flat-TOML
+reader, zod validation, rrule summary, deterministic sort) and returns
+`{ rows, readAt, partial, skipped, error? }` through the existing
+`desktop_personal_home` channel and `chatgpt-automations-list` action, behind the
+same trusted-local main-frame gate as the team bridge. `packages/ui/src/lib/personal-home.ts`
+is the client and `packages/ui/src/components/chat/HomeChatGPTTasks.tsx` the card.
+
+Open Carter never creates, edits, pauses, resumes, deletes or runs one of these
+jobs, never writes under `~/.codex`, and never turns an external row into a local
+schedule. ChatGPT ids stay `providerJobId`/`providerThreadId` and are never
+merged with local project/task ids. No thread URL is derived because no ChatGPT
+thread link scheme has been verified. An uncomputable next run displays as
+unknown; unreadable files make the read partial rather than empty; a failed read
+keeps the last good rows beside the error in the retained card component. This
+component is not part of Home. See `packages/ui/src/components/views/account-integration-findings.md`
+for what this feed does and does not prove.
+
+The jobs themselves are executed by the ChatGPT desktop app's own scheduler, not
+by Open Carter. When that app is closed, ChatGPT reports the Mac as offline;
+Open Carter never emits that message and nothing here depends on the jobs
+running — the reader only mirrors the files. If the jobs must fire, keep the
+ChatGPT app running (it is not currently set to open at login).
+
 Meeting recording starts from Home, the search palette ("Start meeting notes") or a calendar event in the trusted local desktop window. The workspace is a Notion-style meeting-notes page (meeting list, Summary/Notes/Transcript tabs, autosaved notes) and a floating bottom pill shows the timer, live level, pause and stop while recording. After the first reviewed summary, the chosen model and its transcript-only disclosure are remembered (`open-carter:meeting-summary-model`/`-ack`), and later recordings summarize automatically on stop through the same prepare/approval-token/generate flow; "Change model" forgets it. Inspect `packages/ui/src/lib/meetings/DOCUMENTATION.md`, `packages/electron/meeting-boundary.mjs` and `packages/web/server/lib/meetings/DOCUMENTATION.md` for consent, capture lifecycle, private local transcripts/notes and deliberate transcript-only summary approval. System audio is an Electron capture candidate, not verified Teams/Zoom or headphone compatibility. iPhone call recording is unsupported. Meeting transcripts are separate from chats and are not automatically uploaded, searched or exported. Calendar and Notion reminders were not added by the meeting implementation.
 
 Chat search opens from the left sidebar or its existing search shortcut, loads results as Carter types, and leaves the app usable. Outside pointer clicks and Escape close the panel and cancel queued/in-flight reads. It uses the existing active-runtime global session scan, not website account history; project/date/model/attachment filters and the 200-result cap remain. See `packages/ui/src/components/layout/ChatSearchPanel.tsx`.
@@ -16,15 +43,18 @@ Project instructions and configuration can be edited from the Rules view, with r
 
 Native ChatGPT uses the standard OpenCode composer, session history, project controls, OpenAI models and reasoning effort. Start at `packages/ui/src/lib/chatgpt/native.ts`. There is no ChatGPT quota badge or badge-owned polling. Its ordinary chats are stored separately from the optional signed-in ChatGPT website wrapper. The website wrapper retains website history and account features; it has its own folder and tools. See `packages/ui/src/components/session/sidebar/shell/ChatGPTFolder.tsx` and `packages/ui/src/components/views/ChatGPTWorkspace.tsx`. Native chats do not sync into chatgpt.com or inherit its account memory. Claude Team integration remains future work.
 
-Muse opens the standalone `https://muse.ai/` website in one retained tab with its own persistent webview. Muse owns sign-in, memory, goals, history and artifacts. Its expandable sidebar folder contains Resume Muse and explicitly saved website pages. The pin button saves the observed exact-origin page URL and title locally, without query parameters, fragments, credentials or inferred chat IDs. Full Muse focuses the retained website without reloading the page or draft. Signed-in navigation remains unverified: these are local saved links, not mirrored account history, and the view says so. The browser controller uses another partition and cannot inspect Muse's signed-in guest. Start at `packages/ui/src/lib/muse/website.ts`, `packages/ui/src/stores/useMuseStore.ts` and `packages/ui/src/components/views/MuseWorkspace.tsx`. Existing OpenCode projects and provider configuration are not migrated or deleted.
-
-The optional Claude website opens `https://claude.ai/` in its own retained guest and `persist:open-carter-claude` sign-in partition. This uses the user's Claude website subscription, not Anthropic API billing or a native model connection. Claude owns its history and account features; signed-in DOM has not been verified, so no history adapter runs. Start at `packages/ui/src/components/views/ClaudeWorkspace.tsx` and `packages/ui/src/stores/useClaudeStore.ts`. Muse and Claude are local Electron only; `packages/electron/website-guest-security.mjs` enforces trusted local attachment, removes guest preload privileges and denies device permissions. Remote pages cannot use these account partitions.
+The optional Claude website opens `https://claude.ai/` in its own retained guest and `persist:open-carter-claude` sign-in partition. This uses the user's Claude website subscription, not Anthropic API billing or a native model connection. Claude owns its history and account features; signed-in DOM has not been verified, so no history adapter runs. Start at `packages/ui/src/components/views/ClaudeWorkspace.tsx` and `packages/ui/src/stores/useClaudeStore.ts`. Claude is local Electron only; `packages/electron/website-guest-security.mjs` enforces trusted local attachment, removes guest preload privileges and denies device permissions. Remote pages cannot use these account partitions.
 
 Header tabs behave like Notion tabs. `useSessionTabsStore` keeps the persisted tab list plus the focused tab; opening a chat or website anywhere replaces the focused tab in place (`navigateTab`), and only the + button, ⌘T, ⌘↵ in the palette, or a sidebar row's "Open in new tab" add a tab (`requestNewTab`). Home is not a tab: it highlights the Home button and keeps the focused tab for the next navigation. Tabs share the strip width (no edge fade) and scroll only past their minimum width. The + button opens `NotionSearchPalette` ("Open in new tab…"), which also replaces the sidebar search: instant title matches, streamed message-content matches with highlights, and a live preview pane; its filter button opens the older advanced `ChatSearchPanel`. Header tabs use the persisted `useSessionTabsStore` for open native sessions and singleton website tabs. Electron's version-22 UI preference migration enables the existing session-tabs option for this personal build; later explicit choices remain respected. Tab selection switches existing content without creating sessions. Home sits directly before the tabs; New session, Recent Sessions and phone-status header actions are omitted. Runtime switching retains remote context. The titlebar overlay keeps the sidebar toggle and OS controls. See `packages/ui/src/components/layout/Header.tsx`, `SessionTabsStrip.tsx` and `packages/ui/src/lib/sessionTabs.ts`.
 
 The right context rail's OpenRouter coin control uses the official native feed in `packages/electron/openrouter-credits.mjs` through `packages/ui/src/components/layout/OpenRouterBalanceBadge.tsx`. It opens remaining dollars and secure management-key setup, never a spending counter or token estimate. Its reader runs while the rail is mounted, including with the context pane closed; hiding the rail suspends it. There are no other provider balance readers or special credit-pool choosers. Provider connections and the normal native model/agent picker remain intact. Personal desktop features need explicit behavior for other runtimes; read the owning docs before editing them.
 
 ## Inspection and edits
+
+Home widget dragging disables CSS transitions on the actively dragged card so
+its transform follows pointer, touch and keyboard input directly. Other cards
+keep their sortable placement transitions. MainLayout does not fade the entire
+main view on chat or website navigation; content appears at full opacity when ready.
 
 The desktop titlebar spans the whole window above the sidebar and chat. It reserves
 only native window-control clearance and the measured sidebar-toggle footprint,
@@ -42,7 +72,7 @@ Meetings can be renamed inline (`desktop_meeting_rename` → `service.rename`). 
 
 ## Version 1.0 (final)
 
-Open Carter 1.0 is the finished personal build; changes after this are fixes, not features. The macOS About panel reads "Open Carter 1.0" (the package version stays upstream's for compatibility). It launches at login once by default (a `open-carter-login-default` marker in userData keeps a later opt-out) and opens visibly; every launch lands on Home while tabs persist. Home never shows a scrollbar. Meeting summaries offer "Add to To-Do", which creates Notion Daily To-Do tasks from checkbox lines or bullets under an action-items/next-steps heading. The ⌘⇧M meeting shortcut was removed. Known environment issue: five upstream `server/lib/git/service.test.js` worktree tests time out on this Mac; they are unrelated to Open Carter changes.
+Open Carter 1.0 is the finished personal build; changes after this are fixes, not features. The macOS About panel reads "Open Carter 1.0" (the package version stays upstream's for compatibility). It launches at login once by default (a `open-carter-login-default` marker in userData keeps a later opt-out) and opens visibly. Ordinary launches land on Home while tabs persist. Explicit `?session=` links and reloads keep the requested chat; `MainLayout.tsx` captures that intent before startup effects run. Home never shows a scrollbar. Meeting summaries offer "Add to To-Do", which creates Notion Daily To-Do tasks from checkbox lines or bullets under an action-items/next-steps heading. The ⌘⇧M meeting shortcut was removed. Known environment issue: five upstream `server/lib/git/service.test.js` worktree tests time out on this Mac; they are unrelated to Open Carter changes.
 
 ## 1.1: Today card and morph motion
 

@@ -144,7 +144,9 @@ export function createMeetingService({ directory, modelsDir = path.join(os.homed
     }
     return next;
   });
-  const start = (id) => transition(id, ['draft'], 'recording');
+  // A closed meeting (stopped or interrupted by quit, sleep or a crash) can be
+  // reopened: new phrases append to the saved transcript and notes.
+  const start = (id) => transition(id, ['draft', 'stopped', 'interrupted'], 'recording');
   const pause = (id) => transition(id, ['recording'], 'paused');
   const resume = (id) => transition(id, ['paused'], 'recording');
   const stop = (id) => transition(id, ['recording', 'paused', 'interrupted'], 'stopped');

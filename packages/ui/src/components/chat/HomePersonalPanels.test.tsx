@@ -21,7 +21,9 @@ afterAll(async () => {
     }
 });
 
-async function fixture() {
+async function fixture(initialView: 'personal' | 'fresh' | 'remembered' = 'personal') {
+    if (initialView === 'personal') browser.localStorage.setItem('open-carter:home-task-view:v1', 'personal');
+    if (initialView === 'fresh') browser.localStorage.removeItem('open-carter:home-task-view:v1');
     useEnterprisePolicyStore.setState({ enterpriseMode: false, networkAccessBlocked: false });
     const calls: string[] = [];
     let finish: (() => void) | undefined;
@@ -29,6 +31,9 @@ async function fixture() {
     Object.defineProperty(browser, '__OPENCHAMBER_ELECTRON__', { configurable: true, value: { runtime: 'electron' } });
     Object.defineProperty(browser, '__OPENCHAMBER_DESKTOP__', { configurable: true, value: { invoke: async (_command: string, args: { action: string; status?: string }) => {
         calls.push(args.action);
+        if (args.action === 'ai-status') return { config: { board: 'collection://ai', model: '', enabled: false }, runs: [], assignments: [], lastCheckedAt: null, nextCheckAt: null, error: '', provisioning: false };
+        if (args.action === 'ai-projects') return [];
+        if (args.action === 'ai-board') return { name: 'AI Tasks', columns: ['Idea'], rows: [], limited: false };
         if (args.action === 'status') return { connected: true, signingIn: false, board: 'board', habits: 'habits', destination: 'parent' };
         if (args.action === 'board') return { name: 'Fixture', columns: ['To do', 'Worked Today', 'Done/Archived'], rows: [
             { url: 'https://www.notion.so/fixture-a', title: 'Calendar-day task', status: 'To do', due: { start: '2026-10-08', end: null, isDatetime: false } },
@@ -69,26 +74,48 @@ test('task cards show exact due dates without a status select and preserve real 
     } finally { await view.cleanup(); }
 });
 
+test('AI Tasks is the fresh default, hidden Daily To-Do does not query, explicit choices survive remount', async () => {
+    const view = await fixture('fresh');
+    try {
+        expect(view.host.querySelector('button[aria-pressed="true"]')?.textContent).toBe('AI Tasks');
+        expect(view.calls.filter((action) => action === 'board')).toHaveLength(0);
+        expect(view.calls.filter((action) => action === 'ai-board')).toHaveLength(1);
+        const personal = [...view.host.querySelectorAll<HTMLButtonElement>('button')].find((item) => item.textContent === 'Daily To-Do');
+        if (!personal) throw new Error('Daily To-Do selector missing');
+        await act(async () => personal.click());
+        expect(view.calls.filter((action) => action === 'board')).toHaveLength(1);
+        expect(browser.localStorage.getItem('open-carter:home-task-view:v1')).toBe('personal');
+    } finally { await view.cleanup(); }
+    const remembered = await fixture('remembered');
+    try {
+        expect(remembered.host.querySelector('button[aria-pressed="true"]')?.textContent).toBe('Daily To-Do');
+        expect(remembered.calls.filter((action) => action === 'board')).toHaveLength(1);
+        expect(remembered.calls.filter((action) => action.startsWith('ai-'))).toHaveLength(0);
+    } finally { await remembered.cleanup(); }
+});
+
 test('add-task form shares the heading row and submits through the existing Notion refresh', async () => {
     const view = await fixture();
     try {
         const heading = browser.document.querySelector('.oc-home-task-heading');
         // The composer stays compact until activated.
-        const opener = heading?.querySelector('form button[type="button"]') as unknown as { click: () => void } | null | undefined;
-        await act(async () => opener?.click());
-        const form = heading?.querySelector('form');
-        const input = form?.querySelector('input');
+        const opener = heading?.querySelector('.oc-home-task-composer button[type="button"]');
+        if (!(opener instanceof browser.HTMLButtonElement)) throw new Error('Task composer opener missing');
+        await act(async () => opener.click());
+        const composer = heading?.querySelector('.oc-home-task-composer');
+        const input = composer?.querySelector('input');
         expect(heading?.querySelector('h2')?.textContent).toBe('Daily To-Do');
-        expect(view.host.querySelectorAll('form')).toHaveLength(1);
-        expect(form).not.toBeNull();
+        // Home sits inside the chat form, so the composer must never nest its own form.
+        expect(view.host.querySelectorAll('form')).toHaveLength(0);
         expect(input?.getAttribute('aria-label')).toBe('Add task');
-        if (!input || !form) throw new Error('Heading task form missing');
+        const add = composer?.querySelector('button[aria-label="Add task"]');
+        if (!input || !(add instanceof browser.HTMLButtonElement)) throw new Error('Heading task composer missing');
         await act(async () => {
             // Use the native setter so React's controlled input sees the change.
             Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), 'value')?.set?.call(input, 'Fixture task');
             input.dispatchEvent(new browser.Event('input', { bubbles: true }));
         });
-        await act(async () => form.dispatchEvent(new browser.Event('submit', { bubbles: true, cancelable: true })));
+        await act(async () => add.click());
         expect(view.calls.filter((action) => action === 'create-task')).toHaveLength(1);
         expect(view.calls.filter((action) => action === 'board')).toHaveLength(2);
         expect(input.value).toBe('');

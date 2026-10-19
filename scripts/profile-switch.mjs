@@ -140,6 +140,38 @@ const pressAt = async (client, x, y) => {
   await client.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", clickCount: 1 })
 }
 
+// Virtualized sidebars mount only nearby rows. Search by scrolling before the
+// measured click, rather than mistaking an off-screen session for missing data.
+const revealSessionRow = async (client, sessionId) => {
+  const id = JSON.stringify(sessionId)
+  for (let step = 0; step < 200; step += 1) {
+    const result = await evaluateValue(client, `(() => {
+      const el = [...document.querySelectorAll('[data-session-row]')]
+        .find((row) => row.getAttribute('data-session-row') === ${id})
+      if (el) {
+        el.scrollIntoView({ block: 'center' })
+        const rect = el.getBoundingClientRect()
+        return { box: { x: rect.x + 60, y: rect.y + rect.height / 2 } }
+      }
+      let scroller = document.querySelector('[data-sidebar-virtual-ready]')?.parentElement
+      while (scroller && !(['auto', 'scroll', 'overlay'].includes(getComputedStyle(scroller).overflowY)
+        && scroller.clientHeight > 0 && scroller.scrollHeight > scroller.clientHeight)) {
+        scroller = scroller.parentElement
+      }
+      if (!scroller) return null
+      const next = ${step} === 0 ? 0 : Math.min(scroller.scrollHeight - scroller.clientHeight,
+        scroller.scrollTop + scroller.clientHeight * 0.75)
+      if (${step} > 0 && next <= scroller.scrollTop) return null
+      scroller.scrollTop = next
+      return { searching: true }
+    })()`)
+    if (result?.box) return result.box
+    if (!result?.searching) return null
+    await wait(80)
+  }
+  throw new Error(`Sidebar search exceeded its scroll budget for ${sessionId}`)
+}
+
 // Render counters worth reading per switch. They are the app's own stream
 // perf counters, so the numbers mean "React renders of that component".
 const RENDER_COUNTERS = [
@@ -243,7 +275,8 @@ const main = async () => {
     if (!rows || rows.length === 0) throw new Error("The sidebar rendered no session rows; the scenario never ran.")
     const plan = options.sessions.length > 0 ? options.sessions : rows.slice(0, options.count)
     const missing = plan.filter((id) => !rows.includes(id))
-    if (missing.length > 0) throw new Error(`Sessions not present in the sidebar: ${missing.join(", ")}`)
+    const virtualized = await evaluateValue(client, `!!document.querySelector('[data-sidebar-virtual-ready]')`)
+    if (missing.length > 0 && !virtualized) throw new Error(`Sessions not present in the sidebar: ${missing.join(", ")}`)
     if (plan.length < 2) throw new Error("Need at least two sessions to switch between.")
     console.log(`Switching between ${plan.length} sessions, two visits each.`)
 
@@ -264,14 +297,8 @@ const main = async () => {
     const switches = []
     const visits = [...plan.map((id) => ({ id, visit: "cold" })), ...plan.map((id) => ({ id, visit: "warm" }))]
     for (const [index, { id, visit }] of visits.entries()) {
-      const box = await evaluateValue(client, `(() => {
-        const el = document.querySelector('[data-session-row="${id}"]')
-        if (!el) return null
-        el.scrollIntoView({ block: "center" })
-        const rect = el.getBoundingClientRect()
-        return { x: rect.x + 60, y: rect.y + rect.height / 2 }
-      })()`)
-      if (!box) throw new Error(`Row for ${id} disappeared from the sidebar.`)
+      const box = await revealSessionRow(client, id)
+      if (!box) throw new Error(`Session ${id} was not reachable in the sidebar.`)
       await wait(800)
       await client.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: box.x, y: box.y })
       await wait(options.hover)

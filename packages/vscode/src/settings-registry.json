@@ -301,6 +301,10 @@
       "scope": "profile",
       "perSurface": true
     },
+    "chatColumnWidth": {
+      "scope": "profile",
+      "perSurface": true
+    },
     "showSplitAssistantMessageActions": {
       "scope": "profile"
     },

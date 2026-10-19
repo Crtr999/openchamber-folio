@@ -32,7 +32,7 @@ export const supportsMeetingSystemAudio = (platform, release) => {
 };
 
 /** Native authorization and capture grants only. Records and STT belong to web. */
-export const createMeetingBoundary = ({ service, summary, isSummaryBlocked, authorize, getSources, systemAudioSupported, emit, now = Date.now }) => {
+export const createMeetingBoundary = ({ service, summary, isSummaryBlocked, authorize, getSources, systemAudioSupported, emit, onActiveChange, now = Date.now }) => {
   let active = null;
   let starting = null;
   let grant = null;
@@ -41,6 +41,14 @@ export const createMeetingBoundary = ({ service, summary, isSummaryBlocked, auth
   let generation = 0;
   let closed = false;
   const summaryRequests = new Set();
+  let reportedActive = false;
+  // Lets native keep the app awake only while a recording is really in progress.
+  const reportActive = () => {
+    const next = Boolean(active);
+    if (next === reportedActive) return;
+    reportedActive = next;
+    try { onActiveChange?.(next); } catch { /* a power hint must never break capture */ }
+  };
 
   const capture = (mode) => ({ mode, degraded: mode === 'microphone', systemAudioSupported, systemAudioValidation: 'pending' });
   const requireOwner = (event, id) => {
@@ -175,6 +183,7 @@ export const createMeetingBoundary = ({ service, summary, isSummaryBlocked, auth
     } finally {
       if (action === 'start') starting = null;
       controlBusy = false;
+      reportActive();
     }
   };
 
@@ -210,6 +219,7 @@ export const createMeetingBoundary = ({ service, summary, isSummaryBlocked, auth
     grant = null;
     active = null;
     starting = null;
+    reportActive();
     if (owner) emit(owner.sender, { id: owner.id, reason });
     try {
       const request = { reason };

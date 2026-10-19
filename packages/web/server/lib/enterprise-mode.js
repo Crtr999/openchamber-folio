@@ -40,7 +40,8 @@ import { z } from 'zod';
  * - Speech and transcription go only to servers on this machine (`tts`,
  *   `dictation`).
  * - Push notifications carry no message text or session name (`notifications`).
- * - Desktop personal-home Notion OAuth, data access and chat export are off
+ * - Desktop personal-home Notion OAuth, data access, chat export and AI task
+ *   pickup/result writeback are off
  *   (`packages/electron/personal-home.mjs`); local EventKit remains available.
  * - Meeting summaries are off (`meetings/summary.js`), even after user approval.
  * - CarterBot teaching capture, playback, skill drafting, installation and tests

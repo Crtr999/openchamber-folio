@@ -1,5 +1,5 @@
+import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
-import { museI18n } from './muse.i18n';
 import { claudeI18n } from './claude.i18n';
 import { meetingsI18n } from './meetings.i18n';
 import { homeI18n } from './home.i18n';
@@ -23,10 +23,10 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...friendsI18n['pl'],
   ...personalWorkspaceI18n.pl,
   'workspace.officePreview': 'Tylko tekst i osadzone obrazy. Oryginalny układ, wykresy, animacje i bieżące obliczenia nie są odtwarzane.',
   ...chatgptI18n['pl'],
-  ...museI18n.pl,
   ...claudeI18n.pl,
   ...meetingsI18n.pl,
   'meeting.quickStart': 'Rozpocznij spotkanie',
@@ -1312,6 +1312,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.chatInput.reviewCommentsRemove': 'Usuń komentarze do przeglądu',
   'chat.chatInput.toast.addedFileMentions': 'Dodano {count} wzmianek o plikach',
   'chat.chatInput.toast.attachFileFailed': 'Nie udało się dołączyć pliku',
+  'chat.chatInput.toast.processingVideo': 'Przetwarzanie wideo…',
   'chat.chatInput.toast.attachNamedFailed': 'Nie udało się dołączyć {name}',
   'chat.chatInput.toast.unsupportedAttachmentModalities': 'Model {model} nie obsługuje danych wejściowych {modalities} wymaganych przez {files}. Nadal możesz wysłać wiadomość, ale te załączniki mogą zostać zignorowane.',
   'chat.chatInput.toast.attachmentsTooLarge': 'Załączniki są zbyt duże, aby je wysłać. Spróbuj zmniejszyć liczbę lub rozmiar obrazów.',

@@ -620,6 +620,7 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
     <TooltipProvider delay={400} closeDelay={0} timeout={300}>
     <div
       ref={sessionSearchContainerRef}
+      data-oc-sidebar="true"
       className={cn(
         'relative flex h-full flex-col text-foreground overflow-x-hidden',
         mobileVariant ? '' : 'bg-transparent',

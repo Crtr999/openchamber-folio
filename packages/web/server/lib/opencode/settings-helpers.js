@@ -709,6 +709,9 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.wideChatLayoutEnabled === 'boolean') {
       result.wideChatLayoutEnabled = candidate.wideChatLayoutEnabled;
     }
+    if (candidate.chatColumnWidth === null || (Number.isSafeInteger(candidate.chatColumnWidth) && candidate.chatColumnWidth >= 480)) {
+      result.chatColumnWidth = candidate.chatColumnWidth;
+    }
     if (typeof candidate.showSplitAssistantMessageActions === 'boolean') {
       result.showSplitAssistantMessageActions = candidate.showSplitAssistantMessageActions;
     }

@@ -18,6 +18,7 @@ export type DecorateLabels = {
   disableCodeWrap: string;
   copyTable: string;
   downloadTable: string;
+  tableScroll: string;
   copyDiagram: string;
   downloadDiagram: string;
   zoomInDiagram: string;
@@ -363,7 +364,7 @@ const decorateTables = (root: HTMLElement, labels: DecorateLabels): void => {
     if (existing) continue;
 
     const wrapper = document.createElement('div');
-    wrapper.className = 'group my-4 flex w-fit max-w-full flex-col space-y-2';
+    wrapper.className = 'group my-4 flex min-w-0 w-fit max-w-full flex-col space-y-2';
     wrapper.setAttribute('data-markdown', 'table-wrapper');
 
     const toolbar = document.createElement('div');
@@ -391,6 +392,10 @@ const decorateTables = (root: HTMLElement, labels: DecorateLabels): void => {
 
     const scroll = document.createElement('div');
     scroll.className = 'overflow-x-auto rounded-lg border border-border/80 bg-[var(--surface-elevated)]';
+    scroll.setAttribute('data-md-table-scroll', '');
+    scroll.setAttribute('role', 'region');
+    scroll.setAttribute('aria-label', labels.tableScroll);
+    scroll.tabIndex = 0;
 
     const parent = table.parentElement;
     if (!parent) continue;

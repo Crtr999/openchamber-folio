@@ -15,6 +15,8 @@ type BoardProps = {
     pendingPage: string;
     onMove: (page: string, status: string) => void;
     renderTask: (row: Task) => React.ReactNode;
+    /** Display name for a status; the stored Notion status is unchanged. */
+    columnLabel?: (column: string) => string;
 };
 
 const columnId = (column: string) => `home-status:${column}`;
@@ -33,7 +35,7 @@ function dueDateText(value: string, isDatetime: boolean, locale: string) {
     return value.replace('T', ' ');
 }
 
-const TaskCard: React.FC<{ row: Task } & Omit<BoardProps, 'board'> & { columns: string[] }> = ({ row, columns, disabled, pendingPage, onMove, renderTask }) => {
+const TaskCard: React.FC<{ row: Task } & Omit<BoardProps, 'board'> & { columns: string[] }> = ({ row, columns, disabled, pendingPage, onMove, renderTask, columnLabel }) => {
     const { t, locale } = useI18n();
     const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, isDragging } = useDraggable({ id: row.url, disabled });
     const pending = pendingPage === row.url;
@@ -48,21 +50,21 @@ const TaskCard: React.FC<{ row: Task } & Omit<BoardProps, 'board'> & { columns: 
             </span>
             {pending && <Icon name="loader-4" className="size-3 animate-spin text-muted-foreground" />}
             <DropdownMenu><DropdownMenuTrigger asChild><Button data-home-task-move type="button" variant="ghost" size="icon" className="size-5 shrink-0" disabled={disabled} aria-label={t('home.moveTask')} title={t('home.moveTask')}><Icon name="arrow-left-right" className="size-3" /></Button></DropdownMenuTrigger>
-                <DropdownMenuContent>{columns.map((column) => <DropdownMenuItem key={column} nativeButton render={<button type="button" />} disabled={column === row.status} onSelect={() => onMove(row.url, column)}>{column}</DropdownMenuItem>)}</DropdownMenuContent>
+                <DropdownMenuContent>{columns.map((column) => <DropdownMenuItem key={column} nativeButton render={<button type="button" />} disabled={column === row.status} onSelect={() => onMove(row.url, column)}>{columnLabel?.(column) ?? column}</DropdownMenuItem>)}</DropdownMenuContent>
             </DropdownMenu>
         </div>
     </div>;
 };
 
-const StatusColumn: React.FC<{ column: string; count: number; disabled: boolean; children: React.ReactNode }> = ({ column, count, disabled, children }) => {
+const StatusColumn: React.FC<{ column: string; label: string; count: number; disabled: boolean; children: React.ReactNode }> = ({ column, label, count, disabled, children }) => {
     const { setNodeRef, isOver } = useDroppable({ id: columnId(column), disabled });
     return <div ref={setNodeRef} data-home-status={column} className={cn('oc-home-column min-h-16 rounded-sm', isOver && 'ring-2 ring-ring bg-interactive-selection/30')}>
-        <h3 className="oc-home-board-heading">{column}<span className="oc-home-count ml-auto">{count}</span></h3>
+        <h3 className="oc-home-board-heading">{label}<span className="oc-home-count ml-auto">{count}</span></h3>
         {children}
     </div>;
 };
 
-export const HomeTaskBoard: React.FC<BoardProps> = ({ board, disabled, pendingPage, onMove, renderTask }) => {
+export const HomeTaskBoard: React.FC<BoardProps> = ({ board, disabled, pendingPage, onMove, renderTask, columnLabel }) => {
     const boardRef = React.useRef<HTMLDivElement>(null);
     const previousPending = React.useRef('');
     React.useEffect(() => {
@@ -89,12 +91,12 @@ export const HomeTaskBoard: React.FC<BoardProps> = ({ board, disabled, pendingPa
         const column = board.columns.find((item) => columnId(item) === over.id);
         if (row && column && row.status !== column) onMove(row.url, column);
     };
-    const card = (row: Task) => <TaskCard key={row.url} row={row} columns={board.columns} disabled={disabled} pendingPage={pendingPage} onMove={onMove} renderTask={renderTask} />;
+    const card = (row: Task) => <TaskCard key={row.url} row={row} columns={board.columns} disabled={disabled} pendingPage={pendingPage} onMove={onMove} renderTask={renderTask} columnLabel={columnLabel} />;
     const unassigned = board.rows.filter((row) => !board.columns.includes(row.status ?? ''));
     return <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragEnd={move}>
         <div ref={boardRef} className="oc-home-board">{board.columns.map((column) => {
             const rows = board.rows.filter((row) => row.status === column);
-            return <StatusColumn key={column} column={column} count={rows.length} disabled={disabled}>{rows.map(card)}</StatusColumn>;
+            return <StatusColumn key={column} column={column} label={columnLabel?.(column) ?? column} count={rows.length} disabled={disabled}>{rows.map(card)}</StatusColumn>;
         })}{unassigned.length > 0 && <div className="oc-home-column">{unassigned.map(card)}</div>}</div>
     </DndContext>;
 };

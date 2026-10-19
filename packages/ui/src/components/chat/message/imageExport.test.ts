@@ -19,6 +19,7 @@ describe('message image export', () => {
                 disableCodeWrap: 'Do not wrap',
                 copyTable: 'Copy table',
                 downloadTable: 'Download table',
+                tableScroll: 'Scrollable table',
                 copyDiagram: 'Copy diagram',
                 downloadDiagram: 'Download diagram',
                 zoomInDiagram: 'Zoom in',

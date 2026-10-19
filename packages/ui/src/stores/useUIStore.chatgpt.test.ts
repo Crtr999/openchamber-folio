@@ -43,31 +43,3 @@ test('other main pages replace ChatGPT', () => {
     expect(useUIStore.getState().isChatGPTPageOpen).toBe(false);
   }
 });
-
-test('Muse replaces other full-page surfaces and closes with Home', () => {
-  const ui = useUIStore.getState();
-  ui.setChatGPTPageOpen(true);
-  ui.setMusePageOpen(true);
-  expect(useUIStore.getState().isMusePageOpen).toBe(true);
-  expect(useUIStore.getState().isChatGPTPageOpen).toBe(false);
-  expect(useUIStore.getState().isScheduledTasksDialogOpen).toBe(false);
-  ui.closeMainSurfaces();
-  expect(useUIStore.getState().isMusePageOpen).toBe(false);
-});
-
-test('other main pages close Muse', () => {
-  const ui = useUIStore.getState();
-  const transitions = [
-    () => ui.setScheduledTasksDialogOpen(true),
-    () => ui.setArchivePageOpen(true),
-    () => ui.setUsageStatsPageOpen(true),
-    () => ui.setWorktreesPageProjectId('project'),
-    () => ui.setOpenGuestPage('guest'),
-    () => ui.setRunOverviewKey('run'),
-  ];
-  for (const navigate of transitions) {
-    ui.setMusePageOpen(true);
-    navigate();
-    expect(useUIStore.getState().isMusePageOpen).toBe(false);
-  }
-});

@@ -12,6 +12,7 @@ const ACCEPTED_ATTACHMENT_TYPES = [
   "application/vnd.oasis.opendocument.text",
   "application/vnd.oasis.opendocument.presentation",
   "application/vnd.oasis.opendocument.spreadsheet",
+  "video/*",
   "text/*",
   "application/json",
   "application/ld+json",
@@ -67,9 +68,13 @@ const ACCEPTED_ATTACHMENT_TYPES = [
   ".kts",
   ".log",
   ".lua",
+  ".m4v",
   ".md",
   ".mdx",
   ".mjs",
+  ".mkv",
+  ".mov",
+  ".mp4",
   ".mts",
   ".ndjson",
   ".odp",
@@ -99,6 +104,7 @@ const ACCEPTED_ATTACHMENT_TYPES = [
   ".tsx",
   ".txt",
   ".vue",
+  ".webm",
   ".xml",
   ".xlsx",
   ".yaml",
@@ -204,6 +210,7 @@ const TEXT_MIMES = new Set([
 ])
 const ATTACHMENT_SAMPLE_BYTES = 4096
 const DOCUMENT_EXTENSIONS = new Set(["docx", "pptx", "xlsx", "odt", "odp", "ods"])
+const VIDEO_EXTENSIONS = new Set(["mp4", "m4v", "mov", "webm", "mkv"])
 const REDACTED = "[REDACTED]"
 const OMITTED = "[OMITTED BY OPENCHAMBER]"
 const SENSITIVE_NAMES = /^(authorization|proxy-authorization|cookie|set-cookie|x-api-key|api[-_]?key|client[-_]?secret|password|secret|access[-_]?token|refresh[-_]?token|id[-_]?token|token)$/i
@@ -221,6 +228,9 @@ const extensionOf = (name: string): string => {
 export const isDocumentAttachmentFilename = (name: string): boolean => DOCUMENT_EXTENSIONS.has(extensionOf(name))
 
 const declaredMimeOf = (file: File): string => file.type.split(";", 1)[0]?.trim().toLowerCase() ?? ""
+
+export const isVideoAttachment = (file: File): boolean =>
+  declaredMimeOf(file).startsWith("video/") || VIDEO_EXTENSIONS.has(extensionOf(file.name))
 
 const inspectTextContent = async (file: File): Promise<"text/plain" | undefined> => {
   const bytes = new Uint8Array(await file.slice(0, ATTACHMENT_SAMPLE_BYTES).arrayBuffer())
@@ -395,6 +405,16 @@ export const prepareAttachmentFiles = (
   file: File,
   reservedFilenames: Iterable<string> = [],
 ): PreparedAttachmentFile[] | Promise<PreparedAttachmentFile[] | undefined> | undefined => {
+  if (isVideoAttachment(file)) {
+    return import("./video-attachments").then(async ({ expandVideoAttachment }) => {
+      const expanded = await expandVideoAttachment(file, reservedFilenames)
+      return [
+        { file: expanded.textFile, mimeType: "text/plain" },
+        ...expanded.images.map((image) => ({ file: image, mimeType: "image/jpeg" })),
+      ]
+    })
+  }
+
   if (!isDocumentAttachmentFilename(file.name)) {
     const prepared = prepareAttachmentFile(file)
     if (prepared instanceof Promise) return prepared.then((output) => output ? [output] : undefined)

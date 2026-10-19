@@ -1,5 +1,4 @@
 const WEBSITE_ORIGINS = new Map([
-  ['persist:open-carter-muse', 'https://muse.ai'],
   ['persist:open-carter-claude', 'https://claude.ai'],
   ['open-carter-teaching', ''],
 ]);

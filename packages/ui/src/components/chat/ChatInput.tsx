@@ -17,6 +17,7 @@ import {
     ATTACHMENT_ACCEPT,
     getUnsupportedAttachmentInputs,
     isDocumentAttachmentFilename,
+    isVideoAttachment,
     type AttachmentInputModality,
 } from '@/sync/attachment-files';
 import type { AttachedFile } from '@/stores/types/sessionTypes';
@@ -2677,6 +2678,26 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
      * cited only once they attached, so a rejected file leaves no dangling
      * citation.
      */
+    // Videos are expanded server-side (frames + transcript) before any chip
+    // appears, so show progress meanwhile and surface the real failure reason
+    // instead of the generic attach toast. Returns undefined when it already
+    // reported an error.
+    const addAttachedFileWithFeedback = React.useCallback(async (file: File): Promise<boolean | undefined> => {
+        if (!isVideoAttachment(file)) return addAttachedFile(file);
+        const progressToast = toast.loading(t('chat.chatInput.toast.processingVideo'), { description: file.name });
+        try {
+            return await addAttachedFile(file);
+        } catch (error) {
+            console.error('Video attach failed', error);
+            toast.error(t('chat.chatInput.toast.attachNamedFailed', { name: file.name }), {
+                description: error instanceof Error ? error.message : undefined,
+            });
+            return undefined;
+        } finally {
+            toast.dismiss(progressToast);
+        }
+    }, [addAttachedFile, t]);
+
     const attachFilesWithCitation = React.useCallback(async (
         files: File[],
         leadingText: string = '',
@@ -2726,9 +2747,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         }
 
         const attachedOtherNames: string[] = [];
+        let reportedError = false;
         for (const file of otherFiles) {
             try {
-                if (await addAttachedFile(file)) {
+                const result = await addAttachedFileWithFeedback(file);
+                if (result === undefined) reportedError = true;
+                if (result) {
                     attached = true;
                     attachedOtherNames.push(file.name);
                 }
@@ -2739,10 +2763,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         }
         insertCitation(attachedOtherNames, '');
 
-        if (files.length > 0 && !attached) {
+        if (files.length > 0 && !attached && !reportedError) {
             toast.error(t('chat.chatInput.toast.attachFileFailed'));
         }
-    }, [addAttachedFile, insertTextAtSelection, t]);
+    }, [addAttachedFile, addAttachedFileWithFeedback, insertTextAtSelection, t]);
 
     const handlePaste = React.useCallback(async (event: ClipboardEvent) => {
         const clipboardData = event.clipboardData;
@@ -3319,19 +3343,22 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         const attachmentDraftKey = useInputStore.getState().attachmentDraftKey;
         const list = Array.isArray(files) ? files : Array.from(files);
         let attached = false;
+        let reportedError = false;
 
         for (const file of list) {
             try {
-                attached = (await addAttachedFile(file)) || attached;
+                const result = await addAttachedFileWithFeedback(file);
+                if (result === undefined) reportedError = true;
+                attached = Boolean(result) || attached;
             } catch (error) {
                 console.error('File attach failed', error);
             }
             if (useInputStore.getState().attachmentDraftKey !== attachmentDraftKey) return;
         }
-        if (list.length > 0 && !attached) {
+        if (list.length > 0 && !attached && !reportedError) {
             toast.error(t('chat.chatInput.toast.attachFileFailed'));
         }
-    }, [addAttachedFile, t]);
+    }, [addAttachedFileWithFeedback, t]);
 
     const handleVSCodePickFiles = React.useCallback(async () => {
         try {
@@ -3805,7 +3832,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             ) : null}
             <div className={cn('chat-input-column relative overflow-visible', isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
                 {showDesktopDraftPresentation ? (
-                    <HomeQuickActions stacked className={cn('absolute bottom-1 left-full ml-2 hidden xl:flex', draftPresentationClassName)} />
+                    <HomeQuickActions stacked className={cn('absolute bottom-1.5 left-full ml-2 hidden xl:flex', draftPresentationClassName)} />
                 ) : null}
                 {/* Comment mode shows only its own shell: the normal composer's
                     furniture (chips, banners, draft selectors) stays in state

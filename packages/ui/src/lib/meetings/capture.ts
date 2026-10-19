@@ -11,7 +11,14 @@ const MIN_PHRASE_SAMPLES = RATE * 3;
 const PAUSE_SAMPLES = RATE * 0.5;
 const SPEECH_LEVEL = 0.006;
 const SILENT_PEAK = 0.009;
-export const MAX_PENDING_CHUNKS = 8;
+// About five minutes of speech. Overflow means transcription is genuinely stuck,
+// which is the one backlog case that still ends the recording visibly.
+export const MAX_PENDING_CHUNKS = 30;
+// One phrase that cannot be transcribed is skipped; this many in a row means the
+// recognizer is broken and the recording stops instead of silently losing audio.
+export const MAX_CONSECUTIVE_CHUNK_FAILURES = 3;
+// Failures that mean this recording no longer exists or may not continue.
+const FATAL_CHUNK_FAILURE = /meeting_(not_active|closed|forbidden|paused|source|model_unavailable|interrupted)|models_missing|invalid_state|disposed|interrupted/;
 export class PCMBuffer {
     private pcm = new Float32Array(CHUNK_SAMPLES);
     private used = 0;
@@ -37,7 +44,7 @@ export class PCMBuffer {
 }
 
 type CapturePhase = 'idle' | 'starting' | 'recording' | 'paused' | 'pausing' | 'resuming' | 'stopping' | 'error';
-type CaptureSnapshot = { phase: CapturePhase; meeting: Meeting | null; mode: CaptureMode; microphone: number; system: number; silentMicrophone: boolean; silentSystem: boolean; error: 'capture' | 'system' | 'interrupted' | null; detail: string | null };
+type CaptureSnapshot = { phase: CapturePhase; meeting: Meeting | null; mode: CaptureMode; microphone: number; system: number; silentMicrophone: boolean; silentSystem: boolean; skipped: number; error: 'capture' | 'system' | 'interrupted' | null; detail: string | null };
 type SourceCapture = { stream: MediaStream; node: AudioWorkletNode; input: MediaStreamAudioSourceNode; buffer: PCMBuffer; nextMs: number; lastSound: number; quiet: number; flushed: (() => void) | null };
 type Chunk = { source: AudioSource; startMs: number; endMs: number; pcm: Float32Array };
 
@@ -72,7 +79,7 @@ export async function acquireMeetingStream<T extends StoppableStream>(operation:
 
 // One renderer-wide owner. Views subscribe but never own tracks or audio buffers.
 class MeetingCapture {
-    private snapshot: CaptureSnapshot = { phase: 'idle', meeting: null, mode: 'system-and-microphone', microphone: 0, system: 0, silentMicrophone: false, silentSystem: false, error: null, detail: null };
+    private snapshot: CaptureSnapshot = { phase: 'idle', meeting: null, mode: 'system-and-microphone', microphone: 0, system: 0, silentMicrophone: false, silentSystem: false, skipped: 0, error: null, detail: null };
     private listeners = new Set<() => void>();
     private sources = new Map<AudioSource, SourceCapture>();
     private streams = new Set<MediaStream>();
@@ -83,6 +90,10 @@ class MeetingCapture {
     private inFlight: number[] | null = null;
     private generation = 0;
     private started = 0;
+    // Where this capture's timeline begins: the end of any text already saved when a
+    // closed meeting is resumed, so new phrases never overlap earlier ones.
+    private base = 0;
+    private failures = 0;
     private lastMeter = 0;
     private detach: (() => void)[] = [];
     private stopping: Promise<void> | null = null;
@@ -96,7 +107,9 @@ class MeetingCapture {
         if (this.startPending || this.abortsPending || !['idle', 'error'].includes(this.snapshot.phase)) throw new Error('meeting_busy');
         this.startPending = true;
         const version = ++this.generation;
-        this.update({ phase: 'starting', meeting, mode, error: null, detail: null, silentMicrophone: false, silentSystem: false });
+        this.base = meeting.segments.reduce((end, segment) => Math.max(end, segment.endMs), 0);
+        this.failures = 0;
+        this.update({ phase: 'starting', meeting, mode, error: null, detail: null, silentMicrophone: false, silentSystem: false, skipped: 0 });
         const current = () => version === this.generation && meetingsSupported();
         let systemFailure = false;
         try {
@@ -136,7 +149,7 @@ class MeetingCapture {
             if (!current()) throw new Error('meeting_interrupted');
             // A device list change (AirPods connecting, a monitor waking) is not a
             // capture failure. Only an ended track or a processor error is.
-            this.started = performance.now();
+            this.started = performance.now() - this.base;
             await withMeetingDeadline(this.context?.resume() ?? Promise.resolve(), 15000);
             if (!current()) throw new Error('meeting_interrupted');
             this.update({ phase: 'recording' });
@@ -170,7 +183,7 @@ class MeetingCapture {
         if (!this.context || version !== this.generation) throw new Error('meeting_interrupted');
         const node = new AudioWorkletNode(this.context, 'meeting-pcm');
         const input = this.context.createMediaStreamSource(new MediaStream(stream.getAudioTracks()));
-        const capture: SourceCapture = { stream, node, input, nextMs: 0, lastSound: performance.now(), quiet: 0, flushed: null, buffer: new PCMBuffer((pcm) => {
+        const capture: SourceCapture = { stream, node, input, nextMs: this.base, lastSound: performance.now(), quiet: 0, flushed: null, buffer: new PCMBuffer((pcm) => {
             const startMs = capture.nextMs;
             const endMs = startMs + pcm.length / RATE * 1000;
             capture.nextMs = endMs;
@@ -234,8 +247,15 @@ class MeetingCapture {
                 pcm = Array.from(next.pcm); next.pcm.fill(0);
                 this.inFlight = pcm;
                 const result = await withMeetingDeadline(sendMeetingChunk(this.snapshot.meeting.id, next.source, next.startMs, next.endMs, pcm));
-                if (version === this.generation) this.update({ meeting: result });
-            } catch (cause) { if (version === this.generation) void this.fail('capture', describeFailure(cause) ?? 'transcription_failed'); }
+                if (version === this.generation) { this.failures = 0; this.update({ meeting: result }); }
+            } catch (cause) {
+                if (version !== this.generation) return;
+                const detail = describeFailure(cause) ?? 'transcription_failed';
+                // A single phrase that fails to transcribe is skipped so the meeting keeps
+                // recording. Fatal states and repeated failures still stop it visibly.
+                if (FATAL_CHUNK_FAILURE.test(detail) || ++this.failures >= MAX_CONSECUTIVE_CHUNK_FAILURES) void this.fail('capture', detail);
+                else this.update({ skipped: this.snapshot.skipped + 1 });
+            }
             finally { next.pcm.fill(0); pcm.fill(0); pcm.length = 0; if (this.inFlight === pcm) this.inFlight = null; this.pending = Math.max(0, this.pending - 1); }
         });
     }

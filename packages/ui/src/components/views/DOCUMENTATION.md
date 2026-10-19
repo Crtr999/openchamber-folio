@@ -47,13 +47,6 @@ does not permit third-party applications to collect or intermediate Claude.ai
 tokens. That separate binary is not an OpenCode provider or a cloud-history
 adapter. No native Claude option is added, and API billing is not substituted.
 
-Muse's official [product description](https://introducing.muse.ai/) confirms
-cloud-owned memory, background work, goals and artifacts. No supported public
-API for those account features was verified. Requests to `https://muse.ai/api`
-and `/developers` returned HTTP 401, not usable API documentation. Old video-hosting
-API search results and Meta's model API do not establish access to this Muse
-account. Its real website remains unchanged rather than claiming a native clone.
-
 ## Context panel retention
 
 `ContextPanel` keeps file, diff and walkthrough views mounted to preserve
@@ -129,4 +122,3 @@ UI `*.vitest.tsx` fixtures; the isolated Bun runner intentionally does not.
 
 ChatGPTWorkspace retains one isolated website webview after its first explicit opening. The optional website history folder moves website sidebar navigation into Open Carter, while the website keeps its composer, model selection and account memory. Full mode restores website navigation without reloading or replacing a draft. The origin-gated DOM adapter in lib/chatgpt/website.ts reads navigation metadata only and validates snapshots. Visible views read every three seconds, one at a time; hidden views suspend reads and stale completions are rejected. The loaded sidebar is partial history; older history uses the website scroll viewport, with Full ChatGPT as fallback. Website layout changes produce an explicit unavailable state. The view exposes no OpenCode browser controller or app preload.
 
-MuseWorkspace retains one website guest and one Open Carter tab for the complete standalone `https://muse.ai/` website in `persist:open-carter-muse`, separate from ChatGPT. Electron navigation events supply the current exact-origin title and an eligible current URL. Eligibility requires HTTPS, the exact origin and no credentials, query or fragment. Live metadata clears during loading, failure or external sign-in navigation; it is never interpreted as a chat identifier. Explicit pinning saves the observed URL and title in the device-local `open-carter.muse.saved-pages.v1` snapshot. Hydration validates entries and deduplicates URLs without guessing routes. The existing safe-storage adapter keeps writes in memory if durable storage is unavailable. Saved links remain through runtime resets and sign-out, and can be removed locally without deleting website data. No DOM snapshots, messages, cookies or account stores are read. Muse keeps its own sidebar, memory, goals and artifacts. Repeated selection resumes the same guest and preserves the current page and draft; the first Home request is fulfilled by src without a second load. Back, Forward and Reload are explicit controls; Full Muse focuses the complete retained website without navigation. Popup links use the main-process in-place navigation handler rather than creating windows. Main-frame load failure offers Reload. A visible notice distinguishes local saved pages from unverified account-history mirroring. The browser controller cannot inspect this partition; signed-in navigation and conversation IDs remain blocked on real account DOM evidence. Web, VS Code, hosted mobile, Capacitor and remote desktop do not expose this view.

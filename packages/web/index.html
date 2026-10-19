@@ -499,13 +499,13 @@
       }
       #initial-loading {
         background-color: var(--splash-background);
-        color: var(--splash-foreground);
+        color: var(--splash-stroke);
         display: flex;
         align-items: center;
         justify-content: center;
         height: 100vh;
         font-family: system-ui, -apple-system, sans-serif;
-        transition: opacity 0.3s ease-out;
+        transition: opacity 0.18s ease-out;
         position: absolute;
         width: 100%;
         z-index: 9999;
@@ -514,13 +514,31 @@
         opacity: 0;
         pointer-events: none;
       }
+      .startup-stack { display: grid; justify-items: center; gap: 20px; }
+      .startup-stack > svg { width: 64px; height: 64px; }
+      .startup-progress { display: flex; gap: 5px; }
+      .startup-progress > span {
+        width: 4px; height: 4px; border-radius: 50%;
+        background: var(--splash-stroke); opacity: 0.45;
+        animation: startup-dot 1.1s ease-in-out 4;
+      }
+      .startup-progress > span:nth-child(2) { animation-delay: 0.12s; }
+      .startup-progress > span:nth-child(3) { animation-delay: 0.24s; }
+      @keyframes startup-dot {
+        0%, 100% { opacity: 0.3; }
+        45% { opacity: 0.85; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #initial-loading { transition: none; }
+        .startup-progress > span { animation: none; }
+      }
     </style>
   </head>
   <body class="h-full bg-background text-foreground">
     <div id="root" class="h-full">
       <!-- Loading fallback while React initializes -->
       <div id="initial-loading">
-        <div style="display: flex; align-items: center; justify-content: center;">
+        <div class="startup-stack">
           <svg width="120" height="120" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OpenChamber loading icon">
             <!-- Isometric cube: edge=48, centerY=50 -->
             <!-- Points: top(50,2), left(8.432,26), right(91.568,26), center(50,50), bottomLeft(8.432,74), bottomRight(91.568,74), bottom(50,98) -->
@@ -576,6 +594,7 @@
               <path d="M-8 -4 L8 -4 L8 12 L-8 12 Z" fill="var(--splash-logo-fill)" fill-opacity="0.4"/>
             </g>
           </svg>
+          <div class="startup-progress" aria-hidden="true"><span></span><span></span><span></span></div>
         </div>
       </div>
     </div>

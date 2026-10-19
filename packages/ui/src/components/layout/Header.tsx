@@ -118,6 +118,7 @@ const HeaderIconActionButton = React.memo(function HeaderIconActionButton({
           onClick={onClick}
           aria-label={ariaLabel}
           aria-pressed={pressed}
+          data-oc-header-action={iconName}
           className={cn(
             className ?? DESKTOP_HEADER_ICON_BUTTON_CLASS,
             pressed && 'bg-interactive-selection text-interactive-selection-foreground'
@@ -921,9 +922,8 @@ export const Header: React.FC = () => {
   const guestPage = useGuestsStore((state) => state.guests.find((guest) => guest.id === openGuestPageId));
   const isScheduledSurfaceOpen = useUIStore((state) => state.isScheduledTasksDialogOpen);
   const isChatGPTSurfaceOpen = useUIStore((state) => state.isChatGPTPageOpen);
-  const isMuseSurfaceOpen = useUIStore((state) => state.isMusePageOpen);
   const isClaudeSurfaceOpen = useUIStore((state) => state.isClaudePageOpen);
-  const isWebsiteAssistantSurfaceOpen = isChatGPTSurfaceOpen || isMuseSurfaceOpen || isClaudeSurfaceOpen;
+  const isWebsiteAssistantSurfaceOpen = isChatGPTSurfaceOpen || isClaudeSurfaceOpen;
   const isArchiveSurfaceOpen = useUIStore((state) => state.isArchivePageOpen);
   const isUsageStatsSurfaceOpen = useUIStore((state) => state.isUsageStatsPageOpen);
   const worktreesSurfaceProjectId = useUIStore((state) => state.worktreesPageProjectId);
@@ -936,7 +936,6 @@ export const Header: React.FC = () => {
   });
   const activeSurfaceHeader = React.useMemo<{ title: string; subtitle: string | null } | null>(() => {
     if (isChatGPTSurfaceOpen) return { title: 'ChatGPT', subtitle: null };
-    if (isMuseSurfaceOpen) return { title: 'Muse', subtitle: null };
     if (isClaudeSurfaceOpen) return { title: 'Claude', subtitle: null };
     if (guestPage) return { title: guestPage.pageTitle ?? guestPage.name, subtitle: null };
     if (isScheduledSurfaceOpen) {
@@ -958,7 +957,7 @@ export const Header: React.FC = () => {
       return { title: overviewRunTitle ?? t('multirun.overview.headerTitle'), subtitle: t('multirun.overview.headerTitle') };
     }
     return null;
-  }, [isClaudeSurfaceOpen, isChatGPTSurfaceOpen, isMuseSurfaceOpen, guestPage, isArchiveSurfaceOpen, overviewRunTitle, runOverviewKey, isScheduledSurfaceOpen, isUsageStatsSurfaceOpen, t, worktreesSurfaceProjectId, worktreesSurfaceProjectLabel]);
+  }, [isClaudeSurfaceOpen, isChatGPTSurfaceOpen, guestPage, isArchiveSurfaceOpen, overviewRunTitle, runOverviewKey, isScheduledSurfaceOpen, isUsageStatsSurfaceOpen, t, worktreesSurfaceProjectId, worktreesSurfaceProjectLabel]);
 
 
   const actionDirectory = React.useMemo(() => {

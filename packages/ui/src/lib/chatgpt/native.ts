@@ -1,6 +1,7 @@
 import { isElectronShell, isDesktopLocalOriginActive } from '@/lib/desktop';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { opencodeClient } from '@/lib/opencode/client';
+import { rememberUnboundDraftTarget } from '@/lib/projectProviderBinding';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -48,9 +49,15 @@ export async function openNativeChatGPT(setupError: string): Promise<void> {
   }
   projects.updateProjectMeta(project.id, { icon: 'chatgpt', defaultAgent: 'ChatGPT' });
   useUIStore.getState().closeMainSurfaces();
+  rememberUnboundDraftTarget({
+    selectedProjectId: source.newSessionDraft.selectedProjectId ?? null,
+    directoryOverride: source.newSessionDraft.directoryOverride ?? null,
+    target: source.newSessionDraft.target,
+  });
   useSessionUIStore.getState().openNewSessionDraft({ target: 'project', selectedProjectId: project.id, directoryOverride: directory });
   const draftId = useSessionUIStore.getState().newSessionDraft.draftId;
-  useConfigStore.getState().setAgent(activeAgent);
+  const targetAgent = activeAgent?.toLowerCase() === 'claude' ? 'ChatGPT' : activeAgent;
+  useConfigStore.getState().setAgent(targetAgent);
   const selectionBeforeActivation = useConfigStore.getState();
   await useConfigStore.getState().activateDirectory(directory);
   if (!runtimeIsCurrent() || useSessionUIStore.getState().newSessionDraft.draftId !== draftId
@@ -59,7 +66,7 @@ export async function openNativeChatGPT(setupError: string): Promise<void> {
   const config = useConfigStore.getState();
   if (config.currentAgentName?.toLowerCase() === 'zdr') throw new Error(setupError);
   // A newer composer choice owns the draft, including while its project loads.
-  if (config.currentAgentName !== activeAgent || (config.selectionSource === 'manual'
+  if (config.currentAgentName !== targetAgent || (config.selectionSource === 'manual'
     && (selectionBeforeActivation.selectionSource !== 'manual'
       || config.currentProviderId !== selectionBeforeActivation.currentProviderId
       || config.currentModelId !== selectionBeforeActivation.currentModelId))) return;

@@ -207,6 +207,11 @@ describe('settings helpers', () => {
     expect(helpers.sanitizeSettingsUpdate({ wideChatLayoutEnabled: true })).toEqual({ wideChatLayoutEnabled: true });
     expect(helpers.sanitizeSettingsUpdate({ wideChatLayoutEnabled: false })).toEqual({ wideChatLayoutEnabled: false });
     expect(helpers.sanitizeSettingsUpdate({ wideChatLayoutEnabled: 'true' })).toEqual({});
+    expect(helpers.sanitizeSettingsUpdate({ chatColumnWidth: 1920 })).toEqual({ chatColumnWidth: 1920 });
+    expect(helpers.sanitizeSettingsUpdate({ chatColumnWidth: null })).toEqual({ chatColumnWidth: null });
+    for (const chatColumnWidth of [479, -1, 900.1, '900', Infinity, NaN]) {
+      expect(helpers.sanitizeSettingsUpdate({ chatColumnWidth })).toEqual({});
+    }
   });
 
   it('accepts only booleans for collapsible user messages', () => {
@@ -781,7 +786,7 @@ describe('settings registry gate', () => {
     workStatusPanelEnabled: true, workStatusHiddenSections: ['mcp'], workStatusHiddenSectionsExplicit: true, workStatusSectionOrder: ['mcp', 'session'],
     showReasoningTraces: true, streamingAutoFollowEnabled: true, collapsibleThinkingBlocks: true, showTextJustificationActivity: true,
     chatRenderMode: 'live', activityRenderMode: 'summary', mermaidRenderingMode: 'svg', userMessageRenderingMode: 'markdown', collapsibleUserMessages: true,
-    stickyUserHeader: true, promptNavigatorEnabled: true, wideChatLayoutEnabled: true, showSplitAssistantMessageActions: true, showToolFileIcons: true,
+    stickyUserHeader: true, promptNavigatorEnabled: true, wideChatLayoutEnabled: true, chatColumnWidth: 1280, showSplitAssistantMessageActions: true, showToolFileIcons: true,
     codeBlockLineWrap: true, showTurnChangedFiles: true, showExpandedBashTools: true, showExpandedEditTools: true, toolJsonViewMode: 'raw',
     timeFormatPreference: '24h', weekStartPreference: 'monday', messageStreamTransport: 'ws', diffLayoutPreference: 'inline', diffWrapLines: true,
     gitChangesViewMode: 'tree', gitmojiEnabled: true, defaultFileViewerPreview: true, directoryShowHidden: true, filesViewShowGitignored: true,

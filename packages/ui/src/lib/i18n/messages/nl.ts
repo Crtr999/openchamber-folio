@@ -1,5 +1,4 @@
 import { chatgptI18n } from './chatgpt.i18n';
-import { museI18n } from './muse.i18n';
 import { claudeI18n } from './claude.i18n';
 import { meetingsI18n } from './meetings.i18n';
 import { homeI18n } from './home.i18n';
@@ -25,7 +24,6 @@ export const dict = {
   ...personalWorkspaceI18n.nl,
   'workspace.officePreview': 'Alleen tekst en ingesloten afbeeldingen. Oorspronkelijke opmaak, grafieken, animaties en liveberekeningen worden niet weergegeven.',
   ...chatgptI18n['nl'],
-  ...museI18n.nl,
   ...claudeI18n.nl,
   ...meetingsI18n.nl,
   'meeting.quickStart': 'Vergadering starten',
@@ -2491,6 +2489,7 @@ export const dict = {
   'chat.chatInput.toast.largeTextPaste.inline': 'Inline plakken',
   'chat.chatInput.toast.addedFileMentions': '{count} bestandsvermelding(en) toegevoegd',
   'chat.chatInput.toast.attachFileFailed': 'Kan het bestand niet toevoegen',
+  'chat.chatInput.toast.processingVideo': 'Video verwerken…',
   'chat.chatInput.toast.attachNamedFailed': 'Kan {name} niet toevoegen',
   'chat.chatInput.toast.unsupportedAttachmentModalities': '{model} ondersteunt geen {modalities}-invoer die {files} vereist. U kunt het bericht toch verzenden, maar deze bijlagen worden mogelijk genegeerd.',
   'chat.chatInput.toast.someFilesSkipped': 'Sommige bestanden zijn overgeslagen:\n{summary}',

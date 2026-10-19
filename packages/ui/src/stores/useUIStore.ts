@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { chatWidthSchema } from '@/lib/chatWidth';
 import { z } from 'zod';
 import { devtools, persist } from 'zustand/middleware';
 import type { SidebarSection } from '@/constants/sidebar';
@@ -857,7 +858,6 @@ interface UIStore {
   isScheduledTasksDialogOpen: boolean;
   isArchivePageOpen: boolean;
   isChatGPTPageOpen: boolean;
-  isMusePageOpen: boolean;
   isClaudePageOpen: boolean;
   isUsageStatsPageOpen: boolean;
   openGuestPageId: string | null;
@@ -1039,6 +1039,7 @@ interface UIStore {
   enterToSend: boolean;
   enterToSendConfigured: boolean;
   wideChatLayoutEnabled: boolean;
+  chatColumnWidth: number | null;
   codeBlockLineWrap: boolean;
   showToolFileIcons: boolean;
   showTurnChangedFiles: boolean;
@@ -1120,7 +1121,6 @@ interface UIStore {
   setScheduledTasksDialogOpen: (open: boolean) => void;
   setArchivePageOpen: (open: boolean) => void;
   setChatGPTPageOpen: (open: boolean) => void;
-  setMusePageOpen: (open: boolean) => void;
   setClaudePageOpen: (open: boolean) => void;
   setUsageStatsPageOpen: (open: boolean) => void;
   setOpenGuestPage: (id: string | null) => void;
@@ -1254,6 +1254,7 @@ interface UIStore {
   setEnterToSend: (value: boolean) => void;
   setEnterToSendConfigured: (value: boolean) => void;
   setWideChatLayoutEnabled: (value: boolean) => void;
+  setChatColumnWidth: (value: number | null) => void;
   setCodeBlockLineWrap: (value: boolean) => void;
   setShowToolFileIcons: (value: boolean) => void;
   setShowTurnChangedFiles: (value: boolean) => void;
@@ -1329,7 +1330,7 @@ export const useUIStore = create<UIStore>()(
         isScheduledTasksDialogOpen: false,
         isArchivePageOpen: false,
         isChatGPTPageOpen: false,
-        isMusePageOpen: false,
+       
         isClaudePageOpen: false,
         isUsageStatsPageOpen: false,
         openGuestPageId: null,
@@ -1451,6 +1452,7 @@ export const useUIStore = create<UIStore>()(
         enterToSend: false,
         enterToSendConfigured: false,
         wideChatLayoutEnabled: false,
+        chatColumnWidth: null,
         codeBlockLineWrap: true,
         showToolFileIcons: true,
         showTurnChangedFiles: false,
@@ -2107,54 +2109,48 @@ export const useUIStore = create<UIStore>()(
 
         setScheduledTasksDialogOpen: (open) => {
           set(open
-            ? { isScheduledTasksDialogOpen: true, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isMusePageOpen: false, isClaudePageOpen: false }
+            ? { isScheduledTasksDialogOpen: true, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false }
             : { isScheduledTasksDialogOpen: false });
         },
 
         setArchivePageOpen: (open) => {
           set(open
-            ? { isArchivePageOpen: true, isUsageStatsPageOpen: false, isScheduledTasksDialogOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isMusePageOpen: false, isClaudePageOpen: false }
+            ? { isArchivePageOpen: true, isUsageStatsPageOpen: false, isScheduledTasksDialogOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false }
             : { isArchivePageOpen: false });
         },
 
         setUsageStatsPageOpen: (open) => {
           set(open
-            ? { isUsageStatsPageOpen: true, isArchivePageOpen: false, isScheduledTasksDialogOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isMusePageOpen: false, isClaudePageOpen: false }
+            ? { isUsageStatsPageOpen: true, isArchivePageOpen: false, isScheduledTasksDialogOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false }
             : { isUsageStatsPageOpen: false });
         },
 
         setWorktreesPageProjectId: (projectId) => {
           set(projectId
-            ? { worktreesPageProjectId: projectId, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isMusePageOpen: false, isClaudePageOpen: false }
+            ? { worktreesPageProjectId: projectId, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false }
             : { worktreesPageProjectId: null });
         },
 
         setOpenGuestPage: (id) => {
-          set(id ? { openGuestPageId: id, isChatGPTPageOpen: false, isMusePageOpen: false, isClaudePageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null }
-            : { openGuestPageId: null, isChatGPTPageOpen: false, isMusePageOpen: false, isClaudePageOpen: false });
+          set(id ? { openGuestPageId: id, isChatGPTPageOpen: false, isClaudePageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null }
+            : { openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false });
         },
 
         setChatGPTPageOpen: (open) => {
           set(open
-            ? { isChatGPTPageOpen: true, isMusePageOpen: false, isClaudePageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
+            ? { isChatGPTPageOpen: true, isClaudePageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
             : { isChatGPTPageOpen: false });
-        },
-
-        setMusePageOpen: (open) => {
-          set(open
-            ? { isMusePageOpen: true, isChatGPTPageOpen: false, isClaudePageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
-            : { isMusePageOpen: false });
         },
 
         setClaudePageOpen: (open) => {
           set(open
-            ? { isClaudePageOpen: true, isMusePageOpen: false, isChatGPTPageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
+            ? { isClaudePageOpen: true, isChatGPTPageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
             : { isClaudePageOpen: false });
         },
 
         closeMainSurfaces: () => {
           const state = get();
-          if (!state.isScheduledTasksDialogOpen && !state.isArchivePageOpen && !state.isUsageStatsPageOpen && !state.worktreesPageProjectId && !state.runOverviewKey && !state.openGuestPageId && !state.isChatGPTPageOpen && !state.isMusePageOpen && !state.isClaudePageOpen) {
+          if (!state.isScheduledTasksDialogOpen && !state.isArchivePageOpen && !state.isUsageStatsPageOpen && !state.worktreesPageProjectId && !state.runOverviewKey && !state.openGuestPageId && !state.isChatGPTPageOpen && !state.isClaudePageOpen) {
             return;
           }
           set({
@@ -2165,7 +2161,7 @@ export const useUIStore = create<UIStore>()(
             runOverviewKey: null,
             openGuestPageId: null,
             isChatGPTPageOpen: false,
-            isMusePageOpen: false,
+           
             isClaudePageOpen: false,
           });
         },
@@ -2745,7 +2741,7 @@ export const useUIStore = create<UIStore>()(
         // opening it closes the other surfaces and vice versa.
         setRunOverviewKey: (runKey) => {
           set(runKey
-            ? { runOverviewKey: runKey, isSessionSwitcherOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, openGuestPageId: null, isChatGPTPageOpen: false, isMusePageOpen: false, isClaudePageOpen: false }
+            ? { runOverviewKey: runKey, isSessionSwitcherOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false }
             : { runOverviewKey: null });
         },
 
@@ -2884,6 +2880,10 @@ export const useUIStore = create<UIStore>()(
         setWideChatLayoutEnabled: (value) => {
           set({ wideChatLayoutEnabled: value });
         },
+        setChatColumnWidth: (value) => {
+          const parsed = chatWidthSchema.safeParse(value);
+          if (parsed.success && parsed.data !== get().chatColumnWidth) set({ chatColumnWidth: parsed.data });
+        },
         setCodeBlockLineWrap: (value) => {
           set({ codeBlockLineWrap: value });
         },
@@ -2979,12 +2979,15 @@ export const useUIStore = create<UIStore>()(
       {
         name: 'ui-store',
         storage: createDeferredSafeJSONStorage(),
-        version: 25,
+        version: 26,
         migrate: (persistedState, version) => {
           if (!persistedState || typeof persistedState !== 'object') {
             return persistedState;
           }
           const state = persistedState as Record<string, unknown>;
+
+          // Existing normal/wide choices stay presets until an explicit resize.
+          if (version < 26) state.chatColumnWidth = chatWidthSchema.catch(null).parse(state.chatColumnWidth);
 
           // Missing preferences retain the existing visible default, including on web.
           state.contextRailVisible = z.boolean().catch(true).parse(state.contextRailVisible);
@@ -3344,6 +3347,7 @@ export const useUIStore = create<UIStore>()(
           enterToSend: state.enterToSend,
           enterToSendConfigured: state.enterToSendConfigured,
           wideChatLayoutEnabled: state.wideChatLayoutEnabled,
+          chatColumnWidth: state.chatColumnWidth,
           codeBlockLineWrap: state.codeBlockLineWrap,
           showToolFileIcons: state.showToolFileIcons,
           showTurnChangedFiles: state.showTurnChangedFiles,

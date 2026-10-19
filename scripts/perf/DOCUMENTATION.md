@@ -242,10 +242,11 @@ bun run profile:switch -- --url http://127.0.0.1:4599 --output artifacts/switch-
 bun run profile:switch -- --url http://127.0.0.1:4599 --baseline artifacts/switch-before --budget-ack 32 --budget-content 100
 ```
 
-`--sessions a,b,c` picks the rows to click; the default is the first rows in
-the sidebar, so pass explicit ids to compare runs across days. The row must be
-present in the sidebar; the command fails rather than measuring a click on
-nothing.
+`--sessions a,b,c` picks the rows to click; the default is the first mounted rows
+in the sidebar, so pass explicit ids to compare runs across days. For virtualized
+lists, the command scrolls to mount each target before measuring its click.
+This setup scroll is outside the switch timing. An unreachable row fails the run
+rather than measuring a click on nothing.
 
 ## profile:startup
 

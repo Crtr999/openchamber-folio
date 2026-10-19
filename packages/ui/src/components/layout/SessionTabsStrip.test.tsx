@@ -25,7 +25,7 @@ const { useUIStore } = await import('@/stores/useUIStore');
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
 const { useGlobalSessionsStore } = await import('@/stores/useGlobalSessionsStore');
 const { useSessionTabsStore } = await import('@/stores/useSessionTabsStore');
-const { useMuseStore } = await import('@/stores/useMuseStore');
+const { useClaudeStore } = await import('@/stores/useClaudeStore');
 const { SessionTabsStrip } = await import('./SessionTabsStrip');
 const { HeaderSessionPinMenuItem } = await import('./HeaderSessionPinMenuItem');
 const { SyncProvider } = await import('@/sync/sync-context');
@@ -34,7 +34,7 @@ const initialUI = useUIStore.getState();
 const initialSessionUI = useSessionUIStore.getState();
 const initialSessions = useGlobalSessionsStore.getState();
 const initialTabs = useSessionTabsStore.getState();
-const initialMuse = useMuseStore.getState();
+const initialClaude = useClaudeStore.getState();
 const session: Session = {
   id: 'session-a', title: 'Existing chat', directory: '/workspace', projectID: 'project', cost: 0,
   tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }, time: { created: 1, updated: 1 },
@@ -57,9 +57,8 @@ beforeEach(() => {
     createSession: async () => { creations += 1; return null; },
   });
   useGlobalSessionsStore.setState({ activeSessions: [session] });
-  useSessionTabsStore.setState({ tabIds: ['website:muse', 'website:claude', 'not-loaded'] });
-  useMuseStore.setState({ pageTitle: 'My Muse page' });
-  useUIStore.getState().setMusePageOpen(true);
+  useSessionTabsStore.setState({ tabIds: ['website:chatgpt', 'website:claude', 'not-loaded'] });
+  useUIStore.getState().setChatGPTPageOpen(true);
 });
 
 afterEach(async () => {
@@ -68,7 +67,7 @@ afterEach(async () => {
   useSessionUIStore.setState(initialSessionUI, true);
   useGlobalSessionsStore.setState(initialSessions, true);
   useSessionTabsStore.setState(initialTabs, true);
-  useMuseStore.setState(initialMuse, true);
+  useClaudeStore.setState(initialClaude, true);
   document.body.replaceChildren();
 });
 
@@ -92,23 +91,23 @@ const websiteButton = (title: string) => {
 test('websites share one strip and website activation does not add a draft or duplicate', async () => {
   await renderStrip();
   expect(host.querySelectorAll('[role="tab"]')).toHaveLength(2);
-  await act(async () => websiteButton('My Muse page').click());
-  expect(useUIStore.getState().isMusePageOpen).toBe(true);
-  expect(websiteButton('My Muse page').getAttribute('aria-selected')).toBe('true');
+  await act(async () => websiteButton('ChatGPT').click());
+  expect(useUIStore.getState().isChatGPTPageOpen).toBe(true);
+  expect(websiteButton('ChatGPT').getAttribute('aria-selected')).toBe('true');
   expect(host.querySelectorAll('[role="tab"]')).toHaveLength(2);
-  await act(async () => websiteButton('My Muse page').click());
-  expect(useSessionTabsStore.getState().tabIds).toEqual(['website:muse', 'website:claude', 'not-loaded']);
+  await act(async () => websiteButton('ChatGPT').click());
+  expect(useSessionTabsStore.getState().tabIds).toEqual(['website:chatgpt', 'website:claude', 'not-loaded']);
   expect(creations).toBe(0);
 });
 
 test('website buttons switch retained pages and close selects the neighbour without touching sessions', async () => {
   await renderStrip();
   await act(async () => websiteButton('Claude').click());
-  expect(useUIStore.getState().isMusePageOpen).toBe(false);
+  expect(useUIStore.getState().isChatGPTPageOpen).toBe(false);
   expect(useUIStore.getState().isClaudePageOpen).toBe(true);
   expect(selections).toEqual([]);
-  await act(async () => websiteButton('My Muse page').click());
-  const close = websiteButton('My Muse page').closest('.session-tab-slot')?.querySelector<HTMLButtonElement>('button[aria-label="Close tab"]');
+  await act(async () => websiteButton('ChatGPT').click());
+  const close = websiteButton('ChatGPT').closest('.session-tab-slot')?.querySelector<HTMLButtonElement>('button[aria-label="Close tab"]');
   if (!close) throw new Error('Missing website close button');
   await act(async () => close.click());
   expect(useUIStore.getState().isClaudePageOpen).toBe(true);
@@ -118,9 +117,9 @@ test('website buttons switch retained pages and close selects the neighbour with
 });
 
 test('website overflow exposes a live pin and retains keyboard menu navigation', async () => {
-  useMuseStore.getState().adoptPageTitle('https://muse.ai/observed-page', 'Observed page');
+  useClaudeStore.getState().adoptPageTitle('https://claude.ai/observed-page', 'Observed page');
   await renderStrip();
-  const trigger = websiteButton('Observed page').closest('.session-tab-slot')?.querySelector<HTMLButtonElement>('button[aria-label="Session tab actions"]');
+  const trigger = websiteButton('Claude').closest('.session-tab-slot')?.querySelector<HTMLButtonElement>('button[aria-label="Session tab actions"]');
   if (!trigger) throw new Error('Missing website menu trigger');
   await act(async () => {
     trigger.focus();
@@ -138,7 +137,7 @@ test('website overflow exposes a live pin and retains keyboard menu navigation',
   await act(async () => close.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', code: 'KeyP', ctrlKey: true, bubbles: true, cancelable: true })));
   expect(document.activeElement).toBe(pin);
   await act(async () => pin.click());
-  expect(useMuseStore.getState().savedPages.some(page => page.url === 'https://muse.ai/observed-page')).toBe(true);
+  expect(useClaudeStore.getState().savedPages.some(page => page.url === 'https://claude.ai/observed-page')).toBe(true);
   expect(creations).toBe(0);
 });
 

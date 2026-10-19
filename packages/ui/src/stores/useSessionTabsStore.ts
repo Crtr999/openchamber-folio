@@ -158,6 +158,14 @@ export const useSessionTabsStore = create<SessionTabsStore>()(
         name: 'session-tabs-store',
         storage: createDeferredSafeJSONStorage<PersistedSessionTabs>(),
         partialize: (state) => ({ tabIds: state.tabIds, focusedTabId: state.focusedTabId }),
+        // Drop ids of removed website tabs (e.g. the retired Muse tab) from older installs.
+        merge: (persisted, current) => {
+          const stored = (persisted ?? {}) as Partial<PersistedSessionTabs>;
+          const isRemoved = (id: unknown) => id === 'website:muse';
+          const tabIds = Array.isArray(stored.tabIds) ? stored.tabIds.filter((id) => !isRemoved(id)) : current.tabIds;
+          const focusedTabId = isRemoved(stored.focusedTabId) ? null : (stored.focusedTabId ?? current.focusedTabId);
+          return { ...current, tabIds, focusedTabId };
+        },
       },
     ),
   ),

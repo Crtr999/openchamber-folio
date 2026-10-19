@@ -136,7 +136,8 @@ Pour vérifier que ça a marché, ouvrez Paramètres → Fournisseurs : un avis 
 ### Ce qui change
 
 - Les fournisseurs de modèles viennent uniquement de votre configuration OpenCode. Connecter un fournisseur, s’y identifier, ajouter une clé ou créer un fournisseur personnalisé est désactivé dans OpenChamber ; supprimer ou changer de compte existant fonctionne toujours. Cela ferme seulement l’accès par l’application ; le verrou lui-même, c’est la politique OpenCode décrite plus bas.
-- **Notion / Home:** La politique de votre organisation bloque Notion.
+- **Notion / Home:** La politique de votre organisation bloque Notion, y compris la prise de tâches IA et l’enregistrement des résultats.
+- **CarterBot :** Enregistrement, lecture, génération de compétences, installation et tests désactivés. Vous pouvez arrêter un enregistrement existant.
 - Les résumés de réunions sont désactivés, même après approbation. La capture des réunions sur ordinateur, la transcription locale et les notes locales privées restent disponibles.
 - L'actualisation native de la facturation des fournisseurs, les nouvelles clés de facturation, la connexion de gestion et l'association d'un abonnement sont désactivées. Les montants déjà récupérés restent périmés et ne sont pas remplacés par zéro.
 - Les [Fournisseurs de classification (Jev)](/classification-providers/) restent désactivés, y compris un point de terminaison personnalisé que quelqu’un saisit dans les Paramètres. Le filet de sécurité et Auto ne sont pas proposés, et les sessions ne passent en cours qu’à la main. Pour utiliser Jev via votre propre infrastructure, fixez un point de terminaison avec `jev` dans le fichier de politique, ou avec `OPENCHAMBER_JEV_URL` (plus `OPENCHAMBER_JEV_MODEL` et, s’il en faut une, `OPENCHAMBER_JEV_API_KEY`). Il devient le choix par défaut, on peut toujours le désactiver, et rien d’autre ne peut être choisi.

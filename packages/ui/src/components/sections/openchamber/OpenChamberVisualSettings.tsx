@@ -10,6 +10,7 @@ import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { NumberInput } from '@/components/ui/number-input';
+import { CHAT_MIN_WIDTH } from '@/lib/chatWidth';
 import { Input } from '@/components/ui/input';
 import {
     Select,
@@ -361,6 +362,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setAutoSaveEnabled = useUIStore(state => state.setAutoSaveEnabled);
     const wideChatLayoutEnabled = useUIStore(state => state.wideChatLayoutEnabled);
     const setWideChatLayoutEnabled = useUIStore(state => state.setWideChatLayoutEnabled);
+    const chatColumnWidth = useUIStore(state => state.chatColumnWidth);
+    const setChatColumnWidth = useUIStore(state => state.setChatColumnWidth);
     const codeBlockLineWrap = useUIStore(state => state.codeBlockLineWrap);
     const setCodeBlockLineWrap = useUIStore(state => state.setCodeBlockLineWrap);
     const chatRenderMode = useUIStore(state => state.chatRenderMode);
@@ -559,9 +562,10 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     }, [setCollapsibleUserMessages]);
 
     const handleWideChatLayoutChange = React.useCallback((enabled: boolean) => {
+        setChatColumnWidth(null);
         setWideChatLayoutEnabled(enabled);
-        void updateDesktopSettings({ wideChatLayoutEnabled: enabled });
-    }, [setWideChatLayoutEnabled]);
+        void updateDesktopSettings({ wideChatLayoutEnabled: enabled, chatColumnWidth: null });
+    }, [setWideChatLayoutEnabled, setChatColumnWidth]);
 
     const handleShowSplitAssistantMessageActionsChange = React.useCallback((enabled: boolean) => {
         setShowSplitAssistantMessageActions(enabled);
@@ -2043,6 +2047,32 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                         ariaLabel={t('settings.openchamber.visual.field.promptNavigatorEnabledAria')}
                                         settingsItem="chat.prompt-navigator"
                                     />
+                                )}
+
+                                {shouldShow('wideChatLayout') && (
+                                    <SettingsFieldRow
+                                        label={t('chat.width.label')}
+                                        info={t('chat.width.settingsHint')}
+                                        settingsItem="chat.column-width"
+                                    >
+                                        <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                                            <NumberInput
+                                                value={chatColumnWidth ?? undefined}
+                                                fallbackValue={wideChatLayoutEnabled ? 1024 : 768}
+                                                min={CHAT_MIN_WIDTH}
+                                                step={16}
+                                                deferExternalValueWhileFocused
+                                                onValueChange={value => setChatColumnWidth(Math.round(value))}
+                                                onClear={() => setChatColumnWidth(null)}
+                                                aria-label={t('chat.width.label')}
+                                                className={SETTINGS_NUMBER_INPUT_CLASS}
+                                            />
+                                            <span className={SETTINGS_NUMBER_UNIT_CLASS}>px</span>
+                                            <Button variant="ghost" size="sm" disabled={chatColumnWidth === null} onClick={() => setChatColumnWidth(null)}>
+                                                {t('chat.width.reset')}
+                                            </Button>
+                                        </div>
+                                    </SettingsFieldRow>
                                 )}
 
                                 {shouldShow('wideChatLayout') && (

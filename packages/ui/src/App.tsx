@@ -396,13 +396,19 @@ function App({ apis }: AppProps) {
   const bootOutcomeKnown = bootInjectionStatus === 'valid';
   const bootViewIsMain = bootView?.screen === 'main';
 
+  // Stale-while-revalidate: once OpenCode answered its health check and a
+  // persisted providers/agents snapshot is already hydrated, the shell is
+  // usable. initializeApp keeps refreshing in the background, so do not hold
+  // the splash for that network round-trip.
+  const startupContentReady = isInitialized || (isConnected && providersCount > 0 && agentsCount > 0);
+
   // Splash dismissal: use the authoritative loading gate from desktopBoot.
   // Desktop shells strictly require a valid boot outcome before dismissing.
   // Non-main outcomes (chooser/recovery) can dismiss without waiting for init.
   React.useEffect(() => {
     if (!canDismissInitialLoading({
       isDesktopShell: isDesktopRuntime,
-      isInitialized,
+      isInitialized: startupContentReady,
       bootOutcomeKnown,
       bootViewIsMain,
     })) {
@@ -417,10 +423,10 @@ function App({ apis }: AppProps) {
           loadingElement.remove();
         }, 300);
       }
-    }, 150);
+    }, 0);
 
     return () => clearTimeout(timer);
-  }, [isDesktopRuntime, isInitialized, bootOutcomeKnown, bootViewIsMain]);
+  }, [isDesktopRuntime, startupContentReady, bootOutcomeKnown, bootViewIsMain]);
 
   // Deterministic malformed handling: update splash text so the user
   // sees a specific error instead of a generic spinner, but do NOT
@@ -989,7 +995,7 @@ function App({ apis }: AppProps) {
                   <OpenCodeUpdateToast />
                   <ProjectConfigErrorToast />
                   <MainLayout />
-                  <AppStartupOverlay ready={isInitialized && (!isDesktopRuntime || (bootOutcomeKnown && bootViewIsMain))} />
+                  <AppStartupOverlay ready={startupContentReady && (!isDesktopRuntime || (bootOutcomeKnown && bootViewIsMain))} />
                   <Toaster />
                   <AppLinkConfirmDialog />
                   <SharedTrustConfirmDialog />

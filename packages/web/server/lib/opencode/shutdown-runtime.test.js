@@ -48,6 +48,48 @@ const createRuntime = (server, overrides = {}) => {
 };
 
 describe('graceful shutdown runtime', () => {
+  it('drains the AI coordinator before disposing its OpenCode dependencies', async () => {
+    const order = [];
+    const runtime = createRuntime(null, {
+      getAiTaskRuntime: () => ({ close: async () => { await Promise.resolve(); order.push('tasks'); } }),
+      sessionRuntime: { dispose: () => order.push('sessions') },
+    });
+    await runtime.gracefulShutdown({ exitProcess: false });
+    expect(order).toEqual(['tasks', 'sessions']);
+  });
+  it('stops team polling and drains team runs before their OpenCode dependencies', async () => {
+    vi.useFakeTimers();
+    const order = [];
+    const check = vi.fn();
+    const interval = setInterval(check, 100);
+    const close = vi.fn(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+      expect(check).not.toHaveBeenCalled();
+      order.push('team');
+    });
+    const runtime = createRuntime(null, {
+      getTeamRuntime: () => ({ close }),
+      getTeamCheckInterval: () => interval,
+      getAiTaskRuntime: () => ({ close: () => order.push('tasks') }),
+      sessionRuntime: { dispose: () => order.push('sessions') },
+    });
+    const shutdown = runtime.gracefulShutdown({ exitProcess: false });
+    expect(runtime.gracefulShutdown({ exitProcess: false })).toBe(shutdown);
+    await shutdown;
+    expect(order).toEqual(['team', 'tasks', 'sessions']);
+    expect(close).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it('continues draining the task coordinator when team cleanup fails', async () => {
+    const order = [];
+    const runtime = createRuntime(null, {
+      getTeamRuntime: () => ({ close: async () => { throw new Error('fixture team close failure'); } }),
+      getAiTaskRuntime: () => ({ close: () => order.push('tasks') }),
+      sessionRuntime: { dispose: () => order.push('sessions') },
+    });
+    await runtime.gracefulShutdown({ exitProcess: false });
+    expect(order).toEqual(['tasks', 'sessions']);
+  });
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();

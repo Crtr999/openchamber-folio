@@ -1,3 +1,4 @@
+import { HomeFriends } from './HomeFriends';
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
@@ -12,7 +13,6 @@ import { compareSessionsByLifecycleOrder, useSessionOrderingStore } from '@/sync
 import { cn, formatDirectoryName } from '@/lib/utils';
 import { isElectronShell, isDesktopLocalOriginActive } from '@/lib/desktop';
 import { useClaudeStore } from '@/stores/useClaudeStore';
-import { useMuseStore } from '@/stores/useMuseStore';
 import coastalLandscape from '@/assets/home-coast.webp';
 import './HomeDashboard.css';
 import { HomePersonalPanels, HomeChatExport } from './HomePersonalPanels';
@@ -52,15 +52,28 @@ export const HomeGreeting: React.FC = () => {
     );
 };
 
-/** Start meeting. Sits beside the composer on wide windows. */
+/** Start meeting and Meeting log. Sits beside the composer on wide windows. */
 export const HomeQuickActions: React.FC<{ className?: string; stacked?: boolean }> = ({ className, stacked = false }) => {
     const { t } = useI18n();
     if (!meetingsSupported()) return null;
+    const resolveActiveProjectDir = () => {
+        const ui = useSessionUIStore.getState();
+        const sessionDir = ui.currentSessionDirectory;
+        if (sessionDir && !sessionDir.includes('/.config/openchamber/chats')) return sessionDir;
+        if (ui.newSessionDraft.open && ui.newSessionDraft.target === 'project' && ui.newSessionDraft.directoryOverride) {
+            return ui.newSessionDraft.directoryOverride;
+        }
+        return undefined;
+    };
     return (
-        <div className={cn(stacked ? 'flex-col items-start' : 'items-center', className)}>
-            <Button size="sm" variant="ghost" className="oc-press h-8 rounded-full px-3 text-[12.5px] text-muted-foreground hover:text-foreground"
-                onClick={() => openMeetingWorkspace({ title: '', autoStart: true })}>
+        <div className={cn(stacked ? 'flex-col items-start gap-0.5' : 'items-center gap-1', className)}>
+            <Button size="sm" variant="ghost" className="oc-press h-7 rounded-full px-3 text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
+                onClick={() => openMeetingWorkspace({ title: '', autoStart: true, directory: resolveActiveProjectDir() })}>
                 {t('meeting.quickStart')}
+            </Button>
+            <Button size="sm" variant="ghost" className="oc-press h-7 rounded-full px-3 text-[12px] text-muted-foreground/85 hover:text-foreground"
+                onClick={() => openMeetingWorkspace({ title: '', openLog: true })}>
+                {t('meeting.ui.log')}
             </Button>
         </div>
     );
@@ -94,6 +107,7 @@ export const HomeDashboard: React.FC = () => {
     return (
         <div className="flex min-w-0 flex-col gap-4">
         <HomeQuickActions className="flex justify-end xl:hidden" />
+        <HomeFriends />
         <HomePersonalPanels>{(personalPanels) => <HomeWidgetLayout widgets={{
             working: { label: t('home.working'), content: <section>
                 <h2 className="oc-home-card-heading">
@@ -150,12 +164,6 @@ export const HomeDashboard: React.FC = () => {
                        <span>Claude</span>
                       <Icon name="arrow-right" className="ml-auto size-3.5 opacity-40" />
                   </Button>}
-                 {isElectronShell() && isDesktopLocalOriginActive() && <Button variant="ghost" size="sm" className="oc-home-row"
-                     onClick={() => useMuseStore.getState().open()}>
-                     <Icon name="chat-3" className="size-3.5 text-muted-foreground" />
-                      <span>Muse</span>
-                     <Icon name="arrow-right" className="ml-auto size-3.5 opacity-40" />
-                 </Button>}
                 <Button variant="ghost" size="sm" className="oc-home-row"
                     onClick={() => useUIStore.getState().setScheduledTasksDialogOpen(true)}>
                     <Icon name="calendar-schedule" className="size-3.5 text-muted-foreground" />

@@ -1,5 +1,5 @@
+import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
-import { museI18n } from './muse.i18n';
 import { claudeI18n } from './claude.i18n';
 import { meetingsI18n } from './meetings.i18n';
 import { homeI18n } from './home.i18n';
@@ -22,10 +22,10 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 export const dict = {
+  ...friendsI18n['fr'],
   ...personalWorkspaceI18n.fr,
   'workspace.officePreview': 'Texte et images intégrées uniquement. La mise en page originale, les graphiques, animations et calculs ne sont pas reproduits.',
   ...chatgptI18n['fr'],
-  ...museI18n.fr,
   ...claudeI18n.fr,
   ...meetingsI18n.fr,
   'meeting.quickStart': 'Démarrer une réunion',
@@ -2187,6 +2187,7 @@ export const dict = {
   'chat.chatInput.toast.largeTextPaste.inline': 'Coller en ligne',
   'chat.chatInput.toast.addedFileMentions': 'Ajout des mentions du fichier {count}',
   'chat.chatInput.toast.attachFileFailed': 'Impossible de joindre le fichier',
+  'chat.chatInput.toast.processingVideo': 'Traitement de la vidéo…',
   'chat.chatInput.toast.attachNamedFailed': 'Échec de la connexion du {name}',
   'chat.chatInput.toast.unsupportedAttachmentModalities': '{model} ne prend pas en charge l’entrée {modalities} requise par {files}. Vous pouvez tout de même envoyer le message, mais ces pièces jointes risquent d’être ignorées.',
   'chat.chatInput.toast.someFilesSkipped': 'Certains fichiers ont été ignorés :\n{summary}',

@@ -21,6 +21,9 @@ import { showPill } from '@/lib/pill';
 import { createHomeTask, exportMeetingToNotion } from '@/lib/personal-home';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionTabsStore } from '@/stores/useSessionTabsStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useMeetingsSidebarStore } from '@/stores/useMeetingsSidebarStore';
+import { formatDirectoryName } from '@/lib/utils';
 
 // The recording acknowledgement is asked once and remembered on this device, so
 // starting a meeting is one click. Set to false to ask before every recording.
@@ -28,6 +31,10 @@ import { useSessionTabsStore } from '@/stores/useSessionTabsStore';
 const REMEMBER_CONSENT = true;
 const CONSENT_KEY = 'open-carter:meeting-consent';
 const MODE_KEY = 'open-carter:meeting-mode';
+const RESUME_PROMPT_KEY = 'open-carter:meeting-resume-dismissed';
+// An unexpected stop (quit, crash, sleep, lost renderer) within this window offers a resume.
+const RESUME_WINDOW_MS = 6 * 60 * 60_000;
+const UNEXPECTED_STOPS = new Set(['crash', 'quit', 'sleep', 'renderer-gone', 'capture-error', 'navigation']);
 // Notion-style automatic summaries: after the first explicit, reviewed summary
 // the chosen model and its transcript-only disclosure are remembered, and every
 // later stopped recording is summarized automatically through the same
@@ -53,10 +60,10 @@ const clock = (ms: number) => {
 const defaultTitle = (locale: string) => `Meeting @${new Date().toLocaleString(locale, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
 
 /** Elapsed recording time, paused while capture is paused. */
-function useElapsed(phase: string, meetingId: string | undefined) {
+function useElapsed(phase: string, meetingId: string | undefined, savedMs: number) {
     const [now, setNow] = React.useState(() => Date.now());
     const state = React.useRef<{ id?: string; accumulated: number; since: number | null }>({ accumulated: 0, since: null });
-    if (state.current.id !== meetingId) state.current = { id: meetingId, accumulated: 0, since: null };
+    if (state.current.id !== meetingId) state.current = { id: meetingId, accumulated: savedMs, since: null };
     const running = phase === 'recording' || phase === 'pausing';
     if (running && state.current.since === null) state.current.since = Date.now();
     if (!running && state.current.since !== null) { state.current.accumulated += Date.now() - state.current.since; state.current.since = null; }
@@ -166,7 +173,7 @@ export function MeetingWorkspace() {
     const [pillDismissed, setPillDismissed] = React.useState(false);
     const [justSaved, setJustSaved] = React.useState<Meeting | null>(null);
     const [errorDismissedFor, setErrorDismissedFor] = React.useState<string | null>(null);
-    const [copied, setCopied] = React.useState<Tab | null>(null);
+    const [copied, setCopied] = React.useState<Tab | 'all' | null>(null);
     const [titleDraft, setTitleDraft] = React.useState<{ id: string; value: string } | null>(null);
     const [taskState, setTaskState] = React.useState<{ id: string; state: 'adding' | 'added' | 'error'; count: number; message?: string } | null>(null);
     const [notionState, setNotionState] = React.useState<{ id: string; state: 'saving' | 'saved' | 'error'; message?: string } | null>(null);
@@ -174,15 +181,35 @@ export function MeetingWorkspace() {
     // Only a runtime switch invalidates a one-click start; list refreshes must not.
     const runtimeEpoch = React.useRef(0);
     const quickStartRef = React.useRef<(launch: z.infer<typeof meetingLaunchSchema>, mode?: 'system-and-microphone' | 'microphone') => Promise<void>>(async () => {});
+    const pendingLaunchRef = React.useRef<z.infer<typeof meetingLaunchSchema> | null>(null);
     const summaryEpoch = React.useRef(0);
     const pending = React.useRef(false);
+    const autoRan = React.useRef(new Set<string>());
+    const [resumable, setResumable] = React.useState<Meeting | null>(null);
+    const [promptDismissed, setPromptDismissed] = React.useState(() => readFlag(RESUME_PROMPT_KEY));
+    const projects = useProjectsStore((state) => state.projects);
+    const meetingDirectories = useMeetingsSidebarStore((state) => state.directoriesById);
+    const setMeetingDirectory = useMeetingsSidebarStore((state) => state.setMeetingDirectory);
     const active = !['idle', 'error'].includes(capture.phase);
     const meeting = active && selected && capture.meeting?.id === selected.id ? capture.meeting : selected;
-    const elapsed = useElapsed(capture.phase, capture.meeting?.id);
+    const elapsed = useElapsed(capture.phase, capture.meeting?.id, capture.meeting ? capture.meeting.segments.reduce((end, segment) => Math.max(end, segment.endMs), 0) : 0);
 
-    const upsert = React.useCallback((result: Meeting) => {
+    const resolveDefaultMeetingDirectory = React.useCallback((explicit?: string) => {
+        if (explicit && explicit.trim()) return explicit.trim();
+        const ui = useSessionUIStore.getState();
+        if (ui.currentSessionDirectory && !ui.currentSessionDirectory.includes('/.config/openchamber/chats')) {
+            return ui.currentSessionDirectory;
+        }
+        if (ui.newSessionDraft.open && ui.newSessionDraft.target === 'project' && ui.newSessionDraft.directoryOverride) {
+            return ui.newSessionDraft.directoryOverride;
+        }
+        return undefined;
+    }, []);
+
+    const upsert = React.useCallback((result: Meeting, directory?: string) => {
         setSelected((current) => current?.id === result.id ? result : current);
         setMeetings((current) => current.some((item) => item.id === result.id) ? current.map((item) => item.id === result.id ? result : item) : [result, ...current]);
+        useMeetingsSidebarStore.getState().upsertMeeting(result, directory);
     }, []);
 
     React.useEffect(() => {
@@ -190,6 +217,7 @@ export function MeetingWorkspace() {
         if (!saved) return;
         setSelected((current) => current?.id === saved.id && current.updatedAt <= saved.updatedAt ? saved : current);
         setMeetings((current) => current.map((item) => item.id === saved.id && item.updatedAt <= saved.updatedAt ? saved : item));
+        useMeetingsSidebarStore.getState().upsertMeeting(saved);
     }, [capture.meeting]);
     React.useEffect(() => { if (active || capture.error) setPillDismissed(false); }, [active, capture.error]);
 
@@ -201,6 +229,7 @@ export function MeetingWorkspace() {
             // An active recording is the place to go back to, not a new one.
             const snapshot = meetingCapture.getSnapshot();
             if (!['idle', 'error'].includes(snapshot.phase)) { setSelected(snapshot.meeting); setTab('transcript'); setOpen(true); return; }
+            pendingLaunchRef.current = parsed.data;
             setSupported(meetingsSupported()); setSeed(parsed.data); setSelected(null); setOpen(true); setConsentState(storedConsent());
             if (parsed.data.autoStart) void quickStartRef.current(parsed.data);
         };
@@ -217,7 +246,25 @@ export function MeetingWorkspace() {
             const result = await listMeetings();
             if (version !== generation.current) return;
             setMeetings(result.meetings); setReadiness(result.readiness); setSystemSupported(result.capture.systemAudioSupported);
+            useMeetingsSidebarStore.getState().setMeetings(result.meetings);
             setPartial(result.warnings.length > 0);
+            const requested = pendingLaunchRef.current;
+            pendingLaunchRef.current = null;
+            if (requested?.meetingId) {
+                const target = result.meetings.find((item) => item.id === requested.meetingId);
+                if (target) {
+                    setSelected(target);
+                    setTab(target.summary.status === 'available' ? 'summary' : target.segments.length ? 'transcript' : 'notes');
+                    return;
+                }
+            } else if (requested?.openLog) {
+                const latest = result.meetings.find((item) => !(item.status === 'draft' && !item.segments.length && !item.notes.trim() && Date.now() - Date.parse(item.createdAt) > 30 * 60_000));
+                if (latest) {
+                    setSelected(latest);
+                    setTab(latest.summary.status === 'available' ? 'summary' : latest.segments.length ? 'transcript' : 'notes');
+                    return;
+                }
+            }
             setSelected((current) => current ? result.meetings.find((item) => item.id === current.id && item.updatedAt >= current.updatedAt) ?? current : null);
         } catch { if (version === generation.current) setError(true); }
         finally { if (version === generation.current) setBusy(false); }
@@ -240,14 +287,18 @@ export function MeetingWorkspace() {
     };
     const create = () => {
         const version = generation.current;
+        const targetDir = resolveDefaultMeetingDirectory(seed.directory);
         void run(async () => {
             const result = await createMeeting(seed.title.trim() || defaultTitle(locale), seed.calendarEventId);
             if (version !== generation.current) return;
             setSelected(result); setMeetings((current) => [result, ...current]); setSeed({ title: '' }); setTab('notes');
+            useMeetingsSidebarStore.getState().upsertMeeting(result, targetDir);
         });
     };
     const begin = React.useCallback((target: Meeting, mode: 'system-and-microphone' | 'microphone') => {
         writeFlag(MODE_KEY, mode);
+        // A resumed meeting gets a fresh automatic summary when it stops again.
+        autoRan.current.delete(target.id);
         setTab('transcript');
         void meetingCapture.start(target, mode);
     }, []);
@@ -257,6 +308,7 @@ export function MeetingWorkspace() {
     const quickStart = React.useCallback(async (launch: z.infer<typeof meetingLaunchSchema>, mode: 'system-and-microphone' | 'microphone' = storedMode()) => {
         if (pending.current || !['idle', 'error'].includes(meetingCapture.getSnapshot().phase)) return;
         const epoch = runtimeEpoch.current;
+        const targetDir = resolveDefaultMeetingDirectory(launch.directory);
         pending.current = true; setBusy(true); setError(false);
         try {
             if (!meetingsSupported() || !storedConsent()) return;
@@ -264,11 +316,40 @@ export function MeetingWorkspace() {
             const created = await createMeeting(launch.title.trim() || defaultTitle(locale), launch.calendarEventId);
             if (epoch !== runtimeEpoch.current) return;
             setSelected(created); setMeetings((current) => [created, ...current]); setSeed({ title: '' });
+            useMeetingsSidebarStore.getState().upsertMeeting(created, targetDir);
             begin(created, mode);
         } catch { if (epoch === runtimeEpoch.current) setError(true); }
         finally { pending.current = false; if (epoch === runtimeEpoch.current) setBusy(false); }
-    }, [begin, locale]);
+    }, [begin, locale, resolveDefaultMeetingDirectory]);
     React.useEffect(() => { quickStartRef.current = quickStart; }, [quickStart]);
+
+    // After a restart, a recording that ended unexpectedly is offered back once.
+    // The list is read shortly after mount so sidebar folders and All Chats populate.
+    React.useEffect(() => {
+        if (!supported) return;
+        let current = true;
+        const timer = window.setTimeout(() => {
+            void listMeetings().then(({ meetings: all }) => {
+                if (!current) return;
+                useMeetingsSidebarStore.getState().setMeetings(all);
+                const candidate = all
+                    .filter((item) => item.status === 'interrupted' && item.interruptionReason !== null && UNEXPECTED_STOPS.has(item.interruptionReason)
+                        && Date.now() - Date.parse(item.updatedAt) < RESUME_WINDOW_MS && (item.segments.length > 0 || item.notes.trim().length > 0))
+                    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+                setResumable(candidate ?? null);
+            }).catch(() => {});
+        }, 600);
+        return () => { current = false; window.clearTimeout(timer); };
+    }, [supported]);
+    const resumeNow = React.useCallback((target: Meeting) => {
+        setResumable(null);
+        if (!['idle', 'error'].includes(meetingCapture.getSnapshot().phase)) return;
+        setSelected(target); setPillDismissed(true);
+        // Without a remembered acknowledgement the workspace asks first.
+        if (!storedConsent()) { setTab('transcript'); setOpen(true); return; }
+        begin(target, storedMode());
+    }, [begin]);
+    const dismissResume = (target: Meeting) => { writeFlag(RESUME_PROMPT_KEY, target.id); setPromptDismissed(target.id); setResumable(null); };
 
     // Notes autosave (debounced), like a Notion page.
     const notes = selected ? drafts.get(selected.id) ?? selected.notes : '';
@@ -314,7 +395,6 @@ export function MeetingWorkspace() {
     }, [capture.phase, capture.error, capture.meeting]);
 
     // Automatic summary once a recording stops (after the first reviewed one).
-    const autoRan = React.useRef(new Set<string>());
     const previousPhase = React.useRef(capture.phase);
     React.useEffect(() => {
         const was = previousPhase.current;
@@ -400,7 +480,7 @@ export function MeetingWorkspace() {
         const live = active && capture.meeting?.id === item.id;
         const label = live ? (capture.phase === 'paused' ? t('meeting.paused') : t('meeting.recording')) : item.status === 'draft' ? t('meeting.ui.draft') : item.status === 'interrupted' ? t('meeting.ui.interrupted') : item.summary.status === 'available' ? t('meeting.ui.summarized') : t('meeting.ui.done');
         return <span className={cn('inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10.5px] font-medium',
-            live ? 'bg-red-500/15 text-red-400' : item.summary.status === 'available' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-muted text-muted-foreground')}>
+            live ? 'bg-muted text-foreground' : item.summary.status === 'available' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-muted text-muted-foreground')}>
             {live ? <span className="oc-rec-dot size-1.5 rounded-full bg-red-500" /> : null}{label}
         </span>;
     };
@@ -444,11 +524,11 @@ export function MeetingWorkspace() {
     const ready = Boolean(readiness?.available);
     const startControls = (target: Meeting | null) => <div className="space-y-2.5">
         <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" className="oc-press gap-1.5 rounded-lg px-3.5" disabled={busy || !consent || !ready || (target ? target.status !== 'draft' : false) || !systemSupported}
+            <Button size="sm" className="oc-press gap-1.5 rounded-lg px-3.5" disabled={busy || !consent || !ready || !systemSupported}
                 onClick={() => target ? begin(target, 'system-and-microphone') : void quickStart({ title: seed.title, calendarEventId: seed.calendarEventId }, 'system-and-microphone')}>
-                <Icon name="mic" className="size-4" />{t('meeting.ui.startTranscribing')}
+                <Icon name={target && target.status !== 'draft' ? 'play' : 'mic'} className="size-4" />{target && target.status !== 'draft' ? t('meeting.ui.resumeTranscribing') : t('meeting.ui.startTranscribing')}
             </Button>
-            <Button size="sm" variant="ghost" className="oc-press text-muted-foreground" disabled={busy || !consent || !ready || (target ? target.status !== 'draft' : false)}
+            <Button size="sm" variant="ghost" className="oc-press text-muted-foreground" disabled={busy || !consent || !ready}
                 onClick={() => target ? begin(target, 'microphone') : void quickStart({ title: seed.title, calendarEventId: seed.calendarEventId }, 'microphone')}>
                 {t('meeting.ui.micOnly')}
             </Button>
@@ -483,10 +563,20 @@ export function MeetingWorkspace() {
         useSessionUIStore.getState().openNewSessionDraft({ initialPrompt: `${t('meeting.ui.chatIntro', { title: target.title })}\n\n<meeting title="${target.title.replace(/"/g, "'")}">\n${content}\n</meeting>\n\n` });
     };
     const sendToNotion = (target: Meeting) => {
+        const currentNotes = drafts.get(target.id) ?? target.notes;
         setNotionState({ id: target.id, state: 'saving' });
-        exportMeetingToNotion(target.title, meetingMarkdown(target, locale, labels()))
+        exportMeetingToNotion(target.title, meetingMarkdown({ ...target, notes: currentNotes }, locale, labels()))
             .then(() => { setNotionState({ id: target.id, state: 'saved' }); showPill(t('meeting.ui.notionPill', { title: target.title })); })
             .catch((cause: unknown) => setNotionState({ id: target.id, state: 'error', message: cause instanceof Error ? cause.message.replace(/^Error:\s*/, '') : String(cause) }));
+    };
+    const copyAll = (target: Meeting) => {
+        const currentNotes = drafts.get(target.id) ?? target.notes;
+        const text = `# ${target.title}\n\n${meetingMarkdown({ ...target, notes: currentNotes }, locale, labels())}`;
+        void copyTextToClipboard(text).then(() => {
+            setCopied('all');
+            showPill(t('meeting.ui.copiedAllPill'));
+            setTimeout(() => setCopied((prev) => prev === 'all' ? null : prev), 1800);
+        });
     };
 
     const pill = (() => {
@@ -513,8 +603,19 @@ export function MeetingWorkspace() {
             return <div role="alert" className={cn(pillClass, 'max-w-[min(640px,92vw)] gap-2 border-red-500/40 py-1.5 pl-3 pr-1.5')}>
                 <Icon name="error-warning" className="size-4 shrink-0 text-red-400" />
                 <span className="min-w-0 truncate text-[12px] text-foreground" title={captureError}>{captureError}</span>
+                {capture.meeting?.status === 'interrupted' ? <Button size="xs" onClick={() => resumeNow(capture.meeting as Meeting)}>{t('meeting.resume')}</Button> : null}
                 <Button size="xs" variant="ghost" onClick={() => openWorkspace(capture.meeting)}>{t('meeting.ui.open')}</Button>
                 <button type="button" aria-label={t('meeting.ui.dismiss')} onClick={() => setPillDismissed(true)} className="oc-press flex size-6 items-center justify-center rounded-full text-muted-foreground hover:bg-interactive-hover"><Icon name="close" className="size-3.5" /></button>
+            </div>;
+        }
+        if (resumable && !capture.error && resumable.id !== promptDismissed) {
+            const target = resumable;
+            return <div role="status" className={cn(pillClass, 'max-w-[min(640px,92vw)] gap-2 border-border/80 py-1.5 pl-3 pr-1.5')}>
+                <Icon name="mic" className="size-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 truncate text-[12.5px] text-foreground" title={t('meeting.ui.resumePillBody', { title: target.title })}>{t('meeting.ui.resumePillBody', { title: target.title })}</span>
+                <Button size="xs" onClick={() => resumeNow(target)}>{t('meeting.resume')}</Button>
+                <Button size="xs" variant="ghost" onClick={() => { setResumable(null); openWorkspace(target, 'transcript'); }}>{t('meeting.ui.open')}</Button>
+                <button type="button" aria-label={t('meeting.ui.dismiss')} onClick={() => dismissResume(target)} className="oc-press flex size-6 items-center justify-center rounded-full text-muted-foreground hover:bg-interactive-hover"><Icon name="close" className="size-3.5" /></button>
             </div>;
         }
         if (justSaved && !autoSummary) {
@@ -592,6 +693,23 @@ export function MeetingWorkspace() {
                                 <Icon name="calendar" className="size-3.5" />
                                 <time dateTime={meeting.createdAt}>{new Date(meeting.createdAt).toLocaleString(locale, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</time>
                                 {statusChip(meeting)}
+                                <Select
+                                    value={meetingDirectories[meeting.id] || '__all_chats__'}
+                                    onValueChange={(value) => setMeetingDirectory(meeting.id, value === '__all_chats__' ? null : value)}
+                                >
+                                    <SelectTrigger aria-label={t('meeting.ui.folder')} className="h-6 w-auto gap-1.5 rounded-full border-border/60 bg-muted/20 px-2.5 py-0 text-[11px] font-medium text-muted-foreground hover:text-foreground">
+                                        <Icon name="folder" className="size-3 shrink-0" />
+                                        <SelectValue placeholder={t('meeting.ui.allChatsFolder')} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="__all_chats__">{t('meeting.ui.allChatsFolder')}</SelectItem>
+                                        {projects.map((proj) => (
+                                            <SelectItem key={proj.id} value={proj.path}>
+                                                {proj.label || formatDirectoryName(proj.path)}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                                 {recordingHere ? <span className="font-mono tabular-nums">{clock(elapsed)}</span> : null}
                             </div>
                             <input aria-label={t('meeting.ui.rename')} title={t('meeting.ui.rename')} value={titleDraft?.id === meeting.id ? titleDraft.value : meeting.title} maxLength={300}
@@ -599,9 +717,13 @@ export function MeetingWorkspace() {
                                 onBlur={() => commitTitle(meeting)}
                                 onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setTitleDraft(null); event.currentTarget.blur(); } }}
                                 className="-mx-1.5 mt-1 w-[calc(100%-2rem)] rounded-md bg-transparent px-1.5 py-0.5 text-[26px] font-bold leading-tight tracking-tight text-foreground outline-none transition-colors hover:bg-interactive-hover/60 focus:bg-interactive-hover/60" />
-                            {meeting.status !== 'draft' && !recordingHere ? <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                                <Button size="sm" variant="outline" className="oc-press h-7 gap-1.5 rounded-full px-3 text-[12px]" disabled={!meeting.segments.length && !meeting.notes.trim()} onClick={() => discussInChat(meeting)}>
+                            {!recordingHere && (meeting.status !== 'draft' || Boolean(notes.trim()) || Boolean(meeting.segments.length)) ? <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                                <Button size="sm" variant="outline" className="oc-press h-7 gap-1.5 rounded-full px-3 text-[12px]" disabled={!meeting.segments.length && !notes.trim()} onClick={() => discussInChat({ ...meeting, notes })}>
                                     <Icon name="chat-new" className="size-3.5" />{t('meeting.ui.discuss')}
+                                </Button>
+                                <Button size="sm" variant="ghost" className="oc-press h-7 gap-1.5 rounded-full px-3 text-[12px] text-muted-foreground hover:text-foreground" disabled={!meeting.segments.length && !notes.trim() && meeting.summary.status !== 'available'} onClick={() => copyAll(meeting)}>
+                                    <Icon name={copied === 'all' ? 'check' : 'file-copy'} className="size-3.5" />
+                                    {copied === 'all' ? t('meeting.ui.copiedAll') : t('meeting.ui.copyAll')}
                                 </Button>
                                 <Button size="sm" variant="ghost" className="oc-press h-7 gap-1.5 rounded-full px-3 text-[12px] text-muted-foreground hover:text-foreground" disabled={notionState?.id === meeting.id && notionState.state === 'saving'} onClick={() => sendToNotion(meeting)}>
                                     <Icon name={notionState?.id === meeting.id && notionState.state === 'saved' ? 'check' : notionState?.id === meeting.id && notionState.state === 'saving' ? 'loader-4' : 'upload-2'} className={cn('size-3.5', notionState?.id === meeting.id && notionState.state === 'saving' && 'animate-spin')} />
@@ -610,15 +732,16 @@ export function MeetingWorkspace() {
                                 {notionState?.id === meeting.id && notionState.state === 'error' ? <span role="alert" className="text-[11.5px] text-destructive">{notionState.message || t('personalTools.error')}</span> : null}
                             </div> : null}
                             {recordingHere ? <div className="mt-4 flex flex-wrap items-center gap-2">
-                                <span className="flex items-center gap-2 rounded-full bg-red-500/10 px-3 py-1.5 text-red-400"><Waveform level={level} live={capture.phase === 'recording'} /><span className="text-[12px] font-medium">{capture.phase === 'paused' ? t('meeting.paused') : capture.phase === 'recording' ? t('meeting.ui.listening') : t('meeting.ui.starting')}</span></span>
+                                <span className="flex items-center gap-2 text-muted-foreground"><Waveform level={level} live={capture.phase === 'recording'} /><span className="text-[12px]">{capture.phase === 'paused' ? t('meeting.paused') : capture.phase === 'recording' ? t('meeting.ui.listening') : t('meeting.ui.starting')}</span></span>
                                 <Button size="sm" variant="outline" className="oc-press gap-1.5 rounded-full" disabled={!['recording', 'paused'].includes(capture.phase)} onClick={pauseResume}><Icon name={capture.phase === 'paused' ? 'play' : 'pause'} className="size-3.5" />{capture.phase === 'paused' ? t('meeting.resume') : t('meeting.pause')}</Button>
-                                <Button size="sm" className="oc-press gap-1.5 rounded-full bg-red-500 text-white hover:bg-red-500/90" disabled={capture.phase === 'stopping'} onClick={() => void meetingCapture.stop()}><span className="size-2 rounded-[2px] bg-white" />{t('meeting.stop')}</Button>
+                                <Button size="sm" variant="outline" className="oc-press gap-1.5 rounded-full" disabled={capture.phase === 'stopping'} onClick={() => void meetingCapture.stop()}><span className="size-2 rounded-[2px] bg-foreground" />{t('meeting.stop')}</Button>
                                 {(capture.silentMicrophone || capture.silentSystem) ? <p role="status" className="w-full text-[11.5px] text-[var(--status-warning-text)]">{t('meeting.silence')}</p> : null}
-                            </div> : meeting.status === 'draft' && !active ? <div className="mt-4">{startControls(meeting)}</div> : null}
+                            </div> : !active ? <div className="mt-4">{startControls(meeting)}</div> : null}
+                            {recordingHere && capture.skipped > 0 ? <p role="status" className="mt-2 text-[11.5px] text-[var(--status-warning-text)]">{t('meeting.ui.skippedNotice', { count: capture.skipped })}</p> : null}
                             {capture.error && capture.meeting?.id === meeting.id && errorDismissedFor !== meeting.id && !(meeting.status === 'stopped' && meeting.segments.length) ? <div className="relative mt-3 space-y-2 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 pr-9">
                                 <button type="button" aria-label={t('meeting.ui.dismiss')} onClick={() => setErrorDismissedFor(meeting.id)} className="oc-press absolute right-2 top-2 flex size-5 items-center justify-center rounded text-muted-foreground hover:text-foreground"><Icon name="close" className="size-3.5" /></button>
                                 <p role="alert" className="text-[12px] text-red-400">{captureError}</p>
-                                {!active && !meeting.segments.length ? <div className="flex flex-wrap gap-2">
+                                {!active && !meeting.segments.length && meeting.status === 'draft' ? <div className="flex flex-wrap gap-2">
                                     <Button size="xs" disabled={busy} onClick={() => void quickStart({ title: meeting.title }, 'system-and-microphone')}>{t('meeting.ui.startTranscribing')}</Button>
                                     <Button size="xs" variant="outline" disabled={busy} onClick={() => void quickStart({ title: meeting.title }, 'microphone')}>{t('meeting.ui.micOnly')}</Button>
                                 </div> : null}
@@ -633,16 +756,21 @@ export function MeetingWorkspace() {
                                 {value === 'summary' && summaryRunning ? <Icon name="loader-4" className="size-3 animate-spin text-muted-foreground" /> : null}
                                 <span className={cn('absolute inset-x-1 bottom-0 h-[2px] rounded-full bg-foreground transition-transform duration-200', tab === value ? 'scale-x-100' : 'scale-x-0')} />
                             </button>)}
-                            {(tab === 'transcript' && meeting.segments.length) || (tab === 'summary' && meeting.summary.status === 'available') ? <button type="button"
-                                onClick={() => {
-                                    const text = tab === 'summary' && meeting.summary.status === 'available' ? meeting.summary.text
-                                        : transcriptText(meeting, { microphone: t('meeting.microphone'), system: t('meeting.system') });
-                                    void copyTextToClipboard(text).then(() => { setCopied(tab); setTimeout(() => setCopied(null), 1600); });
-                                }}
-                                className="oc-press ml-auto mb-1 flex items-center gap-1 self-center rounded-md px-2 py-1 text-[11.5px] text-muted-foreground hover:bg-interactive-hover hover:text-foreground">
-                                <Icon name={copied === tab ? 'check' : 'file-copy'} className="size-3.5" />{copied === tab ? t('meeting.ui.copied') : t('meeting.ui.copy')}
-                            </button> : null}
-                            {tab === 'notes' ? <span className="ml-auto self-center pb-1 text-[11px] text-muted-foreground">{saveState === 'saving' ? t('meeting.ui.saving') : saveState === 'saved' ? t('meeting.ui.saved') : saveState === 'error' ? <span className="text-destructive">{t('meeting.ui.saveFailed')}</span> : null}</span> : null}
+                            <div className="ml-auto flex items-center gap-2 self-center pb-1">
+                                {tab === 'notes' ? <span className="text-[11px] text-muted-foreground">{saveState === 'saving' ? t('meeting.ui.saving') : saveState === 'saved' ? t('meeting.ui.saved') : saveState === 'error' ? <span className="text-destructive">{t('meeting.ui.saveFailed')}</span> : null}</span> : null}
+                                {(tab === 'transcript' && meeting.segments.length) || (tab === 'summary' && meeting.summary.status === 'available') || (tab === 'notes' && notes.trim().length > 0) ? <button type="button"
+                                    onClick={() => {
+                                        const text = tab === 'summary' && meeting.summary.status === 'available'
+                                            ? meeting.summary.text
+                                            : tab === 'notes'
+                                                ? notes
+                                                : transcriptText(meeting, { microphone: t('meeting.microphone'), system: t('meeting.system') });
+                                        void copyTextToClipboard(text).then(() => { setCopied(tab); setTimeout(() => setCopied(null), 1600); });
+                                    }}
+                                    className="oc-press flex items-center gap-1 rounded-md px-2 py-1 text-[11.5px] text-muted-foreground hover:bg-interactive-hover hover:text-foreground">
+                                    <Icon name={copied === tab ? 'check' : 'file-copy'} className="size-3.5" />{copied === tab ? t('meeting.ui.copied') : t('meeting.ui.copy')}
+                                </button> : null}
+                            </div>
                         </div>
                         <div key={tab} role="tabpanel" id={`meeting-panel-${tab}`} aria-labelledby={`meeting-tab-${tab}`} tabIndex={0} className="oc-face-in min-h-0 flex-1 overflow-y-auto px-10 py-5 md:px-14">
                             {tab === 'notes' ? <textarea aria-label={t('meeting.notes')} placeholder={t('meeting.ui.notesPlaceholder')} maxLength={100000} value={notes}

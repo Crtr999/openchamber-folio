@@ -278,6 +278,44 @@ test('capture failure interrupts a busy native chunk before joining its drain an
     expect(calls.includes('desktop_meeting_stop')).toBe(false);
 });
 
+test('resuming a closed meeting continues the timeline after its saved text', async () => {
+    record = { ...record, status: 'interrupted', interruptionReason: 'quit', segments: [{ source: 'microphone', label: 'Microphone', startMs: 0, endMs: 60000, text: 'Earlier', createdAt: record.createdAt }] };
+    await meetingCapture.start(record, 'microphone');
+    expect(meetingCapture.getSnapshot().phase).toBe('recording');
+    const starts: number[] = [];
+    Object.assign(browser, { __OPENCHAMBER_DESKTOP__: { invoke: async (command: string, args: { startMs?: number }) => {
+        calls.push(command);
+        if (command === 'desktop_meeting_chunk') starts.push(args.startMs ?? -1);
+        return record;
+    } } });
+    SyntheticWorklet.latest?.port.onmessage?.({ data: new Float32Array(CHUNK_SAMPLES).fill(0.25) });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(starts).toEqual([60000]);
+});
+
+test('a failed phrase is skipped and recording continues; repeated failures stop it visibly', async () => {
+    await meetingCapture.start(record, 'microphone');
+    let failing = true;
+    Object.assign(browser, { __OPENCHAMBER_DESKTOP__: { invoke: async (command: string) => {
+        calls.push(command);
+        if (command === 'desktop_meeting_chunk' && failing) throw new Error('transcription_failed: Local transcription failed.');
+        return record;
+    } } });
+    const send = () => { SyntheticWorklet.latest?.port.onmessage?.({ data: new Float32Array(CHUNK_SAMPLES).fill(0.25) }); return new Promise((resolve) => setTimeout(resolve, 10)); };
+    await send();
+    expect(meetingCapture.getSnapshot().phase).toBe('recording');
+    expect(meetingCapture.getSnapshot().skipped).toBe(1);
+    failing = false;
+    await send();
+    expect(meetingCapture.getSnapshot().phase).toBe('recording');
+    failing = true;
+    await send(); await send();
+    expect(meetingCapture.getSnapshot().phase).toBe('recording');
+    await send();
+    expect(meetingCapture.getSnapshot().phase).toBe('error');
+    expect(meetingCapture.getSnapshot().detail).toContain('transcription_failed');
+});
+
 test('a device list change (headphones connecting) does not end a healthy recording', async () => {
     await meetingCapture.start(record, 'microphone');
     navigator.mediaDevices.dispatchEvent(new Event('devicechange'));

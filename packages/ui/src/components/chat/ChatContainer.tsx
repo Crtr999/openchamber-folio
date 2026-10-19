@@ -3,6 +3,7 @@ import type { Message, Part, Session } from '@/lib/opencode/model';
 import { getLastConversationRecord, isIncompleteAssistantTurn } from '@/lib/opencode/model';
 
 import { ChatInput } from './ChatInput';
+import { ChatWidthControls } from './ChatWidthControls';
 import { ChatColumnSessionContext, type ChatColumnSession } from './chatColumnSession';
 import { MobileCommentComposerContext, useMobileCommentComposerOwner } from './composer/comment/MobileCommentComposerContext';
 import { DraftPresetChips } from './DraftPresetChips';
@@ -1634,6 +1635,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
 			scrollToMessage={timelineController.scrollToMessage}
 		/>
 		<div data-composer-bound className="relative flex min-w-0 flex-1 flex-col h-full bg-background">
+			<ChatWidthControls enabled={active && !isMobile && !draftLayoutVisible && !isDesktopExpandedInput} />
 			{returnToParentButton}
 			{sessionSurface}
 

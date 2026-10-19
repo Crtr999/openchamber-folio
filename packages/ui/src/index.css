@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "./styles/design-system.css";
 @import "./styles/typography.css";
+@import "./styles/chat-width.css";
 @import "./styles/personal-interactions.css";
 @import "./styles/mobile.css";
 /* KaTeX styles are loaded eagerly through `styles/katex-css` (a JS import) at

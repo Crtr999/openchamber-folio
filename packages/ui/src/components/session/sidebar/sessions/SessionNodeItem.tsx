@@ -80,6 +80,8 @@ import {
   type SessionWorktreeMenuTarget,
   type StartSessionWorktreeMenuLoadResult,
 } from '../sessionWorktreeMenu';
+import { openMeetingWorkspace } from '@/lib/meetings/workspace';
+import { isMeetingSessionId, meetingIdFromSessionId } from '@/stores/useMeetingsSidebarStore';
 
 type SecondaryMeta = {
   projectLabel?: string | null;
@@ -867,7 +869,8 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   const showActivityDuration = (isStreaming || showUnreadStatus) && hasActivityDuration;
   const hideLeadingIndicatorOnHover = !alwaysShowActions && hasChildren && (isSessionActionPending || showStatusMarker || isPinnedSession);
   const showGutterProjectIcon = isPinnedZoneRow && !isSubtaskSession;
-  const showPinnedMarker = !showGutterProjectIcon && isPinnedSession && !isSessionActionPending && !showStatusMarker;
+  const isMeetingRow = isMeetingSessionId(session.id);
+  const showPinnedMarker = !showGutterProjectIcon && isPinnedSession && !isSessionActionPending && !showStatusMarker && !isMeetingRow;
   const pinnedMarkerContent = (
     <Icon
       name="pushpin"
@@ -875,7 +878,14 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
       aria-label={t('sessions.sidebar.session.status.pinned')}
     />
   );
-  const leadingIndicators = isSessionActionPending || showStatusMarker || showPinnedMarker ? (
+  const meetingMarkerContent = (
+    <Icon
+      name="mic"
+      className="h-3.5 w-3.5 flex-shrink-0 text-red-400/85"
+      aria-label="Meeting"
+    />
+  );
+  const leadingIndicators = isSessionActionPending || showStatusMarker || isMeetingRow || showPinnedMarker ? (
     <span
       style={{ left: ROW_GUTTER_LEFT_PX + depth * ROW_DEPTH_STEP_PX }}
       className={cn(
@@ -889,7 +899,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
           className="h-3 w-3 animate-spin text-primary"
           aria-label={isAiRenaming ? t('sessions.aiRename.generating') : t('sessions.sidebar.session.status.movingToWorktree')}
         />
-      ) : showStatusMarker ? statusMarkerContent : showPinnedMarker ? pinnedMarkerContent : null}
+      ) : showStatusMarker ? statusMarkerContent : isMeetingRow ? meetingMarkerContent : showPinnedMarker ? pinnedMarkerContent : null}
     </span>
   ) : null;
   const gutterProjectIcon = showGutterProjectIcon ? (
@@ -1021,6 +1031,13 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
       toggleRowSelected(session.id, selectionScopeKey, collectNodeDescendantIds(node), sessionRowKey);
       return;
     }
+    if (isMeetingRow) {
+      const targetMeetingId = meetingIdFromSessionId(session.id);
+      if (targetMeetingId) {
+        openMeetingWorkspace({ title: sessionTitle, meetingId: targetMeetingId });
+      }
+      return;
+    }
     if (event?.currentTarget) holdSessionRowPosition(event.currentTarget);
     handleSessionSelect(session.id, sessionDirectory);
   };
@@ -1053,6 +1070,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     // network round trip with that work instead of waiting for it.
     if (
       event.button === 0
+      && !isMeetingRow
       && !isActive
       && !selectionModeEnabled
       && !prefetchOnPressDisabled
@@ -1628,6 +1646,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
                   <button
                     type="button"
 	                    aria-pressed={selectionModeEnabled ? isRowSelected : undefined}
+                        data-oc-session-select="true"
 	                    onPointerDown={handleRowPointerDown}
  	                    onPointerUp={handleRowPointerEnd}
  	                    onPointerCancel={handleRowPointerEnd}
@@ -1655,7 +1674,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
                       {/* Unread emphasis is color-only: a font-weight change
                           would reflow the truncated title and cause a micro
                           horizontal shift when the status flips. */}
-                      <div className={cn('block min-w-0 flex-1 truncate typography-ui-label font-normal', isActive || isRowSelected ? 'text-interactive-selection-foreground' : needsAttention ? 'text-foreground' : 'text-foreground/80')}>{renderHighlightedText(sessionTitle, normalizedSessionSearchQuery)}</div>
+                      <div className={cn('block min-w-0 flex-1 truncate typography-ui-label font-medium', isActive || isRowSelected ? 'text-interactive-selection-foreground' : needsAttention ? 'text-foreground' : 'text-foreground/88 group-hover:text-foreground')}>{renderHighlightedText(sessionTitle, normalizedSessionSearchQuery)}</div>
                       {!archivedBucket && sessionDirectory && renderContext === 'recent' ? (
                         <DirectoryActionIndicator
                           directory={sessionDirectory}

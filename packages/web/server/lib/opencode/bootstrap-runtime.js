@@ -1,4 +1,5 @@
 import { registerNotificationEmitRoutes } from '../notifications/emit-route.js';
+import { registerMediaRoutes } from '../media/routes.js';
 
 export const createBootstrapRuntime = (dependencies) => {
   const {
@@ -124,6 +125,8 @@ export const createBootstrapRuntime = (dependencies) => {
     notificationEmitRoutes.registerApiRoute();
 
     registerTtsRoutes(app, { sayTTSCapability });
+
+    registerMediaRoutes(app);
 
     registerNotificationRoutes(app, {
       uiAuthController,

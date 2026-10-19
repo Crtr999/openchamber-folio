@@ -13,7 +13,7 @@ const { decorateMarkdown, getMarkdownCodeText } = await import('./decorate');
 const context: Parameters<typeof decorateMarkdown>[1] = {
   labels: {
     copy: 'Copy', copied: 'Copied', enableCodeWrap: 'Wrap', disableCodeWrap: 'Unwrap',
-    copyTable: 'Copy table', downloadTable: 'Download table', copyDiagram: 'Copy diagram',
+    copyTable: 'Copy table', downloadTable: 'Download table', tableScroll: 'Scrollable table', copyDiagram: 'Copy diagram',
     downloadDiagram: 'Download diagram', zoomInDiagram: 'Zoom in', zoomOutDiagram: 'Zoom out',
     resetDiagramView: 'Reset', previewLabel: 'Preview', previewTitle: 'Preview',
   },
@@ -24,6 +24,20 @@ const context: Parameters<typeof decorateMarkdown>[1] = {
 
 afterEach(() => document.body.replaceChildren());
 afterAll(() => dom.happyDOM.close());
+
+test('tables have one named keyboard scroll region without changing cells or duplicate decoration', () => {
+  const root = document.createElement('div');
+  root.innerHTML = '<table><thead><tr><th>Column</th></tr></thead><tbody><tr><td>Long readable cell</td></tr></tbody></table>';
+  document.body.append(root);
+  decorateMarkdown(root, context);
+  decorateMarkdown(root, context);
+  const regions = root.querySelectorAll<HTMLElement>('[data-md-table-scroll]');
+  expect(regions.length).toBe(1);
+  expect(regions[0]?.getAttribute('role')).toBe('region');
+  expect(regions[0]?.getAttribute('aria-label')).toBe('Scrollable table');
+  expect(regions[0]?.tabIndex).toBe(0);
+  expect(regions[0]?.textContent).toBe('ColumnLong readable cell');
+});
 
 test('direction belongs to list items and quotes, including loose and nested lists', () => {
   const root = document.createElement('div');

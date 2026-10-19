@@ -1,5 +1,5 @@
+import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
-import { museI18n } from './muse.i18n';
 import { claudeI18n } from './claude.i18n';
 import { meetingsI18n } from './meetings.i18n';
 import { homeI18n } from './home.i18n';
@@ -23,10 +23,10 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...friendsI18n['uk'],
   ...personalWorkspaceI18n.uk,
   'workspace.officePreview': 'Лише текст і вбудовані зображення. Оригінальний макет, діаграми, анімація та поточні обчислення не відтворюються.',
   ...chatgptI18n['uk'],
-  ...museI18n.uk,
   ...claudeI18n.uk,
   ...meetingsI18n.uk,
   'meeting.quickStart': 'Почати зустріч',
@@ -2457,6 +2457,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.chatInput.toast.largeTextPaste.inline": "Вставити в повідомлення",
   "chat.chatInput.toast.addedFileMentions": "Додано згадки файлів {count}",
   "chat.chatInput.toast.attachFileFailed": "Не вдалося прикріпити файл",
+  "chat.chatInput.toast.processingVideo": "Обробка відео…",
   "chat.chatInput.toast.attachNamedFailed": "Не вдалося прикріпити {name}",
   "chat.chatInput.toast.unsupportedAttachmentModalities": "{model} не підтримує вхідні дані {modalities}, потрібні для {files}. Повідомлення все одно можна надіслати, але ці вкладення можуть бути проігноровані.",
   "chat.chatInput.toast.someFilesSkipped": "Деякі файли були пропущені:\n{summary}",

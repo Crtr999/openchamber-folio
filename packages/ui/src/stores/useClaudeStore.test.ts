@@ -74,7 +74,7 @@ test('external sign-in titles never become Claude navigation metadata', () => {
 test('Claude and every other main page replace each other; Home closes all', () => {
   const ui = useUIStore.getState();
   const openPages = [
-    () => ui.setChatGPTPageOpen(true), () => ui.setMusePageOpen(true),
+    () => ui.setChatGPTPageOpen(true),
     () => ui.setArchivePageOpen(true), () => ui.setUsageStatsPageOpen(true),
     () => ui.setScheduledTasksDialogOpen(true), () => ui.setWorktreesPageProjectId('project'),
     () => ui.setRunOverviewKey('run'), () => ui.setOpenGuestPage('guest'),
@@ -85,7 +85,7 @@ test('Claude and every other main page replace each other; Home closes all', () 
     expect(useUIStore.getState().isClaudePageOpen).toBe(false);
     ui.setClaudePageOpen(true);
     const state = useUIStore.getState();
-    expect(state.isMusePageOpen || state.isChatGPTPageOpen || state.isArchivePageOpen || state.isUsageStatsPageOpen || state.isScheduledTasksDialogOpen).toBe(false);
+    expect(state.isChatGPTPageOpen || state.isArchivePageOpen || state.isUsageStatsPageOpen || state.isScheduledTasksDialogOpen).toBe(false);
     expect(state.worktreesPageProjectId).toBeNull();
     expect(state.runOverviewKey).toBeNull();
     expect(state.openGuestPageId).toBeNull();

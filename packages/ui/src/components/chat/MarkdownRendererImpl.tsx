@@ -798,6 +798,7 @@ const useDecorateContext = (
     disableCodeWrap: t('markdownRenderer.code.actions.disableWrapTitle'),
     copyTable: t('markdownRenderer.table.actions.copyTitle'),
     downloadTable: t('markdownRenderer.table.actions.downloadTitle'),
+    tableScroll: t('chat.width.tableScroll'),
     copyDiagram: t('markdownRenderer.mermaid.actions.copySourceTitle'),
     downloadDiagram: t('markdownRenderer.mermaid.actions.downloadSvgTitle'),
     zoomInDiagram: t('markdownRenderer.mermaid.actions.zoomInTitle'),

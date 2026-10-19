@@ -131,3 +131,26 @@ test('pointer resizing previews continuously and only persists the released prop
         Object.defineProperty(globalThis, 'ResizeObserver', originalObserver);
     }
 });
+
+test('the active widget follows input without a CSS transition and cancel does not save a move', async () => {
+    browser.localStorage.clear();
+    const view = await fixture();
+    try {
+        const card = browser.document.querySelector('[data-home-widget="working"]');
+        const handle = card?.querySelector('button[aria-roledescription="sortable"]');
+        if (!card || !handle) throw new Error('Missing sortable widget');
+        await act(async () => {
+            handle.dispatchEvent(new browser.MouseEvent('mousedown', { button: 0, clientX: 10, clientY: 10, bubbles: true }));
+        });
+        await act(async () => {
+            browser.document.dispatchEvent(new browser.MouseEvent('mousemove', { clientX: 30, clientY: 10, bubbles: true }));
+        });
+        expect(card.classList.contains('oc-home-dragging')).toBe(true);
+        expect(card.getAttribute('style')).toContain('transition: none');
+        await act(async () => {
+            browser.document.dispatchEvent(new browser.KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
+        });
+        expect(card.classList.contains('oc-home-dragging')).toBe(false);
+        expect(browser.localStorage.getItem(key)).toBeNull();
+    } finally { await view.cleanup(); }
+});

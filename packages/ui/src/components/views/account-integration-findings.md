@@ -1,7 +1,12 @@
 # Account history and scheduled task integration
 
-Checked October 8, 2026. Pinning is implemented. Automatic Claude/Muse account
-history and external scheduled-task feeds are not implemented.
+Checked October 18, 2026. Pinning is implemented. Automatic Claude account
+history is not implemented. One external scheduled-task feed is implemented: a
+read-only mirror of Carter's own ChatGPT/Codex automations.
+
+The automation reader and card component remain, but Home no longer mounts the
+card or performs its reads. Carter requested its removal from Home. This does
+not remove vendor jobs or change local Scheduled tasks.
 
 ## What the app actually owns
 
@@ -16,10 +21,10 @@ The list is partial website navigation. Its profile display string is not proof
 of an immutable account or Team/personal workspace identity, so do not reuse it
 as the identity contract for a new provider adapter.
 
-Claude and Muse currently publish only observed navigation URL/title events to
-their stores. Their saved-page arrays are explicitly local links and survive
+Claude currently publishes only observed navigation URL/title events to
+its store. Its saved-page array is explicitly local links and survives
 account changes. They are neither account history nor native conversations.
-`website-guest-security.mjs` isolates their persistent sign-in sessions from the
+`website-guest-security.mjs` isolates its persistent sign-in session from the
 general browser controller and strips guest preload privileges. The app-owned
 ChatGPT script demonstrates that a constrained metadata adapter is possible;
 the isolation rules do not justify exposing arbitrary scripts or account tokens
@@ -28,7 +33,7 @@ to agents.
 The installed macOS app had a working accessibility window and nested app groups.
 Only the backend TCP listener was present, with no existing debug listener.
 Accessibility traversal of the changing native chat tree failed and then timed
-out. No signed-in Claude or Muse navigation DOM, account/workspace identifiers,
+out. No signed-in Claude navigation DOM, account/workspace identifiers,
 conversation URL rules or scheduled job metadata were verified. No message bodies,
 cookies, tokens or website application stores were read. No debug port or browser
 partition access was enabled to bypass the guest boundary.
@@ -42,18 +47,6 @@ partition access was enabled to bypass the guest boundary.
 | Claude | [Cowork](https://support.claude.com/en/articles/13345190-get-started-with-claude-cowork) documents cloud sessions and cloud scheduled tasks. [Routines](https://code.claude.com/docs/en/routines) documents Claude Code schedules and a per-routine `/fire` API. | `/fire` starts a routine. It does not enumerate schedules, list chats, or supply a read-only account feed. Wiring it into Open Carter's local Run now control would run a remote job, not mirror its status. Nothing calls it. |
 | Claude compliance | [Compliance API](https://platform.claude.com/docs/en/manage-claude/compliance-api) and [access setup](https://platform.claude.com/docs/en/manage-claude/compliance-api-access) document Enterprise chat/session access through an owner-provisioned Compliance Access Key. Console Admin keys reach only the Activity Feed. | This is a real organization API, not access granted by a Team subscription, consumer login, ordinary inference key or analytics key. A read-only integration needs an authorized organization, the required scopes and a verified metadata contract. |
 | Claude native inference | [Authentication policy](https://code.claude.com/docs/en/legal-and-compliance) permits end-user sign-in to the unmodified official Claude Code binary, but prohibits third-party token collection/intermediation. [OpenCode V2 providers](https://opencode.ai/v2/docs/providers) documents Anthropic inference, not subscription account-history access. | Official Claude Code is an independent runtime. Neither substituting API billing nor replaying subscription tokens would preserve the requested website account history and memory. |
-| Muse | [Product design](https://introducing.muse.ai/) documents a main chat, side chats, Goals, and scheduled/event-driven background work. [Security design](https://security.muse.ai/) identifies the user's Secure VM as its system of record. | No supported personal-account history/job-feed API was verified. Muse does have background scheduling; lack of a feed is not lack of the feature. |
-| Meta developer products | [Muse Code](https://developer.meta.com/ai/products/muse-code) describes a separate coding subscription and Meta Model API. [Muse Connector Platform](https://muse.ai/platform) and its [public guidelines](https://muse.ai/platform/docs) accept API/MCP connectors for Muse to use outside services. | This direction matters. Muse connects to the developer's service; the guidelines do not expose a read API for a user's Muse chats, goals or schedules. Model inference and connectors are not account-history parity. |
-
-The public Muse Platform pages returned HTTP 200. The Markdown fetcher produced
-no text, so their public HTML was inspected without login or credentials. The
-guidelines require a submitted service endpoint, API/MCP tool documentation,
-auth/scopes, business verification, privacy review, a test account and end-to-end
-QA. They support read-only connectors when the information is the outcome, but
-reject a public-page wrapper or link list alone. This could support a future
-Open Carter service connector that Muse explicitly calls. It does not authorize
-pulling Muse's own history or scheduled jobs into Open Carter. Public `/api`
-and `/developers` requests returned HTTP 401 and provided no API specification.
 
 ## What would unblock a website metadata adapter
 
@@ -76,7 +69,7 @@ Native reply/history/memory parity needs a separately supported provider contrac
 
 `SidebarScheduledSection` currently reads only Open Carter project task APIs.
 The server scheduler creates OpenCode sessions. It neither owns nor executes
-ChatGPT, Claude or Muse account jobs.
+ChatGPT or Claude account jobs.
 
 An external row requires a verified provider job ID, title, exact deep link,
 schedule dates with timezone, status, account/workspace scope and read result.
@@ -86,8 +79,48 @@ lists. External rows must be read-only, with no inherited local Run now,
 pause or delete controls. Local schedule definitions must never be created from
 external rows because that would risk running the same work twice.
 
-No current personal-account feed meets those requirements. The concrete next
-choices are a verified guest navigation/task metadata contract, or an explicitly
-authorized Enterprise compliance integration after checking whether its task
-schema supplies current jobs rather than historical audit events. Neither
-requires weakening the existing browser-controller partition restriction.
+## The ChatGPT automations feed
+
+`~/.codex/automations/<id>/automation.toml` is the one feed that now meets those
+requirements. It is Carter's own machine state written by the ChatGPT/Codex
+desktop app, not an account API: version, id, kind, name, status, rrule,
+target_thread_id, created_at, updated_at and prompt. `HomeChatGPTTasks` reads it
+through `chatgpt-automations.mjs` on the trusted local main-frame boundary.
+
+It satisfies the bar except for two points that are reported rather than faked:
+
+- **No deep link.** No ChatGPT/Codex thread URL scheme was verified, so the card
+  shows `target_thread_id` as text and derives no `chatgpt.com` URL.
+- **No account scope.** These files carry no account or workspace identity. The
+  feed is scoped to the Mac it was read from, and nothing here proves which
+  ChatGPT account owns the job.
+
+Everything else is honest about its source. The rrule is summarized only where
+the reader can place the next run; `FREQ=MONTHLY`, `COUNT`, `UNTIL`, an ordinal
+`BYDAY`, an out-of-range `BYHOUR` and any other unmodelled rule display an
+explicit unknown instead of a guess, and a daily rule that states no time of day
+shows its cadence with an unknown next run. Times are placed in the Mac's local
+zone, which is the only zone these files refer to. A strict line-oriented reader
+covers the flat `key = "value"` subset and quarantines anything it cannot read
+with confidence; the card then says how many files were unreadable. A missing
+`~/.codex/automations` is an explicit empty feed, and any other read failure
+keeps the last good rows beside an explicit error.
+
+The rows are read-only in the strict sense: nothing is written under `~/.codex`,
+no task is created, edited, paused, resumed, deleted or run, and an external row
+never becomes a local Open Carter schedule. ChatGPT automation ids stay in
+`providerJobId`/`providerThreadId` and are never merged with local project or
+task ids.
+
+Whether the ChatGPT Mac app is installed, signed in or running is a separate
+concern from this feed. The folder exists whether or not the app is open, and the
+card does not detect, launch or control the app. The jobs are executed by the
+ChatGPT app's own scheduler, so closing the app stops them; a ChatGPT message
+that the Mac is offline in that state comes from ChatGPT itself, never from Open
+Carter.
+
+The remaining unblocked choices are a verified guest navigation/task metadata
+contract, or an explicitly authorized Enterprise compliance integration after
+checking whether its task schema supplies current jobs rather than historical
+audit events. Neither requires weakening the existing browser-controller
+partition restriction.

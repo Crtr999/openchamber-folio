@@ -7,7 +7,7 @@ import { create } from "zustand"
 import type { AttachIssueRequest } from '@openchamber/sdk'
 import type { ContextPartMetadata } from '@/lib/messages/contextParts'
 import type { AttachedFile } from "@/stores/types/sessionTypes"
-import { prepareAttachmentFiles } from "./attachment-files"
+import { isVideoAttachment, prepareAttachmentFiles } from "./attachment-files"
 import { getChatDraftIdentityKey, subscribeChatDraftDeletion, type ChatDraftIdentity } from "@/lib/chatDraftPersistence"
 
 const FILE_URI_PREFIX = "file://"
@@ -277,7 +277,10 @@ export const useInputStore = create<InputState>()((set, get) => ({
       let attachedFiles: AttachedFile[] | undefined
       try {
         attachedFiles = await prepareLocalAttachments(file, reservedFilenames)
-      } catch {
+      } catch (error) {
+        // Video expansion fails for actionable reasons (ffmpeg missing,
+        // unreadable file); let callers show them instead of a generic toast.
+        if (isVideoAttachment(file)) throw error
         return false
       }
       if (!attachedFiles || generation !== attachmentReadGeneration) return false

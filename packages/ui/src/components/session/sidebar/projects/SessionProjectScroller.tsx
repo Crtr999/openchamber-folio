@@ -1,6 +1,5 @@
 import React from 'react';
 import { ChatGPTFolder } from '../shell/ChatGPTFolder';
-import { MuseFolder } from '../shell/MuseFolder';
 import { ClaudeFolder } from '../shell/ClaudeFolder';
 import { cn } from '@/lib/utils';
 import {
@@ -491,7 +490,6 @@ function SessionProjectScrollerComponent({ model, view, actions }: Props): React
           </SortableContext>
         </DndContext>
         <ChatGPTFolder />
-        <MuseFolder />
         <ClaudeFolder />
       </ScrollableOverlay>
     </CrossfadeZoneHeaders>

@@ -19,7 +19,7 @@ test('website folders share a replace-in-place disclosure without changing websi
   document.body.append(container);
   const root = createRoot(container);
   try {
-    for (const label of ['ChatGPT', 'Muse', 'Claude']) {
+    for (const label of ['ChatGPT', 'Claude']) {
       let opened = 0;
       let toggled = 0;
       let added = 0;

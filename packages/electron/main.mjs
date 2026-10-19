@@ -8,6 +8,9 @@ import { createPersonalTeaching } from '@openchamber/web/server/lib/personal-tea
 import { createTeachingSkills } from '@openchamber/web/server/lib/teaching-skills.js';
 import { createPersonalCalendar } from './personal-calendar.mjs';
 import { canReuseManagedOpenCodePreflight } from './opencode-readiness.mjs';
+import { createMacAiHost } from './mac-ai-host.mjs';
+import { createLocalTeamBridge } from './local-team-bridge.mjs';
+import { createChatGPTAutomationsBridge } from './chatgpt-automations.mjs';
 import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, MessageChannelMain, nativeImage, nativeTheme, net as electronNet, Notification, powerMonitor, powerSaveBlocker, protocol, safeStorage, session, shell, Tray, webContents } from 'electron';
 import contextMenu from 'electron-context-menu';
 import log from 'electron-log/main.js';
@@ -249,6 +252,7 @@ const state = {
   quitConfirmationPending: false,
   backgroundShutdownComplete: false,
   backgroundShutdownPromise: null,
+  serverStartupPromise: null,
   sshShutdownPromise: null,
   installingUpdate: false,
   // Latched from the moment an update install starts until the installer has
@@ -267,33 +271,13 @@ const state = {
   trayController: null,
   trayFocusListener: null,
   lastFocusedWindowId: null,
-  keepAwakeBlockerId: null,
 };
 
-const setDesktopKeepAwakeActive = (enabled) => {
-  const currentId = state.keepAwakeBlockerId;
-  const isActive = Number.isInteger(currentId) && powerSaveBlocker.isStarted(currentId);
-
-  if (enabled) {
-    if (!isActive) {
-      state.keepAwakeBlockerId = powerSaveBlocker.start('prevent-app-suspension');
-    }
-    return Number.isInteger(state.keepAwakeBlockerId) && powerSaveBlocker.isStarted(state.keepAwakeBlockerId);
-  }
-
-  if (isActive) {
-    powerSaveBlocker.stop(currentId);
-  }
-  state.keepAwakeBlockerId = null;
-  return false;
-};
-
-const readDesktopKeepAwakeStatus = () => {
-  const enabled = readSettingsRoot().desktopKeepAwakeEnabled === true;
-  const currentId = state.keepAwakeBlockerId;
-  const active = Number.isInteger(currentId) && powerSaveBlocker.isStarted(currentId);
-  return { supported: true, enabled, active };
-};
+const macAiHost = createMacAiHost({
+  platform: process.platform,
+  blocker: powerSaveBlocker,
+  savePreference: (key, value) => mutateSettingsRoot((root) => { root[key] = value; }),
+});
 
 const readDesktopMinimizeToTrayStatus = () => {
   const supported = process.platform === 'win32' || process.platform === 'linux';
@@ -386,6 +370,42 @@ const personalHome = createPersonalHome({
   calendar: createPersonalCalendar({ executable: path.join(app.isPackaged ? process.resourcesPath : app.getAppPath() + '/resources', 'personal-home/CalendarBridge.app/Contents/MacOS/CalendarBridge') }),
 });
 
+let aiTasks = null;
+const boardCachePath = path.join(app.getPath('userData'), 'personal-home-board-cache.json');
+let boardSnapshotCache = { ai: {}, daily: null };
+const liveBoardLoaded = new Set();
+try {
+  const rawCache = JSON.parse(fs.readFileSync(boardCachePath, 'utf8'));
+  if (rawCache && typeof rawCache === 'object') {
+    boardSnapshotCache = {
+      ai: rawCache.ai && typeof rawCache.ai === 'object' ? rawCache.ai : {},
+      daily: rawCache.daily && typeof rawCache.daily === 'object' ? rawCache.daily : null,
+    };
+  }
+} catch {}
+const saveBoardSnapshotCache = () => {
+  void writeJsonFile(boardCachePath, boardSnapshotCache).catch(() => {});
+};
+const refreshAiBoardLive = (boardId) => personalHome.automation.readBoard(boardId).then((board) => {
+  boardSnapshotCache.ai[boardId] = board;
+  liveBoardLoaded.add(boardId);
+  saveBoardSnapshotCache();
+  return board;
+});
+setImmediate(() => {
+  try {
+    const aiState = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'ai-tasks.json'), 'utf8'));
+    const boardId = aiState?.config?.board;
+    if (typeof boardId === 'string' && boardId.trim()) {
+      void refreshAiBoardLive(boardId.trim()).catch(() => {});
+    }
+  } catch {}
+});
+const localTeamBridge = createLocalTeamBridge({ getTeam: () => state.serverHandle?.getTeam() ?? null });
+// Read-only mirror of Carter's ChatGPT/Codex automations. It never writes under ~/.codex.
+const chatGPTAutomationsBridge = createChatGPTAutomationsBridge();
+
+let meetingPowerBlockerId = null;
 const meetingBoundary = createMeetingBoundary({
   service: createMeetingService({ directory: path.join(app.getPath('userData'), 'private-meetings') }),
   summary: createMeetingSummaryService(),
@@ -400,6 +420,11 @@ const meetingBoundary = createMeetingBoundary({
     return sameOrigin(apiBaseUrl, state.sidecarUrl || state.localOrigin || '');
   },
   getSources: (options) => desktopCapturer.getSources(options),
+  // A recording in a hidden or background window must not be throttled by App Nap.
+  onActiveChange: (recording) => {
+    if (recording && meetingPowerBlockerId === null) meetingPowerBlockerId = powerSaveBlocker.start('prevent-app-suspension');
+    else if (!recording && meetingPowerBlockerId !== null) { powerSaveBlocker.stop(meetingPowerBlockerId); meetingPowerBlockerId = null; }
+  },
   systemAudioSupported: supportsMeetingSystemAudio(process.platform, os.release()),
   emit: (contents, detail) => {
     if (!contents.isDestroyed() && isLocalSender(contents)) {
@@ -426,15 +451,16 @@ const attachMeetingLifecycle = (contents) => {
 
 const shutdownBackgroundServices = () => {
   if (!state.backgroundShutdownPromise) {
-    setDesktopKeepAwakeActive(false);
+    const hostStopped = macAiHost.stop();
     shellEnvironmentAbort.abort();
     teachingSkills.cancel();
     state.backgroundShutdownPromise = Promise.all([
       meetingBoundary.dispose(),
       personalTeaching.dismiss().catch(() => { log.warn('[teaching] recording cleanup could not be confirmed'); }),
       startShellEnvironmentProbe().catch(() => {}),
+      hostStopped,
       Promise.resolve(openRouterCredits.stop()),
-      killSidecar(),
+      killSidecar().finally(() => personalHome.close()),
       shutdownSshSessions(),
     ]).finally(() => {
       state.backgroundShutdownComplete = true;
@@ -482,8 +508,6 @@ const prepareForQuit = () => {
     } catch {
     }
   }
-
-  setDesktopKeepAwakeActive(false);
 
   return shutdownBackgroundServices();
 };
@@ -1334,7 +1358,19 @@ const shouldSkipLocalServer = async () => {
   return process.env.OPENCHAMBER_SKIP_LOCAL_SERVER === '1';
 };
 
-const spawnLocalServer = async () => {
+const spawnLocalServer = () => {
+  if (state.serverStartupPromise) return state.serverStartupPromise;
+  if (state.serverHandle) return Promise.resolve(state.sidecarUrl);
+  if (state.backgroundShutdownPromise || state.quitConfirmed) {
+    return Promise.reject(new Error('Desktop startup was interrupted by shutdown.'));
+  }
+  state.serverStartupPromise = startLocalServer().finally(() => {
+    state.serverStartupPromise = null;
+  });
+  return state.serverStartupPromise;
+};
+
+const startLocalServer = async () => {
   const serverStartedAt = performance.now();
   recordElectronStartupPerformance('electron.server.start');
   await inheritUserShellEnv();
@@ -1345,7 +1381,7 @@ const spawnLocalServer = async () => {
   // so phones/tablets on the same Wi-Fi can reach the app. UI shows a clear
   // warning and persists the flag via /api/config/settings.
   const lanAccessEnabled = settings.desktopLanAccessEnabled === true;
-  setDesktopKeepAwakeActive(settings.desktopKeepAwakeEnabled === true);
+  macAiHost.initialize(settings);
   const desktopUiPassword = typeof settings.desktopUiPassword === 'string' ? settings.desktopUiPassword.trim() : '';
   // Enterprise mode keeps the app on this machine unless the administrator
   // allowed network access (the server refuses a network bind as well).
@@ -1419,6 +1455,15 @@ const spawnLocalServer = async () => {
       : undefined,
     onDesktopNotification: (payload) => maybeShowNativeNotification(payload),
     getIsWindowFocused: isAnyWindowFocused,
+    aiTaskConnection: {
+      filePath: path.join(app.getPath('userData'), 'ai-tasks.json'),
+      notion: personalHome.automation,
+    },
+    teamConnection: {
+      filePath: path.join(app.getPath('userData'), 'team-work.json'),
+      guardrails: { projectTokens: 5_000_000, accountTokens: 10_000_000 },
+      onWorkState: (value) => { macAiHost.setTeamWork(value); },
+    },
     getDesktopRuntimeConfig: () => ({
       apiBaseUrl: state.apiBaseUrl || '',
       requestHeaders: sanitizeRuntimeRequestHeaders(state.requestHeaders || {}),
@@ -1435,11 +1480,21 @@ const spawnLocalServer = async () => {
     },
   });
 
+  if (state.backgroundShutdownPromise || state.quitConfirmed) {
+    await stopEmbeddedServer(handle, {
+      launchFallback: launchDetachedOpenCodeKiller,
+      warn: () => log.warn('[electron] late-starting server shutdown failed'),
+    });
+    throw new Error('Desktop startup was interrupted by shutdown.');
+  }
+  aiTasks = handle.getAiTasks();
   const port = handle.getPort();
   const url = buildLocalUrl(port);
 
   state.serverHandle = handle;
   state.sidecarUrl = url;
+  // Read-only projection: never start a second coordinator or force a pickup.
+  void macAiHost.attach(aiTasks);
   recordElectronStartupPerformance('electron.server.ready', {
     durationMs: performance.now() - serverStartedAt,
   });
@@ -1533,9 +1588,14 @@ Stop-ProcessTree $targetPid $true
 };
 
 const killSidecar = async () => {
+  // Startup owns a server even before its handle is published. Drain that
+  // handoff before exiting so a late managed OpenCode child cannot be orphaned.
+  await state.serverStartupPromise?.catch(() => {});
   const handle = state.serverHandle;
   state.serverHandle = null;
   state.sidecarUrl = null;
+  aiTasks = null;
+  macAiHost.detach();
   if (!handle) return;
 
   await stopEmbeddedServer(handle, {
@@ -2246,10 +2306,12 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {}, 
   browserWindow.on('move', () => {
     debounceWindowStatePersist(browserWindow, false);
   });
-  browserWindow.on('hide', () => interruptMeeting('navigation', browserWindow.webContents));
+  // Hiding to the tray leaves the renderer alive, so a recording keeps going.
+  // Only a real quit or a window that is actually going away ends capture.
   browserWindow.on('close', (event) => {
-    interruptMeeting(state.quitRequested ? 'quit' : 'navigation', browserWindow.webContents);
-    if (!state.quitRequested && shouldHideMainWindowToTray(browserWindow)) {
+    const hidingToTray = !state.quitRequested && shouldHideMainWindowToTray(browserWindow);
+    if (!hidingToTray) interruptMeeting(state.quitRequested ? 'quit' : 'navigation', browserWindow.webContents);
+    if (hidingToTray) {
       debounceWindowStatePersist(browserWindow, true);
       event.preventDefault();
       browserWindow.hide();
@@ -3670,9 +3732,89 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       await session.fromPartition('open-carter-teaching').cookies.set({ url: credentials.origin, name: 'cb_key', value: credentials.token, httpOnly: true, sameSite: 'strict', secure: credentials.origin.startsWith('https:') });
       return result;
     }
+    case 'desktop_ai_host_status':
+      z.object({}).strict().parse(args);
+      return macAiHost.status();
+    case 'desktop_ai_host_configure':
+      return macAiHost.configure(args);
     case 'desktop_personal_home': {
       const runtime = getWindowRuntimeConfig(browserWindow);
       if (!browserWindow || !sameOrigin(runtime.apiBaseUrl, state.localOrigin || state.sidecarUrl || '')) throw new Error('Personal connections require the local desktop instance.');
+      if (args.action?.startsWith('team-')) return localTeamBridge.handle(args);
+      if (args.action?.startsWith('chatgpt-automations-')) return chatGPTAutomationsBridge.handle(args);
+      if (args.action?.startsWith('ai-') && !aiTasks && state.serverStartupPromise) {
+        await state.serverStartupPromise.catch(() => {});
+      }
+      if (args.action?.startsWith('ai-') && !aiTasks) throw new Error('AI Tasks is waiting for the local server to start.');
+      if (args.action === 'ai-status') return aiTasks.status();
+      if (args.action === 'ai-configure') {
+        const result = await aiTasks.configure(args);
+        liveBoardLoaded.clear();
+        await macAiHost.status();
+        return result;
+      }
+      if (args.action === 'ai-check') return aiTasks.check();
+      if (args.action === 'ai-projects') return aiTasks.projects();
+      if (args.action === 'ai-assign') return aiTasks.assign(args);
+      if (args.action === 'ai-details') return aiTasks.details(z.string().min(1).parse(args.id));
+      if (args.action === 'ai-create-board') return aiTasks.createBoard();
+      if (args.action === 'ai-delete') {
+        const deleted = await aiTasks.delete(args);
+        const { config } = await aiTasks.status().catch(() => ({ config: { board: '' } }));
+        if (config?.board && boardSnapshotCache.ai[config.board]?.rows) {
+          boardSnapshotCache.ai[config.board] = {
+            ...boardSnapshotCache.ai[config.board],
+            rows: boardSnapshotCache.ai[config.board].rows.filter((row) => row.url !== args.page),
+          };
+          saveBoardSnapshotCache();
+        }
+        return deleted;
+      }
+      if (['ai-board', 'ai-create', 'ai-move', 'ai-notes', 'ai-save-notes'].includes(args.action)) {
+        const { config } = await aiTasks.status();
+        if (!config.board) throw new Error('Configure the AI Tasks database first.');
+        if (args.action === 'ai-board') {
+          const cached = boardSnapshotCache.ai[config.board];
+          if (cached && !liveBoardLoaded.has(config.board)) {
+            void refreshAiBoardLive(config.board).catch(() => {});
+            return cached;
+          }
+          return refreshAiBoardLive(config.board);
+        }
+        if (args.action === 'ai-create') {
+          const created = await personalHome.automation.create(config.board, args);
+          liveBoardLoaded.add(config.board);
+          return created;
+        }
+        if (args.action === 'ai-notes') return personalHome.automation.readNotes(config.board, z.string().min(1).parse(args.page));
+        if (args.action === 'ai-save-notes') return personalHome.automation.saveNotes(config.board, args);
+        const move = z.object({ page: z.string().min(1), status: z.string().min(1) }).parse(args);
+        const moved = await personalHome.automation.move(config.board, move.page, move.status);
+        if (boardSnapshotCache.ai[config.board]?.rows) {
+          boardSnapshotCache.ai[config.board] = {
+            ...boardSnapshotCache.ai[config.board],
+            rows: boardSnapshotCache.ai[config.board].rows.map((row) => row.url === move.page ? { ...row, status: move.status } : row),
+          };
+          saveBoardSnapshotCache();
+        }
+        // Handing a card to the manager starts pickup now, not at the next 15-minute check.
+        if (move.status === 'Ready for AI' && config.enabled) void aiTasks.check().catch(() => {});
+        return moved;
+      }
+      if (args.action === 'board') {
+        const cached = boardSnapshotCache.daily;
+        const refreshDaily = () => personalHome.handle(args).then((board) => {
+          boardSnapshotCache.daily = board;
+          liveBoardLoaded.add('__daily__');
+          saveBoardSnapshotCache();
+          return board;
+        });
+        if (cached && !liveBoardLoaded.has('__daily__')) {
+          void refreshDaily().catch(() => {});
+          return cached;
+        }
+        return refreshDaily();
+      }
       return personalHome.handle(args);
     }
     case 'desktop_openrouter_credits': {
@@ -3771,16 +3913,12 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
     }
 
     case 'desktop_get_keep_awake': {
-      return readDesktopKeepAwakeStatus();
+      return macAiHost.generalStatus();
     }
 
     case 'desktop_set_keep_awake': {
-      const enabled = args.enabled === true;
-      await mutateSettingsRoot((root) => {
-        root.desktopKeepAwakeEnabled = enabled;
-      });
-      const active = setDesktopKeepAwakeActive(enabled);
-      return { supported: true, enabled, active };
+      const { enabled } = z.object({ enabled: z.boolean() }).strict().parse(args);
+      return macAiHost.configureGeneral(enabled);
     }
 
     // Dev-server tunnels: bind a loopback port here and pipe it to a dev server
@@ -5355,7 +5493,6 @@ app.on('before-quit', (event) => {
   state.quitRequested = true;
   // Loopback listeners would otherwise outlive the window that needed them.
   closeAllDevTunnels();
-  personalHome.close();
 
   if (state.installingUpdate) {
     return;
@@ -5458,7 +5595,21 @@ app.whenReady().then(async () => {
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     void meetingBoundary.displayMedia(request, callback);
   }, { useSystemPicker: false });
-  powerMonitor.on('suspend', () => interruptMeeting('sleep'));
+  powerMonitor.on('suspend', () => {
+    macAiHost.suspend();
+    interruptMeeting('sleep');
+  });
+  powerMonitor.on('resume', () => {
+    void macAiHost.resume();
+    if (!state.quitConfirmed && !state.backgroundShutdownPromise) {
+      void state.serverHandle?.getTeam()?.check().catch(() => {
+        // Durable runtime diagnostics remain authoritative; the regular check
+        // retries inspection, never an uncertain prompt submission.
+        log.warn('Team reconciliation after wake did not complete. Saved state was retained.');
+      });
+    }
+    emitToAllWindows('openchamber:system-resume', { timestamp: Date.now() });
+  });
   setupAutoUpdater();
 
   if (process.platform === 'darwin') {
@@ -5474,7 +5625,9 @@ app.whenReady().then(async () => {
   }
   setupTray();
 
-  if ((process.platform === 'darwin' || process.platform === 'win32') && app.isPackaged) {
+  // An isolated QA/profile launch must not register its temporary bundle as the
+  // user's login app. The normal installed profile still owns this setting.
+  if ((process.platform === 'darwin' || process.platform === 'win32') && app.isPackaged && !process.env.OPENCHAMBER_DESKTOP_USER_DATA_DIR) {
     let openAtLogin = loginItemSettings?.openAtLogin === true;
     // Open Carter 1.0: launch at login by default, once. Turning it off later in
     // Settings or System Settings is respected because the marker stays.
@@ -5532,13 +5685,9 @@ app.whenReady().then(async () => {
   await activateMainWindow(initialUrl, localOrigin, bootOutcome, { apiBaseUrl, clientToken, requestHeaders });
   replayDeferredAppEvents();
 
-  // Notify renderer on OS wake-from-sleep so the SSE event pipeline can
-  // reconnect immediately instead of waiting for the heartbeat watchdog.
-  powerMonitor.on('resume', () => {
-    emitToAllWindows('openchamber:system-resume', { timestamp: Date.now() });
-  });
 }).catch((error) => {
   if (state.quitInProgress) return;
   log.error('[electron] startup failed:', error);
+  macAiHost.stop();
   app.exit(1);
 });

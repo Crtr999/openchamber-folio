@@ -23,8 +23,8 @@ navigation; keyboard focus reveals the native tab's action controls.
 
 Local Electron website tabs have overflow and right-click menus too. ChatGPT
 pinning requires a ready snapshot containing the current conversation path.
-Muse and Claude save only their existing observed URL/title metadata, excluding
-provider roots; these links appear in their existing website folders, not the
+Claude saves only its existing observed URL/title metadata, excluding
+provider roots; these links appear in its existing website folder, not the
 native Pinned session list. They remain local saved pages, not mirrored history.
 See [account integration findings](../../views/account-integration-findings.md)
 for account-history and external-task limits.
@@ -41,7 +41,7 @@ occupies the same leading slot as normal sidebar headers. Hover or keyboard focu
 replaces it with the disclosure button in place; Enter or Space expands it. The
 label resumes the singleton website independently of expansion. Selected rows use
 the selection tokens. ChatGPT keeps its add/tools controls and website history;
-Muse keeps locally saved pages; Claude keeps its current-page resume entry.
+Claude keeps its current-page resume entry.
 
 Sidebar code is organized by the business object it owns. Shared contracts are
 kept at this root in `types.ts` and `utils.tsx`.
@@ -443,6 +443,6 @@ hover, keyboard focus, and always-visible action buttons move them left without 
 
 The sidebar Search chats panel performs rolling message-content searches. See the sections documentation for bounded paging, cache ownership and matching-message navigation.
 
-Local Electron windows show the expandable ChatGPT website history folder with conversation rows, new-chat actions and tools. Its snapshot is loaded sidebar navigation, not an account-wide inventory. Pins persist locally and do not change website pins. Native ChatGPT remains a separate OpenCode project. Muse has an expandable website folder with Resume Muse followed by explicitly pinned pages. These local links use observed navigation metadata, not fabricated conversation IDs or account-wide history. Removing a pin deletes only that local link. The website owns history, goals, memory and artifacts. Resume and the agent chooser preserve the same retained website guest, never a native model; selecting a saved page navigates that guest to the saved URL. The complete website remains available and displays the history-verification limit. See the views documentation for URL validation and persistence. No Muse DOM selectors or conversation routes are guessed. Existing native sessions and provider configuration remain untouched. Web, VS Code, hosted mobile, Capacitor and remote desktop do not expose these entries.
+Local Electron windows show the expandable ChatGPT website history folder with conversation rows, new-chat actions and tools. Its snapshot is loaded sidebar navigation, not an account-wide inventory. Pins persist locally and do not change website pins. Native ChatGPT remains a separate OpenCode project. Web, VS Code, hosted mobile, Capacitor and remote desktop do not expose these entries.
 
 The native ChatGPT workspace uses its local `AGENTS.md` for app identity and a named `opencarter` reference for the canonical source. `OPEN_CARTER.md` at that source root maps personal additions and inspection paths. OpenCode V2 currently accepts but does not resolve the config `instructions` array, so active context belongs in `AGENTS.md`. References retain normal external-directory and edit permissions.

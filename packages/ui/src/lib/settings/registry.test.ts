@@ -22,6 +22,29 @@ import { renderSettingsRegistrySnapshot, SETTINGS_REGISTRY_SNAPSHOT_PATHS } from
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..');
 
 describe('settings registry', () => {
+  test('chat width round-trips null reset and unbounded custom pixels per surface; missing and invalid remain absent', () => {
+    const initial = useUIStore.getState();
+    try {
+      expect(useUIStore.getInitialState().chatColumnWidth).toBeNull();
+      expect(SETTINGS_REGISTRY.chatColumnWidth.perSurface).toBe(true);
+      expect(AUTO_SAVE_KEYS).toContain('chatColumnWidth');
+      expect(MIRRORED_KEYS).toContain('chatColumnWidth');
+      useUIStore.getState().setChatColumnWidth(1920);
+      const parsed = parseSettingsDocument(JSON.parse(JSON.stringify(readAutoSaveSnapshot())));
+      expect(parsed?.chatColumnWidth).toBe(1920);
+      applySettingsToStores({});
+      expect(useUIStore.getState().chatColumnWidth).toBe(1920);
+      applySettingsToStores({ chatColumnWidth: null });
+      expect(useUIStore.getState().chatColumnWidth).toBeNull();
+      expect(parseSettingsDocument({ chatColumnWidth: null })).toEqual({ chatColumnWidth: null });
+      for (const bad of [479, -1, 900.1, '900', Infinity, NaN]) {
+        expect(parseSettingsDocument({ chatColumnWidth: bad })).toEqual({});
+      }
+      const migrate = useUIStore.persist.getOptions().migrate;
+      if (!migrate) throw new Error('Missing UI preference migration');
+      expect(z.object({ chatColumnWidth: z.null(), wideChatLayoutEnabled: z.literal(true) }).parse(migrate({ wideChatLayoutEnabled: true }, 25))).toBeTruthy();
+    } finally { useUIStore.setState(initial, true); }
+  });
   test('project paths retain absolute Windows roots across parsing and serialization', () => {
     const parsed = parseSettingsDocument({ projects: [
       { path: 'c:\\', label: 'Drive' },

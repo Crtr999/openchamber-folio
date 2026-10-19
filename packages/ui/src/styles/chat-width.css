@@ -1,0 +1,88 @@
+/* The width variable lives on one app-owned chat, never on the host document. */
+.oc-chat-width-controls {
+    position: absolute;
+    inset-block: 0;
+    inset-inline: 0;
+    width: min(100%, var(--oc-chat-width, 48rem));
+    margin-inline: auto;
+    pointer-events: none;
+    z-index: 20;
+}
+.wide-chat-layout .oc-chat-width-controls { width: min(100%, var(--oc-chat-width, 64rem)); }
+.oc-chat-width-edge {
+    position: absolute;
+    top: 38%;
+    width: 24px;
+    height: 80px;
+    display: grid;
+    place-items: center;
+    pointer-events: auto;
+    cursor: col-resize;
+    touch-action: none;
+    user-select: none;
+    border-radius: 6px;
+    opacity: 0;
+    transition: opacity 150ms ease;
+}
+/* Keep the hit zone in the gutter, not over selectable text or code scrollers. */
+.oc-chat-width-edge[data-edge="start"] { inset-inline-start: -12px; }
+.oc-chat-width-edge[data-edge="end"] { inset-inline-end: -12px; }
+.oc-chat-width-controls[data-can-resize="false"] .oc-chat-width-edge { display: none; }
+.oc-chat-width-edge > span {
+    width: 3px;
+    height: 28px;
+    border-radius: 2px;
+    background: var(--surface-muted-foreground);
+}
+.oc-chat-width-edge[data-edge-hover],
+.oc-chat-width-edge[data-resizing],
+.oc-chat-width-edge:focus-visible:not([data-pointer-focus]) { opacity: 1; }
+.oc-chat-width-edge[data-edge-hover],
+.oc-chat-width-edge[data-resizing] { background: var(--interactive-hover); }
+.oc-chat-width-edge:focus-visible:not([data-pointer-focus]) { outline: 2px solid var(--interactive-focus-ring); outline-offset: -2px; }
+[data-composer-bound][data-chat-resizing],
+[data-composer-bound][data-chat-resizing] * { cursor: col-resize !important; user-select: none !important; }
+.oc-chat-width-reset {
+    position: absolute;
+    inset-inline-end: 24px;
+    top: 8px;
+    pointer-events: auto;
+    background: var(--surface-elevated);
+    opacity: 0;
+    transition: opacity 150ms ease;
+}
+.oc-chat-width-controls:has(.oc-chat-width-edge[data-edge-hover]) .oc-chat-width-reset,
+.oc-chat-width-reset:hover,
+.oc-chat-width-controls:has(.oc-chat-width-edge:focus-visible:not([data-pointer-focus])) .oc-chat-width-reset,
+.oc-chat-width-reset:focus-visible { opacity: 1; }
+@media (hover: none) { .oc-chat-width-reset { opacity: 1; } }
+@media (max-width: 640px) { .oc-chat-width-controls { display: none; } }
+
+/* Tables retain their natural columns and expose their own keyboard/trackpad scroller. */
+[data-markdown="table-wrapper"] > [data-md-table-scroll] {
+    min-width: 0;
+    max-width: 100%;
+    overscroll-behavior-x: contain;
+    scrollbar-color: var(--surface-muted-foreground) transparent !important;
+}
+[data-md-table-scroll]::-webkit-scrollbar { height: 8px; }
+[data-markdown="table-wrapper"] > [data-md-table-scroll]::-webkit-scrollbar-thumb { background: var(--surface-muted-foreground) !important; }
+[data-md-table-scroll]:focus-visible { outline: 2px solid var(--interactive-focus-ring); outline-offset: 2px; }
+@supports selector(::-webkit-scrollbar) {
+    /* Non-auto standard properties override the custom scrollbar in Chromium. */
+    [data-markdown="table-wrapper"] > [data-md-table-scroll] {
+        scrollbar-width: auto;
+        scrollbar-color: auto !important;
+    }
+}
+@media (pointer: coarse) {
+    .oc-chat-width-edge { width: 44px; }
+    .oc-chat-width-edge[data-edge="start"] { inset-inline-start: -32px; }
+    .oc-chat-width-edge[data-edge="end"] { inset-inline-end: -32px; }
+    /* Touch has no persistent hover: a deliberate press reveals the active grip. */
+    .oc-chat-width-edge[data-edge-hover]:not([data-resizing]):not(:focus-visible) { opacity: 0; background: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .oc-chat-width-edge,
+    .oc-chat-width-reset { transition: none; }
+}

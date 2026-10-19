@@ -269,6 +269,22 @@ describe('updateDesktopSettings', () => {
     expect(secondResolved).toBe(true);
   });
 
+  test('a thousand queued preference changes persist only the latest value and settle every caller', async () => {
+    const writes: Array<Partial<SettingsPayload>> = [];
+    registerSettingsSave(async (changes) => {
+      writes.push(changes);
+      return { ...changes };
+    });
+    const updates = Array.from({ length: 1000 }, (_, index) => (
+      updateDesktopSettings({ defaultModel: `provider/model-${index}` })
+    ));
+
+    const results = await Promise.all(updates);
+    expect(writes).toEqual([{ defaultModel: 'provider/model-999' }]);
+    expect(results.every((result) => result.ok)).toBe(true);
+    expect(getSettingsSaveState()).toBe('idle');
+  });
+
   test('publishes saving and saved states for an immediate setting update', async () => {
     const states: string[] = [];
     registerSettingsSave(async (changes) => changes as SettingsPayload);
@@ -1198,6 +1214,79 @@ describe('updateDesktopSettings', () => {
     await updateDesktopSettings({ fontSize: 16 });
     expect(saveCalls).toEqual([{ fontSize: 16 }]);
   });
+
+  for (const transport of ['runtime', 'http']) {
+    test(`a ${transport} save response cannot mark an unsent edit as already saved`, async () => {
+      const firstResult = deferred<SettingsPayload>();
+      const writes: Array<Partial<SettingsPayload>> = [];
+      const save = async (changes: Partial<SettingsPayload>): Promise<SettingsPayload> => {
+        writes.push(changes);
+        return writes.length === 1 ? firstResult.promise : { ...changes };
+      };
+      if (transport === 'runtime') {
+        registerSettingsSave(save);
+      } else {
+        Object.defineProperty(globalThis, 'fetch', {
+          configurable: true,
+          writable: true,
+          value: async (_input: RequestInfo | URL, init?: RequestInit) => (
+            Response.json(await save(JSON.parse(String(init?.body))))
+          ),
+        });
+      }
+      const first = updateDesktopSettings({ defaultModel: 'provider/first' });
+      await delay(250);
+      const second = updateDesktopSettings({ defaultModel: 'provider/second' });
+      firstResult.resolve({ defaultModel: 'provider/first' });
+      await first;
+      const unrelated = updateDesktopSettings({ showDeletionDialog: false });
+      await Promise.all([second, unrelated]);
+      expect(writes).toEqual([
+        { defaultModel: 'provider/first' },
+        { defaultModel: 'provider/second', showDeletionDialog: false },
+      ]);
+    });
+
+    test(`a late ${transport} save response cannot suppress the next edit as redundant`, async () => {
+      const firstResult = deferred<SettingsPayload>();
+      const secondResult = deferred<SettingsPayload>();
+      const writes: Array<Partial<SettingsPayload>> = [];
+      const save = async (changes: Partial<SettingsPayload>): Promise<SettingsPayload> => {
+        writes.push(changes);
+        if (writes.length === 1) return firstResult.promise;
+        if (writes.length === 2) return secondResult.promise;
+        return { ...changes };
+      };
+      if (transport === 'runtime') {
+        registerSettingsSave(save);
+      } else {
+        Object.defineProperty(globalThis, 'fetch', {
+          configurable: true,
+          writable: true,
+          value: async (_input: RequestInfo | URL, init?: RequestInit) => {
+            const changes = JSON.parse(String(init?.body));
+            return Response.json(await save(changes));
+          },
+        });
+      }
+      const first = updateDesktopSettings({ defaultModel: 'provider/first' });
+      await delay(250);
+      const second = updateDesktopSettings({ defaultModel: 'provider/second' });
+      await delay(250);
+      expect(writes).toEqual([{ defaultModel: 'provider/first' }, { defaultModel: 'provider/second' }]);
+      secondResult.resolve({ defaultModel: 'provider/second' });
+      await second;
+      firstResult.resolve({ defaultModel: 'provider/first' });
+      await first;
+      await updateDesktopSettings({ defaultModel: 'provider/first' });
+      await updateDesktopSettings({ defaultModel: 'provider/first' });
+      expect(writes).toEqual([
+        { defaultModel: 'provider/first' },
+        { defaultModel: 'provider/second' },
+        { defaultModel: 'provider/first' },
+      ]);
+    });
+  }
 
   test('reconciles warm cached reads with pending and in-flight settings writes', async () => {
     const saveResult = deferred<SettingsPayload>();

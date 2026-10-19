@@ -1,5 +1,5 @@
+import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
-import { museI18n } from './muse.i18n';
 import { claudeI18n } from './claude.i18n';
 import { meetingsI18n } from './meetings.i18n';
 import { homeI18n } from './home.i18n';
@@ -23,10 +23,10 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...friendsI18n['ko'],
   ...personalWorkspaceI18n.ko,
   'workspace.officePreview': '텍스트와 포함된 이미지만 표시합니다. 원래 레이아웃, 차트, 애니메이션, 실시간 계산은 표시하지 않습니다.',
   ...chatgptI18n['ko'],
-  ...museI18n.ko,
   ...claudeI18n.ko,
   ...meetingsI18n.ko,
   'meeting.quickStart': '회의 시작',
@@ -2491,6 +2491,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.chatInput.toast.largeTextPaste.inline': '본문에 붙여넣기',
   'chat.chatInput.toast.addedFileMentions': '파일 멘션 {count}개 추가됨',
   'chat.chatInput.toast.attachFileFailed': '첨부 파일 실패',
+  'chat.chatInput.toast.processingVideo': '동영상 처리 중…',
   'chat.chatInput.toast.attachNamedFailed': '첨부 {name} 실패',
   'chat.chatInput.toast.unsupportedAttachmentModalities': '{model}은(는) {files}에 필요한 {modalities} 입력을 지원하지 않습니다. 메시지를 보낼 수는 있지만 해당 첨부 파일이 무시될 수 있습니다.',
   'chat.chatInput.toast.someFilesSkipped': '일부 파일을 건너뛰었습니다:\n{summary}',

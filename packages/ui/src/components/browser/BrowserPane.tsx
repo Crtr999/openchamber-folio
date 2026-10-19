@@ -64,7 +64,7 @@ const isChromiumHost = (): boolean => (
 );
 
 /** How long to keep waiting for a dev server that is still coming up. */
-const DEV_SERVER_WAIT_MS = 40_000;
+const DEV_SERVER_WAIT_MS = 3_000;
 /** Chromium's zoom is exponential: factor = 1.2 ^ level. */
 const ZOOM_STEP = 0.5;
 const ZOOM_MIN = -3;
@@ -72,7 +72,7 @@ const ZOOM_MAX = 4;
 const BROWSER_PARTITION = 'persist:openchamber-browser';
 /** Kept small: this rides along with every snapshot. */
 const CONSOLE_PROBLEM_LIMIT = 20;
-const DEV_SERVER_RETRY_DELAY_MS = 600;
+const DEV_SERVER_RETRY_DELAY_MS = 1_500;
 /**
  * A shorter budget for a server that *answers* but with a 5xx, which is what a
  * dev gateway does while the app behind it is still starting. Kept short and

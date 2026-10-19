@@ -312,6 +312,13 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['layout', 'wide', 'messages'],
   },
   {
+    id: 'chat.column-width',
+    page: 'chat',
+    titleKey: 'chat.width.label',
+    descriptionKey: 'chat.width.settingsHint',
+    keywords: ['layout', 'width', 'resize', 'drag', 'composer', 'table', 'reset'],
+  },
+  {
     id: 'chat.message-appearance',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.section.messageAppearance',

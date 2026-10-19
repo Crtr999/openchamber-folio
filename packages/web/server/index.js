@@ -25,7 +25,7 @@ import {
   isNetworkExposedBindHost,
   isUnsafeUnauthenticatedLanAllowed,
 } from './lib/security/bind-host.js';
-import { isNetworkAccessBlocked, NETWORK_ACCESS_BLOCKED_ERROR } from './lib/enterprise-mode.js';
+import { isEnterpriseMode, isNetworkAccessBlocked, NETWORK_ACCESS_BLOCKED_ERROR } from './lib/enterprise-mode.js';
 import {
   TUNNEL_MODE_MANAGED_LOCAL,
   TUNNEL_MODE_MANAGED_REMOTE,
@@ -105,6 +105,12 @@ import { createJevClient } from './lib/routing/jev.js';
 import { createSessionWorkRuntime } from './lib/session-work/runtime.js';
 import { createSessionLineage } from './lib/session-lineage.js';
 import { createGracefulShutdownRuntime } from './lib/opencode/shutdown-runtime.js';
+import { createAiTaskRuntime, createTeamRuntime } from './lib/ai-tasks/runtime.js';
+import { createAiTaskExecutor } from './lib/ai-tasks/executor.js';
+import { createTeamExecutor } from './lib/ai-tasks/team-executor.js';
+import { verifyFreeTeamExecution } from './lib/ai-tasks/team-host-guard.js';
+import { verifyTeamToolsInstallation } from './lib/ai-tasks/team-tools-host.js';
+import { registerTeamToolsRoute } from './lib/ai-tasks/team-tools-route.js';
 import { beginGuestServiceHost, beginGuestServiceShutdown, stopAllGuestServices } from './lib/guests/service.js';
 import { findInstalledGuest } from './lib/guests/catalog.js';
 import { extensionsPersistPath } from './lib/guests/persist.js';
@@ -1247,7 +1253,10 @@ const bootstrapRuntime = createBootstrapRuntime({
   registerTtsRoutes,
   registerNotificationRoutes,
   registerOpenChamberRoutes,
-  registerAgentToolRoutes: (app, options) => options.agentToolRuntime.registerRoutes(app, options.express),
+  registerAgentToolRoutes: (app, options) => {
+    options.agentToolRuntime.registerRoutes(app, options.express);
+    registerTeamToolsRoute(app, { authorizeRequest: options.agentToolRuntime.authorizeRequest, getTeam: () => teamRuntime, express: options.express });
+  },
   express,
 });
 const tunnelWiringRuntime = createTunnelWiringRuntime({
@@ -1694,6 +1703,13 @@ const fetchAgentsSnapshot = (...args) => serverUtilsRuntime.fetchAgentsSnapshot(
 const fetchProvidersSnapshot = (...args) => serverUtilsRuntime.fetchProvidersSnapshot(...args);
 const fetchModelsSnapshot = (...args) => serverUtilsRuntime.fetchModelsSnapshot(...args);
 const setupProxy = (...args) => serverUtilsRuntime.setupProxy(...args);
+let aiTaskRuntime = null;
+let teamRuntime = null;
+let teamCheckInterval = null;
+// Folderless AI Tasks run in one fixed team home inside the chats root, so their
+// chats appear in All Chats. It is a destination only when its team is set up.
+const ALL_CHATS_TEAM_PROJECT = { id: 'openchamber:all-chats', path: path.join(OPENCHAMBER_CHATS_DIR, 'ai-team'), label: 'No folder (All Chats)' };
+const readAiTaskProjects = async () => [ALL_CHATS_TEAM_PROJECT, ...sanitizeProjects((await readSettingsFromDiskMigrated()).projects)];
 const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   process,
   shutdownTimeoutMs: SHUTDOWN_TIMEOUT,
@@ -1739,6 +1755,9 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   },
   tunnelAuthController,
   scheduledTasksRuntime,
+  getAiTaskRuntime: () => aiTaskRuntime,
+  getTeamRuntime: () => teamRuntime,
+  getTeamCheckInterval: () => teamCheckInterval,
   beginGuestServiceShutdown,
   stopAllGuestServices,
   getGuestSurfaceRuntime: () => guestSurfaceRuntime,
@@ -2383,6 +2402,47 @@ async function main(options = {}) {
     console.warn('[ScheduledTasks] Failed to start runtime:', error?.message || error);
   }
 
+  if (options.teamConnection) {
+    teamRuntime = createTeamRuntime({
+      ...options.teamConnection,
+      executor: createTeamExecutor({
+        readProjects: readAiTaskProjects,
+        waitForReady: () => waitForOpenCodeReady(10_000, 250),
+        verifyFreeExecution: verifyFreeTeamExecution,
+        verifyTeamTool: input => verifyTeamToolsInstallation(input, options.teamConnection.filePath),
+      }),
+      isBlocked: () => isEnterpriseMode(),
+    });
+    // Claim/read durable state without dispatching a prompt. A broken team file
+    // stays inspectable and must not prevent ordinary desktop startup.
+    try { await teamRuntime.inbox(); }
+    catch { console.warn('[Team] Durable state is unavailable; no new work is authorized.'); }
+    let checking = false;
+    const checkTeam = async () => {
+      if (checking || isShuttingDown) return;
+      checking = true;
+      try { await teamRuntime.check(); }
+      catch { console.warn('[Team] Check could not be verified; saved state is retained.'); }
+      finally { checking = false; }
+    };
+    teamCheckInterval = setInterval(() => { void checkTeam(); }, 60_000);
+    teamCheckInterval.unref();
+    void checkTeam();
+  }
+
+  if (options.aiTaskConnection) {
+    aiTaskRuntime = createAiTaskRuntime({
+      ...options.aiTaskConnection,
+      team: teamRuntime,
+      executor: createAiTaskExecutor({
+        readProjects: readAiTaskProjects,
+        waitForReady: () => waitForOpenCodeReady(10_000, 250),
+      }),
+      isBlocked: () => isEnterpriseMode(),
+    });
+    aiTaskRuntime.start();
+  }
+
   // Only opens a relay control socket when the user opted in (config enabled).
   // Reconcile the relay lifecycle from demand on startup: run it if any relay
   // device/session exists, stop it (and clear a stale enabled flag) otherwise.
@@ -2416,6 +2476,8 @@ async function main(options = {}) {
   return {
     expressApp: app,
     httpServer: server,
+    getAiTasks: () => aiTaskRuntime,
+    getTeam: () => teamRuntime,
     getPort: () => tunnelRuntimeContext.getActivePort(),
     getOpenCodePort: () => openCodePort,
     getTunnelUrl: () => tunnelService.getPublicUrl(),

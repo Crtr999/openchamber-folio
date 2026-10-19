@@ -24,10 +24,11 @@ test('compact task control expands, preserves a draft, submits once and collapse
     const host = document.createElement('div'); document.body.append(host);
     const root = createRoot(host);
     const submissions: string[] = [];
-    function Fixture() {
+    let chatSubmissions = 0;
+    function Fixture({ disabled = false }: { disabled?: boolean }) {
         const [value, setValue] = React.useState('');
-        return <HomeTaskComposer value={value} onChange={setValue} disabled={false}
-            onSubmit={() => { submissions.push(value); setValue(''); }} />;
+        return <form onSubmit={event => { event.preventDefault(); chatSubmissions++; }}><HomeTaskComposer value={value} onChange={setValue} disabled={disabled}
+            onSubmit={() => { submissions.push(value); setValue(''); }} /></form>;
     }
     await act(async () => root.render(<I18nProvider><Fixture /></I18nProvider>));
     const open = async () => {
@@ -45,7 +46,9 @@ test('compact task control expands, preserves a draft, submits once and collapse
         await act(async () => { setter?.call(input, 'Fixture task'); input.dispatchEvent(new Event('input', { bubbles: true })); });
         await act(async () => input.blur());
         expect(host.querySelector('input')?.value).toBe('Fixture task');
-        await act(async () => host.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+        expect(host.querySelectorAll('form')).toHaveLength(1);
+        expect(host.querySelector('.oc-home-task-composer button')?.getAttribute('type')).toBe('button');
+        await act(async () => host.querySelector<HTMLButtonElement>('.oc-home-task-composer button')?.click());
         expect(submissions).toEqual(['Fixture task']);
         expect(host.querySelector('input')).toBeNull();
         await act(async () => host.querySelector('button')?.focus());
@@ -55,5 +58,22 @@ test('compact task control expands, preserves a draft, submits once and collapse
         await act(async () => focusedInput?.blur());
         expect(host.querySelector('input')).toBeNull();
         expect(submissions).toHaveLength(1);
+        input = await open();
+        await act(async () => { setter?.call(input, 'Keyboard task'); input.dispatchEvent(new Event('input', { bubbles: true })); });
+        await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, isComposing: true })));
+        await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, repeat: true })));
+        expect(submissions).toEqual(['Fixture task']);
+        const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+        await act(async () => input.dispatchEvent(enter));
+        expect(enter.defaultPrevented).toBe(true);
+        expect(submissions).toEqual(['Fixture task', 'Keyboard task']);
+        input = await open();
+        await act(async () => { setter?.call(input, 'Pending task'); input.dispatchEvent(new Event('input', { bubbles: true })); });
+        await act(async () => root.render(<I18nProvider><Fixture disabled /></I18nProvider>));
+        expect(host.querySelector<HTMLButtonElement>('.oc-home-task-composer button')?.disabled).toBe(true);
+        await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
+        expect(submissions).toEqual(['Fixture task', 'Keyboard task']);
+        expect(host.querySelector('input')?.value).toBe('Pending task');
+        expect(chatSubmissions).toBe(0);
     } finally { await act(async () => root.unmount()); host.remove(); }
 });

@@ -25,9 +25,10 @@ function syntheticClient({ hang = false } = {}) {
       rejectCommit?.(new Error('Synthetic shutdown'));
     },
   };
+  // Only 'exit': a disconnected Node/Electron worker never emits 'close'.
   const finish = () => {
     process.exitCode = 0;
-    process.emit('close');
+    process.emit('exit', 0, null);
   };
   return { client, finish };
 }
@@ -99,7 +100,7 @@ describe('warm meeting transcriber', () => {
           if (failOn.includes(total)) throw new Error('Synthetic decode failure');
           emitter.emit('transcript', { transcript: `chunk ${client.commits}` });
         },
-        shutdown() { client.worker = null; process.exitCode = 0; queueMicrotask(() => process.emit('close')); },
+        shutdown() { client.worker = null; process.exitCode = 0; queueMicrotask(() => process.emit('exit', 0, null)); },
       };
       clients.push(client);
       return client;

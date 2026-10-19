@@ -39,7 +39,6 @@ import { useSessionUnseenCount } from '@/sync/notification-store';
 import { useIsSessionAiRenamePending } from '@/sync/use-session-ai-rename';
 import { useMultiRunMemberIds } from '@/lib/multirun/useMultiRuns';
 import { useUIStore } from '@/stores/useUIStore';
-import { useMuseStore } from '@/stores/useMuseStore';
 import { Button } from '@/components/ui/button';
 import { WebsiteTabPinMenuItem } from './WebsiteTabPinMenuItem';
 import { handleDropdownNavigationKey } from '@/components/ui/dropdown-navigation';
@@ -397,10 +396,8 @@ export const SessionTabsStrip: React.FC<{
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const activeSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const isChatGPTPageOpen = useUIStore((state) => state.isChatGPTPageOpen);
-  const isMusePageOpen = useUIStore((state) => state.isMusePageOpen);
   const isClaudePageOpen = useUIStore((state) => state.isClaudePageOpen);
-  const musePageTitle = useMuseStore((state) => state.pageTitle);
-  const activeWebsiteId = isChatGPTPageOpen ? 'website:chatgpt' : isMusePageOpen ? 'website:muse' : isClaudePageOpen ? 'website:claude' : null;
+  const activeWebsiteId = isChatGPTPageOpen ? 'website:chatgpt' : isClaudePageOpen ? 'website:claude' : null;
   const activeTabId = activeWebsiteId ?? currentSessionId;
   const websitesAvailable = isWebsiteTabAvailable();
 
@@ -425,14 +422,14 @@ export const SessionTabsStrip: React.FC<{
     for (const id of tabIds) {
       const website = websitesAvailable ? getWebsiteTab(id) : null;
       if (website) {
-        list.push({ id, title: id === 'website:muse' && musePageTitle ? musePageTitle : website.title });
+        list.push({ id, title: website.title });
         continue;
       }
       const session = sessionsById.get(id);
       if (session) list.push({ id, session });
     }
     return list;
-  }, [tabIds, sessionsById, websitesAvailable, musePageTitle]);
+  }, [tabIds, sessionsById, websitesAvailable]);
 
   const handleSelect = React.useCallback((tab: SessionTab) => {
     activateHeaderTab(tab.id);

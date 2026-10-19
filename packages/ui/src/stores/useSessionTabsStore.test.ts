@@ -61,21 +61,30 @@ describe('useSessionTabsStore', () => {
   test('singleton website ids reuse the session working set and persist in order', async () => {
     const store = useSessionTabsStore.getState();
     store.ensureTab('a');
-    store.ensureTab('website:muse');
+    store.ensureTab('website:chatgpt');
     store.ensureTab('website:claude');
-    store.ensureTab('website:muse');
+    store.ensureTab('website:chatgpt');
     store.reorderTabs('website:claude', 'a');
     const storage = useSessionTabsStore.persist.getOptions().storage;
     if (!storage) throw new Error('Missing tab persistence');
     const snapshot = await storage.getItem('session-tabs-store');
-    expect(snapshot?.state.tabIds).toEqual(['website:claude', 'a', 'website:muse']);
+    expect(snapshot?.state.tabIds).toEqual(['website:claude', 'a', 'website:chatgpt']);
     if (!snapshot) throw new Error('Missing persisted tab snapshot');
     useSessionTabsStore.setState({ tabIds: [] });
     await storage.setItem('session-tabs-store', snapshot);
     await useSessionTabsStore.persist.rehydrate();
-    expect(useSessionTabsStore.getState().tabIds).toEqual(['website:claude', 'a', 'website:muse']);
-    store.closeTab('website:muse');
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['website:claude', 'a', 'website:chatgpt']);
+    store.closeTab('website:chatgpt');
     expect(useSessionTabsStore.getState().tabIds).toEqual(['website:claude', 'a']);
+  });
+
+  test('rehydrating a retired website:muse tab id drops it instead of crashing', async () => {
+    const storage = useSessionTabsStore.persist.getOptions().storage;
+    if (!storage) throw new Error('Missing tab persistence');
+    await storage.setItem('session-tabs-store', { state: { tabIds: ['a', 'website:muse', 'website:claude'], focusedTabId: 'website:muse' }, version: 0 });
+    await useSessionTabsStore.persist.rehydrate();
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['a', 'website:claude']);
+    expect(useSessionTabsStore.getState().focusedTabId).toBeNull();
   });
 
   test('navigateTab replaces the focused tab in place (Notion-style)', () => {

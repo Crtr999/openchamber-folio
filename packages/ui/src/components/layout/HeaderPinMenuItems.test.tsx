@@ -9,7 +9,6 @@ import type { Session } from '@/lib/opencode/model';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { isSessionPinned, useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useMuseStore } from '@/stores/useMuseStore';
 import { useClaudeStore } from '@/stores/useClaudeStore';
 import { useChatGPTStore } from '@/stores/useChatGPTStore';
 import { HeaderSessionPinMenuItem } from './HeaderSessionPinMenuItem';
@@ -28,7 +27,7 @@ const preserve = <State,>(store: StoreApi<State>) => {
   return () => store.setState(state);
 };
 const restoreStores = [preserve(useGlobalSessionsStore), preserve(useSessionPinnedStore), preserve(useSessionUIStore),
-  preserve(useMuseStore), preserve(useClaudeStore), preserve(useChatGPTStore), preserve(useI18nStore)];
+  preserve(useClaudeStore), preserve(useChatGPTStore), preserve(useI18nStore)];
 const Item: SessionTabMenuComponents['Item'] = props => <button {...props} />;
 const session: Session = {
   id: 'target', directory: '/authoritative-worktree', title: 'Target', projectID: 'project', cost: 0,
@@ -42,7 +41,6 @@ beforeEach(() => {
   useSessionPinnedStore.setState({ ids: new Set(), touchedAt: {} });
   useSessionUIStore.setState({ currentSessionId: 'other', currentSessionDirectory: '/wrong-active-directory' });
   useGlobalSessionsStore.getState().upsertSession(session);
-  useMuseStore.setState({ pageUrl: null, pageTitle: '', savedPages: [] });
   useClaudeStore.setState({ pageUrl: null, pageTitle: '', savedPages: [] });
   useChatGPTStore.setState({ status: 'idle', activePath: '/', chats: [], pinnedPaths: [] });
 });
@@ -87,7 +85,6 @@ test('re-resolves a moved session and refuses unknown ownership', async () => {
 });
 
 for (const [tabId, store, url] of [
-  ['website:muse', useMuseStore, 'https://muse.ai/observed-page'],
   ['website:claude', useClaudeStore, 'https://claude.ai/observed-page'],
 ] as const) {
   test(`${tabId} saves observed metadata only and disables root, loading, and external URLs`, async () => {

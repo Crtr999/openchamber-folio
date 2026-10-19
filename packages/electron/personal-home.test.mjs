@@ -5,9 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { createPersonalHome, parseBoardSource, quoteSqlIdentifier, notionPageId } from './personal-home.mjs';
 import { createPersonalCalendar } from './personal-calendar.mjs';
-const source = (schema) => `<data-source-state>${JSON.stringify({ url: 'collection://abc', name: 'Daily', schema })}</data-source-state>`;
+const dailySourceUrl = 'collection://024860a0-3918-450b-93c0-074f9512c67e';
+const habitSourceUrl = 'collection://f26696d5-a0fd-4add-a9ae-a7b48f4e2a15';
+const source = (schema, url = dailySourceUrl) => `<data-source-state>${JSON.stringify({ url, name: 'Daily', schema })}</data-source-state>
+<views><view url="{{view://${url.replace('collection://', '')}}}">${JSON.stringify({ dataSourceUrl: `{{${url}}}`, name: 'Integration', type: 'table', displayProperties: Object.values(schema).map((property) => property.name) })}</view></views>`;
 const boardSource = source({ Name: { name: 'Task name', type: 'title' }, Status: { name: 'Status', type: 'status', groups: { complete: [{ name: 'Done' }], to_do: [{ name: 'To do' }], in_progress: [{ name: 'In progress' }] } } });
-const habitsSource = source({ Day: { name: 'Day', type: 'title' }, Date: { name: 'Date', type: 'date' }, Pray: { name: 'Pray', type: 'checkbox' }, Formula: { name: 'Completion', type: 'formula', readOnly: true } });
+const habitsSource = source({ Day: { name: 'Day', type: 'title' }, Date: { name: 'Date', type: 'date' }, Pray: { name: 'Pray', type: 'checkbox' }, Formula: { name: 'Completion', type: 'formula', readOnly: true } }, habitSourceUrl);
 const safeStorage = { isEncryptionAvailable: () => true, encryptString: (text) => Buffer.from(`encrypted:${text}`), decryptString: (buffer) => buffer.toString().slice(10) };
 async function fixture(options = {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'personal-home-test-'));
@@ -21,12 +24,19 @@ async function fixture(options = {}) {
     const body = JSON.parse(request.body); calls.push(body);
     if (body.method === 'notifications/initialized') return new Response(null, { status: 202 });
     if (body.method === 'initialize') return Response.json({ result: { protocolVersion: '2025-06-18' } });
-    if (body.method === 'tools/list') { const names = ['get_tool_access', 'fetch', 'query_data_sources', 'update_page', 'create_pages', ...(options.deleteTool ? ['delete_page'] : [])]; const wraps = (name) => options.wrappedUpdates && (name === 'update_page' || name === 'query_data_sources' || name === 'delete_page'); return Response.json({ result: { tools: names.map((name) => ({ name, inputSchema: { properties: wraps(name) ? { data: {} } : {} } })) } }); }
+    if (body.method === 'tools/list') { const names = ['get_tool_access', 'fetch', 'query_data_sources', 'update_page', 'create_pages', ...(options.deleteTool ? ['delete_page'] : [])]; const wraps = (name) => options.wrappedUpdates && (name === 'update_page' || name === 'query_data_sources' || name === 'delete_page'); return Response.json({ result: { tools: names.map((name) => { const advertised = { properties: name === 'delete_page' ? { page_id: { type: 'string' } } : {} }; return { name, inputSchema: wraps(name) ? { properties: { data: advertised } } : advertised }; }) } }); }
     const name = body.params.name;
     let result;
     if (name === 'get_tool_access') result = { current_tool_access: { query_data_sources: { status: 'available' } } };
     else if (name === 'fetch') result = { text: body.params.arguments.id.includes('f26696d5') ? habitsSource : options.boardSource ?? boardSource };
-    else if (name === 'query_data_sources') result = body.params.arguments.data.params ? { results: [{ url: 'https://www.notion.so/30813d2f13da8135850ecd155cf3b391', Pray: '__NO__' }] } : { results: [{ url: 'https://www.notion.so/28d13d2f13da80859015c65c62d969c6', title: 'Example', status: 'To do', ...options.dates }] };
+    else if (name === 'query_data_sources') {
+      const data = body.params.arguments.data;
+      assert.equal(data.mode, 'view');
+      result = data.view_url.includes('f26696d5')
+        ? { results: [{ url: 'https://www.notion.so/30813d2f13da8135850ecd155cf3b391', Day: 'Today', 'date:Date:start': '2026-10-06', Pray: '__NO__' }], has_more: false }
+        : { results: [{ url: 'https://www.notion.so/28d13d2f13da80859015c65c62d969c6', 'Task name': 'Example', Status: 'To do',
+          'date:Due:start': options.dates?.dueStart ?? null, 'date:Due:end': options.dates?.dueEnd ?? null, 'date:Due:is_datetime': options.dates?.dueIsDatetime ?? null }], has_more: false };
+    }
     else { if (name === 'update_page' && options.failMove) return Response.json({ result: { isError: true, content: [] } }); if ((name === 'update_page' || name === 'delete_page') && options.wrappedUpdates) { assert.deepEqual(Object.keys(body.params.arguments), ['data']); assert.match(body.params.arguments.data.page_id, /^[0-9a-f]{32}$/); } result = { saved: true }; }
     return Response.json({ result: { content: [{ type: 'text', text: JSON.stringify(result) }] } });
   };
@@ -47,13 +57,13 @@ test('Stateless MCP initializes once; task writes require fetched membership and
     assert.deepEqual(f.calls.find((call) => call.params?.name === 'update_page').params.arguments.properties, { Status: 'Done' });
   } finally { await f.clean(); }
 });
-test('Habit query binds the local day and only fetched checkbox fields can be written', async () => {
+test('Habit view reads select the local day and only fetched checkbox fields can be written', async () => {
   const f = await fixture(); try {
     const result = await f.service.handle({ action: 'habits', day: '2026-10-06' });
     assert.equal(result.items[0].checked, false);
     await assert.rejects(f.service.handle({ action: 'habit', page: result.page, name: 'Completion', checked: true }));
     await f.service.handle({ action: 'habit', page: result.page, name: 'Pray', checked: true });
-    assert.deepEqual(f.calls.find((call) => call.params?.name === 'query_data_sources').params.arguments.data.params, ['2026-10-06']);
+    assert.deepEqual(f.calls.find((call) => call.params?.name === 'query_data_sources').params.arguments.data, { mode: 'view', view_url: `view://${habitSourceUrl.replace('collection://', '')}`, page_size: 100 });
     assert.deepEqual(f.calls.find((call) => call.params?.name === 'update_page').params.arguments.properties, { Pray: '__YES__' });
   } finally { await f.clean(); }
 });
@@ -101,7 +111,7 @@ test('Hosted MCP updates use the advertised data wrapper for both tasks and habi
     await f.service.handle({ action: 'habit', page: habits.page, name: 'Pray', checked: false });
     const writes = f.calls.filter((call) => call.params?.name === 'update_page');
     assert.deepEqual(writes.map((call) => call.params.arguments.data.properties), [{ Status: 'Done' }, { Pray: '__NO__' }]);
-    assert.equal(f.calls.find((call) => call.params?.name === 'query_data_sources').params.arguments.data.mode, 'sql');
+    assert.equal(f.calls.find((call) => call.params?.name === 'query_data_sources').params.arguments.data.mode, 'view');
   } finally { await f.clean(); }
 });
 test('Tasks create, rename and delete only against a fetched board', async () => {
@@ -110,18 +120,18 @@ test('Tasks create, rename and delete only against a fetched board', async () =>
     await assert.rejects(f.service.handle({ action: 'create-task', title: '   ' }));
     await f.service.handle({ action: 'create-task', title: 'Fresh task' });
     const created = f.calls.find((call) => call.params?.name === 'create_pages');
-    assert.equal(created.params.arguments.parent.data_source_id, 'abc');
+    assert.equal(created.params.arguments.parent.data_source_id, dailySourceUrl.replace('collection://', ''));
     assert.deepEqual(created.params.arguments.pages[0].properties, { 'Task name': 'Fresh task', Status: 'To do' });
-    await assert.rejects(f.service.handle({ action: 'delete-task', page: 'https://www.notion.so/28d13d2f13da80859015c65c62d969c6' }), /Refresh the board/);
+    await assert.rejects(f.service.handle({ action: 'delete-task', page: 'https://www.notion.so/28d13d2f13da80859015c65c62d969c6', confirmed: true }), /Refresh the board/);
     const board = await f.service.handle({ action: 'board' });
     await assert.rejects(f.service.handle({ action: 'rename-task', page: 'foreign', title: 'Renamed' }), /Refresh the board/);
-    await assert.rejects(f.service.handle({ action: 'delete-task', page: 'foreign' }), /Refresh the board/);
+    await assert.rejects(f.service.handle({ action: 'delete-task', page: 'foreign', confirmed: true }), /Refresh the board/);
     await assert.rejects(f.service.handle({ action: 'create-task', title: 'Bad status', status: 'Invented' }), /status/);
     await f.service.handle({ action: 'rename-task', page: board.rows[0].url, title: 'Renamed' });
     assert.deepEqual(f.calls.filter((call) => call.params?.name === 'update_page').at(-1).params.arguments.properties, { 'Task name': 'Renamed' });
-    await assert.rejects(f.service.handle({ action: 'delete-task', page: board.rows[0].url }), /Refresh the board/);
+    await assert.rejects(f.service.handle({ action: 'delete-task', page: board.rows[0].url, confirmed: true }), /Refresh the board/);
     await f.service.handle({ action: 'board' });
-    await f.service.handle({ action: 'delete-task', page: board.rows[0].url });
+    await f.service.handle({ action: 'delete-task', page: board.rows[0].url, confirmed: true });
     assert.equal(f.calls.filter((call) => call.params?.name === 'delete_page').at(-1).params.arguments.page_id, '28d13d2f13da80859015c65c62d969c6');
     await assert.rejects(f.service.handle({ action: 'rename-task', page: board.rows[0].url, title: 'Again' }), /Refresh the board/);
   } finally { await f.clean(); }
@@ -129,15 +139,15 @@ test('Tasks create, rename and delete only against a fetched board', async () =>
 test('Deleting a task reports a clear error when the connection exposes no delete tool', async () => {
   const f = await fixture(); try {
     const board = await f.service.handle({ action: 'board' });
-    await assert.rejects(f.service.handle({ action: 'delete-task', page: board.rows[0].url }), /does not allow deleting tasks/);
+    await assert.rejects(f.service.handle({ action: 'delete-task', page: board.rows[0].url, confirmed: true }), /does not allow deleting tasks/);
     assert.equal(f.calls.some((call) => call.params?.name === 'delete_page'), false);
   } finally { await f.clean(); }
 });
 test('Hosted MCP wraps a delete call in data without rewrapping query arguments', async () => {
   const f = await fixture({ wrappedUpdates: true, deleteTool: true }); try {
     const board = await f.service.handle({ action: 'board' });
-    await f.service.handle({ action: 'delete-task', page: board.rows[0].url });
-    assert.equal(f.calls.find((call) => call.params?.name === 'query_data_sources').params.arguments.data.mode, 'sql');
+    await f.service.handle({ action: 'delete-task', page: board.rows[0].url, confirmed: true });
+    assert.equal(f.calls.find((call) => call.params?.name === 'query_data_sources').params.arguments.data.mode, 'view');
     const removed = f.calls.find((call) => call.params?.name === 'delete_page');
     assert.deepEqual(Object.keys(removed.params.arguments), ['data']);
     assert.equal(removed.params.arguments.data.page_id, '28d13d2f13da80859015c65c62d969c6');
@@ -157,9 +167,9 @@ test('Board due dates use the real date property and retain calendar days, offse
       const board = await f.service.handle({ action: 'board' });
       assert.deepEqual(board.columns, ['To do', 'Worked Today', 'Done/Archived']);
       assert.deepEqual(board.rows[0].due, dates.dueStart ? { start: dates.dueStart, end: dates.dueEnd, isDatetime: dates.dueIsDatetime === 1 } : null);
-      const query = f.calls.find((call) => call.params?.name === 'query_data_sources').params.arguments.data.query;
-      assert.match(query, /"date:Due:start" AS dueStart/);
-      assert.doesNotMatch(query, /date:Started/);
+      const query = f.calls.find((call) => call.params?.name === 'query_data_sources').params.arguments.data;
+      assert.equal(query.mode, 'view');
+      assert.equal(query.query, undefined);
       await f.service.handle({ action: 'move', page: board.rows[0].url, status: 'Worked Today' });
       await f.service.handle({ action: 'move', page: board.rows[0].url, status: 'Done\/Archived' });
       assert.deepEqual(f.calls.filter((call) => call.params?.name === 'update_page').map((call) => call.params.arguments.properties), [{ Status: 'Worked Today' }, { Status: 'Done/Archived' }]);
@@ -173,7 +183,7 @@ test('Absent or ambiguous dates are not synthesized; failed moves leave fetched 
   try {
     const board = await f.service.handle({ action: 'board' });
     assert.equal(board.rows[0].due, null);
-    assert.match(f.calls.find((call) => call.params?.name === 'query_data_sources').params.arguments.data.query, /NULL AS dueStart/);
+    assert.equal(f.calls.find((call) => call.params?.name === 'query_data_sources').params.arguments.data.mode, 'view');
     await assert.rejects(f.service.handle({ action: 'move', page: board.rows[0].url, status: 'Done' }), /Notion could not complete/);
     await assert.rejects(f.service.handle({ action: 'move', page: board.rows[0].url, status: 'Done' }), /Notion could not complete/);
   } finally { await f.clean(); }

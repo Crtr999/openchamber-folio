@@ -1,5 +1,5 @@
+import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
-import { museI18n } from './muse.i18n';
 import { claudeI18n } from './claude.i18n';
 import { meetingsI18n } from './meetings.i18n';
 import { homeI18n } from './home.i18n';
@@ -23,10 +23,10 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...friendsI18n['ja'],
   ...personalWorkspaceI18n.ja,
   'workspace.officePreview': 'テキストと埋め込み画像のみ表示します。元のレイアウト、グラフ、アニメーション、リアルタイムの計算は表示しません。',
   ...chatgptI18n['ja'],
-  ...museI18n.ja,
   ...claudeI18n.ja,
   ...meetingsI18n.ja,
   'meeting.quickStart': '会議を開始',
@@ -2487,6 +2487,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.chatInput.toast.largeTextPaste.inline': 'そのまま貼り付け',
   'chat.chatInput.toast.addedFileMentions': '{count}件のファイルメンションを追加しました',
   'chat.chatInput.toast.attachFileFailed': 'ファイルの添付に失敗しました',
+  'chat.chatInput.toast.processingVideo': '動画を処理中…',
   'gitView.commit.aiHighlights.insertAria': '挿入のariaラベル',
   'gitView.commit.aiHighlights.insertTooltip': '挿入のツールチップ',
   'gitView.commit.commitAria': 'コミットのariaラベル',

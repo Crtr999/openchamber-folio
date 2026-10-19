@@ -1,5 +1,5 @@
+import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
-import { museI18n } from './muse.i18n';
 import { claudeI18n } from './claude.i18n';
 import { meetingsI18n } from './meetings.i18n';
 import { homeI18n } from './home.i18n';
@@ -22,10 +22,10 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 export const dict = {
+  ...friendsI18n['en'],
   ...personalWorkspaceI18n.en,
   'workspace.officePreview': 'Text and embedded images only. Original layout, charts, animations, and live calculations are not rendered.',
   ...chatgptI18n['en'],
-  ...museI18n.en,
   ...claudeI18n.en,
   ...meetingsI18n.en,
   'meeting.quickStart': 'Start meeting',
@@ -2491,6 +2491,7 @@ export const dict = {
   'chat.chatInput.toast.largeTextPaste.inline': 'Paste inline',
   'chat.chatInput.toast.addedFileMentions': 'Added {count} file mention(s)',
   'chat.chatInput.toast.attachFileFailed': 'Failed to attach file',
+  'chat.chatInput.toast.processingVideo': 'Processing video…',
   'chat.chatInput.toast.attachNamedFailed': 'Failed to attach {name}',
   'chat.chatInput.toast.unsupportedAttachmentModalities': '{model} does not support {modalities} input required by {files}. You can still send the message, but these attachments may be ignored.',
   'chat.chatInput.toast.someFilesSkipped': 'Some files were skipped:\n{summary}',

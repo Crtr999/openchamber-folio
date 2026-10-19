@@ -502,6 +502,25 @@ export function deniesAnyProvider(entries: readonly ConfigEntry[]): boolean {
     && (entry.info.experimental?.policies ?? []).some((policy) => policy.action === "provider.use" && policy.effect === "deny"))
 }
 
+/**
+ * The providers a directory is restricted to, or null when it is unrestricted.
+ *
+ * A folder that denies `provider.use` for `*` and then allows named providers
+ * is bound to those providers (the Claude folder allows `claude-code`, the
+ * ChatGPT folder `openai`). Read per document for the same reason as
+ * `deniesAnyProvider`. A deny of one named provider, or a deny-all with no
+ * allow, binds nothing: there is no provider to preselect.
+ */
+export function allowedProvidersFromPolicies(entries: readonly ConfigEntry[]): string[] | null {
+  const policies = entries.flatMap((entry) => (isDocument(entry) ? entry.info.experimental?.policies ?? [] : []))
+    .filter((policy) => policy.action === "provider.use")
+  if (!policies.some((policy) => policy.effect === "deny" && policy.resource === "*")) return null
+  const allowed = [...new Set(policies
+    .filter((policy) => policy.effect === "allow" && policy.resource !== "*" && !policy.resource.includes("*"))
+    .map((policy) => policy.resource))]
+  return allowed.length > 0 ? allowed : null
+}
+
 function isPlainRecord(value: Config[keyof Config]): value is Record<string, JsonValue> {
   return Object.prototype.toString.call(value) === "[object Object]"
 }

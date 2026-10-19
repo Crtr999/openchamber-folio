@@ -1,7 +1,6 @@
 import { toast } from '@/components/ui';
 import { openNativeChatGPT } from '@/lib/chatgpt/native';
-import { useMuseStore } from '@/stores/useMuseStore';
-import { useClaudeStore } from '@/stores/useClaudeStore';
+import { openNativeClaude } from '@/lib/claude/native';
 import { ClaudeLogo } from '@/components/ui/ClaudeLogo';
 import { OPENCODE_TOOLS } from '@/lib/opencode/tools';
 import React from 'react';
@@ -22,7 +21,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
-import { MuseLogo } from '@/components/ui/MuseLogo';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon } from "@/components/icon/Icon";
@@ -59,6 +57,17 @@ import {
     findLatestUserModelChoice,
     shouldPreserveManualModelOverride,
 } from '@/lib/messages/userModelChoice';
+import { planSavedSelectionRestore } from '@/lib/messages/savedSelectionRestore';
+import {
+    agentAllowedByBinding,
+    consumeUnboundDraftTarget,
+    filterProvidersByBinding,
+    isBoundAgentName,
+    pickBoundModel,
+    providerBindingFromFolderName,
+    useDirectoryProviderBinding,
+} from '@/lib/projectProviderBinding';
+import { CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
 import { getSyncParts } from '@/sync/sync-refs';
 import type { BtwSelection } from '@/stores/useBtwStore';
 import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
@@ -391,6 +400,37 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const getDirectoryForSession = useSessionUIStore((s) => s.getDirectoryForSession);
     const sync = useSync();
 
+    // A folder bound to a provider (Claude folder -> Claude Code, ChatGPT
+    // folder -> OpenAI) restricts the pickers to it, so choosing the folder is
+    // also choosing the agent/provider. Unbound folders stay unrestricted.
+    const activeDirectoryKey = useConfigStore((state) => state.activeDirectoryKey);
+    const opencodeDefaultModel = useConfigStore((state) => state.opencodeDefaultModel);
+    const bindingDirectory = selection
+        ? null
+        : currentSessionId
+            ? (getDirectoryForSession(currentSessionId) ?? null)
+            : (activeDirectoryKey && activeDirectoryKey !== '__global__' ? activeDirectoryKey : null);
+    const providerBinding = useDirectoryProviderBinding(bindingDirectory);
+
+    // A new chat in a bound folder starts on that folder's provider; the
+    // server would refuse any other, so a leftover pick from another folder
+    // (or the global default) is replaced instead of left to fail.
+    React.useEffect(() => {
+        if (selection || currentSessionId || !providerBinding || providers.length === 0) return;
+        if (currentProviderId && providerBinding.includes(currentProviderId)) return;
+        const slash = opencodeDefaultModel ? opencodeDefaultModel.indexOf('/') : -1;
+        const target = pickBoundModel({
+            providers,
+            binding: providerBinding,
+            preferred: opencodeDefaultModel && slash > 0
+                ? { providerId: opencodeDefaultModel.slice(0, slash), modelId: opencodeDefaultModel.slice(slash + 1) }
+                : null,
+        });
+        if (!target) return;
+        setProvider(target.providerId);
+        setModel(target.modelId);
+    }, [selection, currentSessionId, providerBinding, providers, currentProviderId, opencodeDefaultModel, setProvider, setModel]);
+
     const getSessionModelSelection = useSelectionStore((state) => state.getSessionModelSelection);
     const saveSessionModelSelection = useSelectionStore((state) => state.saveSessionModelSelection);
     const saveSessionAgentSelection = useSelectionStore((state) => state.saveSessionAgentSelection);
@@ -565,8 +605,29 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     }, [isAgentSelectorOpen, isCompact, selection]);
 
     const selectableDesktopAgents = React.useMemo(() => {
-        return agents.filter((agent) => isPrimaryMode(agent.mode));
-    }, [agents]);
+        return agents.filter((agent) => isPrimaryMode(agent.mode) && agentAllowedByBinding(agent, providerBinding));
+    }, [agents, providerBinding]);
+
+    // A new chat whose folder binding excludes the picked agent (the ChatGPT
+    // agent carried into the Claude folder, an OpenAI-pinned agent carried
+    // into a ZDR folder) would be refused on send and bounce the user. Move to
+    // an agent the folder allows instead of leaving a stale one selected.
+    React.useEffect(() => {
+        if (selection || currentSessionId || !providerBinding || providerBinding.length === 0) return;
+        if (!currentAgentName || selectableDesktopAgents.length === 0) return;
+        const lowered = currentAgentName.trim().toLowerCase();
+        const boundProvider = lowered === 'claude' ? 'claude-code' : lowered === 'chatgpt' ? 'openai' : null;
+        const current = agents.find((agent) => agent.name === currentAgentName);
+        const allowed = Boolean(current)
+            && agentAllowedByBinding(current!, providerBinding)
+            && (!boundProvider || providerBinding.includes(boundProvider));
+        if (allowed) return;
+        const preferred = providerBinding.includes('claude-code') ? 'claude' : providerBinding.includes('openai') ? 'chatgpt' : null;
+        const fallback = selectableDesktopAgents.find((agent) => agent.name.trim().toLowerCase() === preferred)
+            ?? selectableDesktopAgents.find((agent) => !isBoundAgentName(agent.name))
+            ?? selectableDesktopAgents[0];
+        if (fallback && fallback.name !== currentAgentName) setAgent(fallback.name);
+    }, [agents, currentAgentName, currentSessionId, providerBinding, selectableDesktopAgents, selection, setAgent]);
 
     const sortedAndFilteredAgents = React.useMemo(() => {
         const sorted = [...selectableDesktopAgents].sort((a, b) => a.name.localeCompare(b.name));
@@ -602,7 +663,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
     const visibleProviders = React.useMemo(() => {
         const result: typeof providers = [];
-        for (const provider of providers) {
+        for (const provider of filterProvidersByBinding(providers, providerBinding)) {
             const providerModels = Array.isArray(provider.models) ? provider.models : [];
             const visibleModels = providerModels.filter((model: ProviderModel) => {
                 const modelId = typeof model?.id === 'string' ? model.id : '';
@@ -615,7 +676,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             }
         }
         return result;
-    }, [providers, hiddenModels]);
+    }, [providers, hiddenModels, providerBinding]);
 
     const matchesModelSearch = React.useCallback(
         (candidate: string, query: string) => matchesRankQuery([candidate], query),
@@ -746,8 +807,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 return 'model-missing';
             }
 
-            const providerMatches = currentProviderId === providerId;
-            const modelMatches = currentModelId === modelId;
+            // Read the live pair: a `setAgent` just before this call may have
+            // moved the model to the agent's default since this render.
+            const liveConfig = useConfigStore.getState();
+            const providerMatches = (liveConfig.currentProviderId ?? currentProviderId) === providerId;
+            const modelMatches = (liveConfig.currentModelId ?? currentModelId) === modelId;
             if (providerMatches && modelMatches) {
                 return 'applied';
             }
@@ -1057,39 +1121,30 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             const savedAgentName = currentSessionId
                 ? useSelectionStore.getState().getSessionAgentSelection(currentSessionId)
                 : null;
-            if (savedAgentName) {
-                const savedModel = getAgentModelForSession(currentSessionId, savedAgentName);
-                if (savedModel) {
-                    const result = tryApplyModelSelection(savedModel.providerId, savedModel.modelId, savedAgentName);
-                    if (result === 'applied') {
-                        if (currentAgentName !== savedAgentName) {
-                            setAgent(savedAgentName);
-                        }
-                        return 'resolved';
-                    }
-                    if (result === 'provider-missing') {
-                        return 'waiting';
-                    }
-                } else {
-                    const savedAgent = agents.find((agent) => agent.name === savedAgentName);
-                    if (currentAgentName !== savedAgentName) {
-                        setAgent(savedAgentName);
-                    }
-                    if (savedAgent?.model?.providerID && savedAgent.model.id) {
-                        return 'resolved';
-                    }
-                }
+            // The chat's own model outranks every default. Switch the agent
+            // first (setAgent resolves the agent's/settings default model),
+            // then put the chat's model back on top of it.
+            const plan = planSavedSelectionRestore({
+                savedAgentName,
+                agentExists: Boolean(savedAgentName && agents.some((agent) => agent.name === savedAgentName)),
+                agentModel: savedAgentName ? getAgentModelForSession(currentSessionId, savedAgentName) : null,
+                sessionModel: savedSessionModel && !isStaleAutoSelection(savedSessionModel.providerId, savedSessionModel.modelId)
+                    ? savedSessionModel
+                    : null,
+            });
+            if (plan.agent && useConfigStore.getState().currentAgentName !== plan.agent) {
+                setAgent(plan.agent);
             }
-
-            if (savedSessionModel && !isStaleAutoSelection(savedSessionModel.providerId, savedSessionModel.modelId)) {
-                const result = tryApplyModelSelection(savedSessionModel.providerId, savedSessionModel.modelId, savedAgentName ?? undefined);
-                if (result === 'applied') {
-                    if (savedAgentName && currentAgentName !== savedAgentName) {
-                        setAgent(savedAgentName);
-                    }
+            for (const [index, candidate] of plan.models.entries()) {
+                const result = tryApplyModelSelection(candidate.providerId, candidate.modelId, plan.agent ?? undefined);
+                if (result === 'applied') return 'resolved';
+                if (result === 'provider-missing' || index === plan.models.length - 1) return 'waiting';
+            }
+            if (plan.agent) {
+                const savedAgent = agents.find((agent) => agent.name === plan.agent);
+                if (savedAgent?.model?.providerID && savedAgent.model.id) {
                     return 'resolved';
                 }
-                return 'waiting';
             }
 
             for (const agent of agents) {
@@ -1338,6 +1393,35 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const handleAgentChange = React.useCallback((agentName: string, options?: { closeModelSelector?: boolean }) => {
         if (selection) return;
         try {
+            if (!currentSessionId) {
+                const sessionUI = useSessionUIStore.getState();
+                const draftDirectory = sessionUI.newSessionDraft.directoryOverride ?? bindingDirectory;
+                const effectiveBinding = providerBinding && providerBinding.length > 0
+                    ? providerBinding
+                    : providerBindingFromFolderName(draftDirectory);
+                // Leave the folder only when it genuinely cannot run this
+                // agent. An agent the folder allows (the operator on OpenAI in
+                // the ChatGPT folder, say) stays right where the user is.
+                const picked = agents.find((agent) => agent.name === agentName);
+                const lowered = agentName.trim().toLowerCase();
+                const boundProvider = lowered === 'claude' ? 'claude-code' : lowered === 'chatgpt' ? 'openai' : null;
+                const inBoundFolder = Boolean(effectiveBinding && effectiveBinding.length > 0);
+                const allowedHere = !inBoundFolder
+                    || (picked ? agentAllowedByBinding(picked, effectiveBinding) : !isBoundAgentName(agentName))
+                        && (!boundProvider || effectiveBinding!.includes(boundProvider));
+                if (inBoundFolder && !allowedHere) {
+                    const unboundTarget = consumeUnboundDraftTarget(CHAT_DRAFT_PROJECT_ID);
+                    sessionUI.openNewSessionDraft({
+                        target: unboundTarget.target,
+                        selectedProjectId: unboundTarget.target === 'chat'
+                            ? CHAT_DRAFT_PROJECT_ID
+                            : unboundTarget.selectedProjectId,
+                        directoryOverride: unboundTarget.target === 'chat'
+                            ? null
+                            : unboundTarget.directoryOverride,
+                    });
+                }
+            }
             setAgent(agentName);
             addRecentAgent(agentName);
             if (options?.closeModelSelector ?? true) {
@@ -1355,9 +1439,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         }
     }, [
         addRecentAgent,
+        agents,
+        bindingDirectory,
         closeMobilePanel,
         currentSessionId,
         isCompact,
+        providerBinding,
         saveSessionAgentSelection,
         setAgent,
         setAgentMenuOpen,
@@ -2961,21 +3048,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                                 <span className="font-medium">ChatGPT</span>
                                             </DropdownMenuItem>}
                                         {!selection && !currentSessionId && isElectronShell() && isDesktopLocalOriginActive()
-                                            && matchesRankQuery(['Muse'], agentSearchQuery) && <DropdownMenuItem
-                                                className="typography-meta"
-                                                onSelect={() => {
-                                                    setIsAgentSelectorOpen(false);
-                                                    useMuseStore.getState().open();
-                                                }}>
-                                                <MuseLogo className="size-4" />
-                                                <span className="font-medium">Muse</span>
-                                            </DropdownMenuItem>}
-                                        {!selection && !currentSessionId && isElectronShell() && isDesktopLocalOriginActive()
                                             && matchesRankQuery(['Claude'], agentSearchQuery) && <DropdownMenuItem
                                                 className="typography-meta"
                                                 onSelect={() => {
                                                     setIsAgentSelectorOpen(false);
-                                                    useClaudeStore.getState().open();
+                                                    void openNativeClaude(t('claude.nativeUnavailable')).catch(error => toast.error(error instanceof Error ? error.message : t('claude.nativeUnavailable')));
                                                 }}>
                                                 <ClaudeLogo className="size-4" />
                                                 <span className="font-medium">Claude</span>
@@ -2985,7 +3062,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                                 No agents found
                                             </div>
                                         ) : (
-                                            sortedAndFilteredAgents.filter(agent => currentSessionId || selection || !isElectronShell() || !isDesktopLocalOriginActive() || (agent.name !== 'ChatGPT' && agent.name !== 'Muse' && agent.name !== 'Claude')).map((agent) => (
+                                            sortedAndFilteredAgents.filter(agent => currentSessionId || selection || !isElectronShell() || !isDesktopLocalOriginActive() || (agent.name !== 'ChatGPT' && agent.name !== 'Claude')).map((agent) => (
                                                 <AgentDescriptionTooltip key={agent.name} description={agent.description}>
                                                     <DropdownMenuItem
                                                         className="typography-meta"

@@ -18,7 +18,7 @@ test('saved Claude links preserve observed paths but reject credentials and URL 
 
 test('main layout retains Claude with other websites and resets its ephemeral state', () => {
   const layout = readFileSync(new URL('../../components/layout/MainLayout.tsx', import.meta.url), 'utf8');
-  expect(layout).toContain('isChatGPTPageOpen || isMusePageOpen || isClaudePageOpen');
+  expect(layout).toContain('isChatGPTPageOpen || isClaudePageOpen');
   expect(layout).toContain('<ClaudeWorkspace visible={isClaudePageOpen} />');
   expect(layout).toContain('useClaudeStore.getState().resetWebsite()');
   const shortcuts = readFileSync(new URL('../../hooks/useKeyboardShortcuts.ts', import.meta.url), 'utf8');

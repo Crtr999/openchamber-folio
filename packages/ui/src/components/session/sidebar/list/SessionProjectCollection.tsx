@@ -42,6 +42,15 @@ import { isSessionInWork } from '@/lib/sessionWorkMetadata';
 import { buildMultiRunIndex } from '@/lib/multirun/runs';
 import { getPinnedSessionKey, isSessionPinned, useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import { getRuntimeKey } from '@/lib/runtime-switch';
+import { compareSessionsByLifecycleOrder } from '@/sync/session-ordering';
+import { openMeetingWorkspace } from '@/lib/meetings/workspace';
+import {
+  isMeetingSessionId,
+  isSidebarVisibleMeeting,
+  meetingIdFromSessionId,
+  toMeetingSession,
+  useMeetingsSidebarStore,
+} from '@/stores/useMeetingsSidebarStore';
 
 const PR_NO_PR_RETRY_MS = 5 * 60_000;
 
@@ -221,7 +230,18 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   const clearFolderRename = React.useCallback(() => setFolderRename(null), []);
   const { expandedParents, toggleParent } = useExpandedParents();
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
+  const sidebarMeetings = useMeetingsSidebarStore((state) => state.meetings);
+  const meetingDirectoriesById = useMeetingsSidebarStore((state) => state.directoriesById);
+  const visibleMeetings = React.useMemo(
+    () => sidebarMeetings.filter(isSidebarVisibleMeeting),
+    [sidebarMeetings],
+  );
   const selectSessionForProject = React.useCallback((sessionId: string, sessionDirectory: string | null) => {
+    if (isMeetingSessionId(sessionId)) {
+      const meetingId = meetingIdFromSessionId(sessionId);
+      if (meetingId) openMeetingWorkspace({ title: '', meetingId });
+      return;
+    }
     if (sessionId === useSessionUIStore.getState().currentSessionId) return;
     setCurrentSession(sessionId, sessionDirectory);
   }, [setCurrentSession]);
@@ -239,7 +259,23 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     spacesByProject,
     runKeyBySessionId,
   });
-  const { getSessionsForProject, getArchivedSessionsForProject } = useProjectSessionLists({ ownership });
+  const { getSessionsForProject: getRawSessionsForProject, getArchivedSessionsForProject } = useProjectSessionLists({ ownership });
+  const getSessionsForProject = React.useCallback((projectId: string): Session[] => {
+    const base = getRawSessionsForProject(projectId);
+    if (topology.isVSCode || visibleMeetings.length === 0) return base;
+    const project = topology.projects.find((entry) => entry.id === projectId);
+    const projectRoot = normalizePath(project?.normalizedPath ?? project?.path ?? null);
+    if (!projectRoot) return base;
+    const matchedMeetings = visibleMeetings.filter((meeting) => {
+      const assignedDir = normalizePath(meetingDirectoriesById[meeting.id] ?? null);
+      return Boolean(assignedDir && (assignedDir === projectRoot || assignedDir.startsWith(`${projectRoot}/`)));
+    });
+    if (matchedMeetings.length === 0) return base;
+    return [
+      ...base,
+      ...matchedMeetings.map((meeting) => toMeetingSession(meeting, projectRoot)),
+    ];
+  }, [getRawSessionsForProject, meetingDirectoriesById, topology.isVSCode, topology.projects, visibleMeetings]);
   // Built before the sections hook runs, because that hook owns the search data
   // for every group the sidebar renders — the chats group included. A group the
   // hook never sees renders an empty list while a search is active.
@@ -254,6 +290,10 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
       ...collection.chatSessions.map((session) => normalizePath(session.directory ?? null)).filter(Boolean),
     ])).filter((directory): directory is string => Boolean(directory))
       .map((directory) => ({ scopeKey: directory, directory }));
+    const mergedChatAndMeetingSessions = [
+      ...collection.chatSessions.filter((session) => !session.time?.archived && isRootSession(session)),
+      ...visibleMeetings.map((meeting) => toMeetingSession(meeting, chatsRoot)),
+    ].sort((left, right) => compareSessionsByLifecycleOrder(left, right, collection.pinnedSessionIds, collection.sessionOrderRanks));
     return {
       id: 'managed-chats',
       label: '',
@@ -265,11 +305,10 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
       folderScopeKey: chatsRoot,
       folderScopes,
       draftTarget: 'chat',
-      sessions: collection.chatSessions
-        .filter((session) => !session.time?.archived && isRootSession(session))
+      sessions: mergedChatAndMeetingSessions
         .map((session) => buildActiveSessionNode(collection.childrenMap, session)),
     };
-  }, [collection.chatSessions, collection.childrenMap, topology.isVSCode, view.homeDirectory]);
+  }, [collection.chatSessions, collection.childrenMap, collection.pinnedSessionIds, collection.sessionOrderRanks, topology.isVSCode, view.homeDirectory, visibleMeetings]);
   const standaloneGroups = React.useMemo<SessionGroup[]>(
     () => chatGroup ? [chatGroup] : EMPTY_STANDALONE_GROUPS,
     [chatGroup],

@@ -92,6 +92,32 @@ carries `data-floating-panel` while any frame is mounted so the recap hint
 hides instead of landing over the transcript. Unmounting clears the offset
 and the marker; resizing or collapsing the frame updates it.
 
+## Chat column width
+
+`ChatWidthControls.tsx` scopes `--oc-chat-width` to one `data-composer-bound`
+container. Messages, input and floating approval/form panels inherit that width.
+Each edge changes the centered width symmetrically; previews write CSS once per
+animation frame and never update the message list or persisted store. Pointer
+release and keyboard keyup commit `useUIStore.chatColumnWidth`; Escape, cancelled
+or lost capture, unmount and authoritative settings updates cancel the preview.
+The minimum is 480px; the maximum is the space available to this chat. Narrowing
+the window or opening a panel clamps the visible width without reducing the saved
+preference. Reset selects the existing normal/wide preset. Chat Settings offers
+a numeric control and reset for keyboard and touch users. Phone chats omit the
+grips and retain full-width columns. The setting is persisted per surface through
+the settings registry and the version-26 local preference migration.
+
+Grips fade in only over their own gutter hit zones, during an active gesture,
+or on keyboard focus. Hovering messages does not reveal them. Pointer capture
+keeps only the active grip visible; release or cancellation returns it to hover
+and focus visibility. Reduced motion skips the fade. The composer retains its
+original neutral border rather than outlining the box when a child is focused.
+
+Markdown tables keep their natural fixed column widths and their own named,
+focusable horizontal scroll region. Its scrollbar stays visible when overflowing,
+independently of the app's otherwise auto-hiding scrollbars. Width changes do not
+redecorate Markdown or disturb its selection/streaming lifecycle.
+
 ## Floating composer
 
 In a normal session view the composer slot is an absolute layer over the
@@ -622,7 +648,7 @@ meaning "the prompt editor".
 is no separate credit-pool chooser or billing-dependent send admission. Connected
 provider models come from OpenCode; provider credentials and configuration are
 unchanged. Build, Plan and configured agents keep their ordinary selection path.
-ChatGPT uses its native project; Muse and Claude retain their website views.
+ChatGPT uses its native project; Claude retains its website view.
 
 ## Testing
 

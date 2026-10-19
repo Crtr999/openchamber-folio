@@ -1,5 +1,5 @@
+import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
-import { museI18n } from './muse.i18n';
 import { claudeI18n } from './claude.i18n';
 import { meetingsI18n } from './meetings.i18n';
 import { homeI18n } from './home.i18n';
@@ -22,10 +22,10 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 export const dict = {
+  ...friendsI18n['de'],
   ...personalWorkspaceI18n.de,
   'workspace.officePreview': 'Nur Text und eingebettete Bilder. Originallayout, Diagramme, Animationen und laufende Berechnungen werden nicht dargestellt.',
   ...chatgptI18n['de'],
-  ...museI18n.de,
   ...claudeI18n.de,
   ...meetingsI18n.de,
   'meeting.quickStart': 'Meeting starten',
@@ -2280,6 +2280,7 @@ export const dict = {
   'chat.chatInput.toast.largeTextPaste.inline': 'Direkt einfügen',
   'chat.chatInput.toast.addedFileMentions': '{count} Datei(er) hinzugefügt',
   'chat.chatInput.toast.attachFileFailed': 'Fehler beim Anhängen der Datei',
+  'chat.chatInput.toast.processingVideo': 'Video wird verarbeitet…',
   'chat.chatInput.toast.attachNamedFailed': 'Fehler beim Anhängen von {name}',
   'chat.chatInput.toast.someFilesSkipped': 'Einige Dateien wurden übersprungen:\n{summary}',
   'chat.chatInput.toast.vscodePickFailed': 'Fehler beim Auswählen der Dateien in VS Code',

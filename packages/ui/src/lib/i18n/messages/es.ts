@@ -1,5 +1,5 @@
+import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
-import { museI18n } from './muse.i18n';
 import { claudeI18n } from './claude.i18n';
 import { meetingsI18n } from './meetings.i18n';
 import { homeI18n } from './home.i18n';
@@ -23,10 +23,10 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...friendsI18n['es'],
   ...personalWorkspaceI18n.es,
   'workspace.officePreview': 'Solo texto e imágenes incrustadas. No se muestran el diseño original, gráficos, animaciones ni cálculos en vivo.',
   ...chatgptI18n['es'],
-  ...museI18n.es,
   ...claudeI18n.es,
   ...meetingsI18n.es,
   'meeting.quickStart': 'Iniciar reunión',
@@ -2457,6 +2457,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.chatInput.toast.largeTextPaste.inline": "Pegar en línea",
   "chat.chatInput.toast.addedFileMentions": "Se añadieron {count} mención(es) de archivo",
   "chat.chatInput.toast.attachFileFailed": "No se pudo adjuntar el archivo",
+  "chat.chatInput.toast.processingVideo": "Procesando vídeo…",
   "chat.chatInput.toast.attachNamedFailed": "No se pudo adjuntar {name}",
   "chat.chatInput.toast.unsupportedAttachmentModalities": "{model} no admite la entrada de {modalities} necesaria para {files}. Aún puedes enviar el mensaje, pero estos adjuntos podrían ignorarse.",
   "chat.chatInput.toast.someFilesSkipped": "Algunos archivos se omitieron:\n{summary}",

@@ -4,6 +4,7 @@ import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 
 export const CHAT_DRAFT_PROJECT_ID = 'openchamber:chats';
+const AI_TEAM_DIRECTORY = 'ai-team';
 type ChatRoots = { configured: string; legacy: string; canonicalConfigured: string; canonicalLegacy: string };
 const chatsRootByRuntime = new Map<string, Promise<ChatRoots>>();
 const chatsRootCacheByRuntime = new Map<string, ChatRoots>();
@@ -104,6 +105,9 @@ export async function deleteChatDirectory(directory: string): Promise<void> {
   const allowedRoots = [roots.configured, roots.legacy, roots.canonicalConfigured, roots.canonicalLegacy];
   if (allowedRoots.includes(normalized)) return;
   if (!allowedRoots.some(root => isWithinRoot(normalized, root))) return;
+  // Folderless AI Tasks share one team home with its own setup; deleting
+  // one of its chats must never remove that home.
+  if (allowedRoots.some(root => isWithinRoot(normalized, joinPath(root, AI_TEAM_DIRECTORY)))) return;
   const response = await runtimeFetch('/api/fs/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

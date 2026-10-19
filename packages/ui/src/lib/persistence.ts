@@ -338,6 +338,15 @@ class SettingsMutationTracker {
     return reconciled;
   }
 
+  unchangedFields(settings: DesktopSettings, operation: SettingsOperation): DesktopSettings {
+    const unchanged = { ...settings };
+    for (const mutation of this.mutations) {
+      if (mutation.revision <= operation.revision) continue;
+      for (const key of settingsKeysOf(mutation.changes)) delete unchanged[key];
+    }
+    return unchanged;
+  }
+
   finish(operation: SettingsOperation): void {
     if (!this.operations.delete(operation)) return;
     if (this.operations.size === 0) {
@@ -753,8 +762,10 @@ async function _flushSettingsUpdate({ keepalive = false }: { keepalive?: boolean
           const updated = sanitizeWebSettings(await runtimeSettings.save(changes));
           if (!isSettingsRuntimeContextCurrent(context)) return;
           if (updated) {
-            rememberServerSettings(updated);
             const reconciled = _settingsMutationTracker.reconcile(updated, operation);
+            // Keep newer save knowledge, but never count an unsent local edit
+            // from the UI reconciliation as a server-confirmed value.
+            rememberServerSettings(_settingsMutationTracker.unchangedFields(updated, operation));
             applyServerSettings(reconciled);
             dispatchSettingsSynced(reconciled, false);
             _settingsCache = null;
@@ -792,8 +803,8 @@ async function _flushSettingsUpdate({ keepalive = false }: { keepalive?: boolean
         const updated = sanitizeWebSettings(await response.json().catch(() => null));
         if (!isSettingsRuntimeContextCurrent(context)) return;
         if (updated) {
-          rememberServerSettings(updated);
           const reconciled = _settingsMutationTracker.reconcile(updated, operation);
+          rememberServerSettings(_settingsMutationTracker.unchangedFields(updated, operation));
           applyServerSettings(reconciled);
           dispatchSettingsSynced(reconciled, false);
           ok = true;

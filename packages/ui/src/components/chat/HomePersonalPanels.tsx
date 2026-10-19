@@ -3,6 +3,7 @@ import { HomeTaskComposer } from './HomeTaskComposer';
 import { openMeetingWorkspace } from '@/lib/meetings/workspace';
 import { toast } from 'sonner';
 import { HomeTaskBoard } from './HomeTaskBoard';
+import { HomeAiTasks } from './HomeAiTasks';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -25,6 +26,10 @@ const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(
 const localTime = (value: Date) => { const d = new Date(value.getTime() - value.getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16); };
 const message = (error: Error | string) => (error instanceof Error ? error.message : String(error)).replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '');
 const toNotionUrl = (id: string) => id.startsWith('https://') ? id : `https://www.notion.so/${id.replaceAll('-', '')}`;
+const taskViewKey = 'open-carter:home-task-view:v1';
+const readTaskView = (): 'personal' | 'ai' => {
+    try { return localStorage.getItem(taskViewKey) === 'personal' ? 'personal' : 'ai'; } catch { return 'ai'; }
+};
 
 export const HomeChatExport: React.FC<{ session: Session }> = ({ session }) => {
     const { t } = useI18n();
@@ -75,6 +80,17 @@ export const HomePersonalPanels: React.FC<{ children: (panels: PersonalPanels) =
     const [eventOpen, setEventOpen] = React.useState(false);
     const [event, setEvent] = React.useState<{ id?: string; title: string; start: string; end: string; calendarId: string }>({ title: '', start: '', end: '', calendarId: '' });
     const [taskDraft, setTaskDraft] = React.useState('');
+    const [taskView, setTaskView] = React.useState(readTaskView);
+    const taskViewRef = React.useRef(taskView);
+    taskViewRef.current = taskView;
+    const chooseTaskView = (view: 'personal' | 'ai') => {
+        setTaskView(view);
+        try { localStorage.setItem(taskViewKey, view); } catch { /* the explicit choice remains in this view */ }
+    };
+    const [boardLoading, setBoardLoading] = React.useState(false);
+    const [boardSlow, setBoardSlow] = React.useState(false);
+    const notionPending = React.useRef<Promise<void> | null>(null);
+    const boardPending = React.useRef<Promise<void> | null>(null);
     const [editingTask, setEditingTask] = React.useState('');
     const [editDraft, setEditDraft] = React.useState('');
     const [confirmTask, setConfirmTask] = React.useState('');
@@ -99,21 +115,50 @@ export const HomePersonalPanels: React.FC<{ children: (panels: PersonalPanels) =
     }, [confirmTask]);
     const fail = React.useCallback((key: string, error: Error | string) => setErrors((previous) => ({ ...previous, [key]: message(error) })), []);
     const clear = (key: string) => setErrors((previous) => ({ ...previous, [key]: '' }));
-    const refreshNotion = React.useCallback(async (version = generation.current) => {
-        if (!notionAllowed) return;
+    React.useEffect(() => {
+        if (!boardLoading) { setBoardSlow(false); return; }
+        const timer = window.setTimeout(() => setBoardSlow(true), 15_000);
+        return () => window.clearTimeout(timer);
+    }, [boardLoading]);
+    const refreshDailyBoard = React.useCallback((version = generation.current) => {
+        if (!notionAllowed || taskViewRef.current !== 'personal') return Promise.resolve();
+        if (boardPending.current) return boardPending.current;
         const revision = boardRevision.current;
+        const owner = getRuntimeKey();
+        setBoardLoading(true);
+        const request = readHomeBoard().then((next) => {
+            if (version !== generation.current || owner !== getRuntimeKey() || revision !== boardRevision.current) return;
+            setBoard(next); setErrors((previous) => ({ ...previous, board: '' }));
+        }).catch((error: Error) => { if (version === generation.current && owner === getRuntimeKey()) fail('board', error); }).finally(() => {
+            if (boardPending.current === request) { boardPending.current = null; setBoardLoading(false); }
+        });
+        boardPending.current = request;
+        return request;
+    }, [notionAllowed, fail]);
+    const refreshNotion = React.useCallback((version = generation.current) => {
+        if (!notionAllowed) return Promise.resolve();
+        if (notionPending.current) return notionPending.current;
+        const request = (async () => {
         try {
             const next = await readHomeNotionStatus();
             if (version !== generation.current) return;
             setStatus(next);
             setErrors((previous) => ({ ...previous, notion: '' }));
             if (!next.connected) { setBoard(null); setHabits(null); return; }
-            const result = await Promise.allSettled([readHomeBoard(), readHomeHabits(day)]);
-            if (version !== generation.current) return;
-            if (revision === boardRevision.current && result[0].status === 'fulfilled') { setBoard(result[0].value); setErrors((previous) => ({ ...previous, board: '' })); } else if (result[0].status === 'rejected') fail('board', result[0].reason);
-            if (result[1].status === 'fulfilled') { setHabits(result[1].value); setErrors((previous) => ({ ...previous, habits: '' })); } else fail('habits', result[1].reason);
+            // Daily To-Do is demand-loaded. Habits still belong to their
+            // visible widget, but neither source waits for the other to paint.
+            const habitsRead = readHomeHabits(day).then((nextHabits) => {
+                if (version === generation.current) { setHabits(nextHabits); setErrors((previous) => ({ ...previous, habits: '' })); }
+            }).catch((error: Error) => { if (version === generation.current) fail('habits', error); });
+            await Promise.all([refreshDailyBoard(version), habitsRead]);
         } catch (e) { if (version === generation.current) fail('notion', e instanceof Error ? e : String(e)); }
-    }, [notionAllowed, day, fail]);
+        })().finally(() => { if (notionPending.current === request) notionPending.current = null; });
+        notionPending.current = request;
+        return request;
+    }, [notionAllowed, day, fail, refreshDailyBoard]);
+    React.useEffect(() => {
+        if (taskView === 'personal' && status?.connected && !board) void refreshDailyBoard();
+    }, [taskView, status?.connected, board, refreshDailyBoard]);
     const refreshCalendar = React.useCallback(async (connect = false, version = generation.current) => {
         if (!supported) return;
         try {
@@ -131,6 +176,7 @@ export const HomePersonalPanels: React.FC<{ children: (panels: PersonalPanels) =
     React.useEffect(() => {
         const version = ++generation.current;
         boardRevision.current += 1; movePending.current = false; setPendingPage(''); setBusy('');
+        notionPending.current = null; boardPending.current = null; setBoardLoading(false);
         setStatus(null); setBoard(null); setHabits(null); setCalendar(null); setErrors({});
         void refreshNotion(version); void refreshCalendar(false, version);
         return () => { generation.current += 1; };
@@ -173,9 +219,12 @@ export const HomePersonalPanels: React.FC<{ children: (panels: PersonalPanels) =
         clear('event'); setEventOpen(true);
     };
     const errorText = (key: string) => errors[key] ? <p role="alert" className="oc-home-empty text-destructive">{errors[key]}</p> : null;
-    const stateText = !supported ? t('home.desktopOnly') : blocked || networkBlocked ? t('home.blocked') : status?.signingIn ? t('home.finishConnect') : status?.connected ? '' : t('home.connectFirst');
+    const stateText = !supported ? t('home.desktopOnly') : blocked || networkBlocked ? t('home.blocked') : !status ? t('common.loading') : status.signingIn ? t('home.finishConnect') : status.connected ? '' : t('home.connectFirst');
     return <>
-        {children({ tasks: <section className="oc-home-task-panel">
+        {children({ tasks: <><div className="mb-2 flex gap-1">
+            <Button variant="chip" size="xs" aria-pressed={taskView === 'ai'} onClick={() => chooseTaskView('ai')}>{t('home.aiTitle')}</Button>
+            <Button variant="chip" size="xs" aria-pressed={taskView === 'personal'} onClick={() => chooseTaskView('personal')}>{t('home.tasks')}</Button>
+        </div>{taskView !== 'personal' ? null : <section className="oc-home-task-panel">
             <div className="oc-home-card-heading oc-home-task-heading">
                 <h2 className="flex min-w-0 items-center gap-2"><Icon name="checkbox" className="size-3.5 shrink-0" /><span className="truncate">{t('home.tasks')}</span></h2>
                 {board && notionAllowed && <HomeTaskComposer value={taskDraft} onChange={setTaskDraft} onSubmit={() => void addTask()} disabled={Boolean(busy)} />}
@@ -186,12 +235,15 @@ export const HomePersonalPanels: React.FC<{ children: (panels: PersonalPanels) =
                 </span>
             </div>
             {stateText && <p className="oc-home-empty">{stateText}</p>}{errorText('notion')}{errorText('board')}{notice && <p role="status" className="oc-home-empty text-primary">{notice}</p>}
+            {boardLoading && <p role="status" className="oc-home-empty">{t(board ? 'home.aiRefreshing' : 'common.loading')}</p>}
+            {boardSlow && <p role="status" className="oc-home-empty">{t('home.aiSlow')}</p>}
+            {boardLoading && !board && <div className="oc-home-task-skeleton" aria-hidden="true"><div /><div /><div /></div>}
             {board && notionAllowed && <>
                 <HomeTaskBoard board={board} disabled={Boolean(busy)} pendingPage={pendingPage} onMove={(page, destination) => void moveTask(page, destination)} renderTask={(row) => <>
                         {editingTask === row.url
                             ? <Input autoFocus value={editDraft} disabled={Boolean(busy)} aria-label={t('home.editTask')} onChange={(event) => setEditDraft(event.target.value)} onBlur={() => void saveTask(row.url)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void saveTask(row.url); } if (event.key === 'Escape') setEditingTask(''); }} />
                             : <div className="flex items-center gap-1">
-                                <a href={row.url} target="_blank" rel="noreferrer" className="block min-w-0 flex-1 truncate text-xs leading-relaxed hover:underline">{row.title || t('home.untitled')}</a>
+                                <a href={row.url} target="_blank" rel="noreferrer" dir="auto" className="block min-w-0 flex-1 break-words text-xs leading-relaxed hover:underline">{row.title || t('home.untitled')}</a>
                                 <Button type="button" variant="ghost" size="icon" className="size-5 shrink-0" aria-label={t('home.editTask')} title={t('home.editTask')} disabled={Boolean(busy)} onClick={() => { setEditingTask(row.url); setEditDraft(row.title ?? ''); }}><Icon name="pencil" className="size-3" /></Button>
                                 {confirmTask === row.url
                                     ? <Button type="button" variant="ghost" size="sm" className="h-5 px-1.5 text-[10px]" disabled={Boolean(busy)} onClick={() => void run('board', async () => { await deleteHomeTask(row.url); setConfirmTask(''); setNotice(t('home.taskDeleted')); setBoard(await readHomeBoard()); })}>{t('home.deleteTaskConfirm')}</Button>
@@ -201,7 +253,7 @@ export const HomePersonalPanels: React.FC<{ children: (panels: PersonalPanels) =
 
             </>}
             {board?.limited && <p className="oc-home-empty">{t('home.boardLimit')}</p>}
-        </section>, calendar: <section>
+        </section>}<HomeAiTasks active={taskView === 'ai'} /></>, calendar: <section>
             <h2 className="oc-home-card-heading"><Icon name="calendar-schedule" className="size-3.5" />{t('home.calendar')}<span className="ml-auto flex gap-1">
                 <Button type="button" variant="ghost" size="sm" onClick={() => openMeetingWorkspace()}>{t('meeting.launch')}</Button>
                 {calendar?.access === 'connected' && <Button type="button" variant="ghost" size="icon" className="size-7" aria-label={t('home.refresh')} disabled={Boolean(busy)} onClick={() => void run('calendar', () => refreshCalendar())}><Icon name="refresh" className="size-3.5" /></Button>}

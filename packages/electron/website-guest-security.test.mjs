@@ -1,14 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { hardenWebsiteSessions, secureWebsiteAttachment } from './website-guest-security.mjs';
+import { hardenWebsiteSessions, secureWebsiteAttachment, setTeachingOrigin } from './website-guest-security.mjs';
 
 const websites = [
-  ['persist:open-carter-muse', 'https://muse.ai/'],
   ['persist:open-carter-claude', 'https://claude.ai/'],
 ];
 
-test('both website partitions deny requests, checks and device access', () => {
+test('website partitions deny requests, checks and device access', () => {
   const partitions = [];
   hardenWebsiteSessions(partition => {
     partitions.push(partition);
@@ -22,7 +21,26 @@ test('both website partitions deny requests, checks and device access', () => {
       setDevicePermissionHandler(handler) { assert.equal(handler(), false); },
     };
   });
-  assert.deepEqual(partitions, websites.map(([partition]) => partition));
+  assert.deepEqual(partitions, [...websites.map(([partition]) => partition), 'open-carter-teaching']);
+});
+
+test('teaching is denied until configured, then isolated and local-parent only', () => {
+  const partition = 'open-carter-teaching';
+  const attach = (src, localParent) => {
+    let refused = false;
+    const preferences = { preload: '/secret.mjs', nodeIntegration: true };
+    secureWebsiteAttachment({ event: { preventDefault() { refused = true; } }, webPreferences: preferences, params: { partition, src }, localParent });
+    return { refused, preferences };
+  };
+  assert.equal(attach('http://localhost:7800/', true).refused, true);
+  setTeachingOrigin('http://localhost:7800');
+  assert.equal(attach('http://localhost:7800/', false).refused, true);
+  assert.equal(attach('http://localhost:7801/', true).refused, true);
+  const allowed = attach('http://localhost:7800/?screen=open-carter-teach&solo=1', true);
+  assert.equal(allowed.refused, false);
+  assert.equal(allowed.preferences.nodeIntegration, false);
+  assert.equal(allowed.preferences.preload, undefined);
+  assert.throws(() => setTeachingOrigin('http://evil.example'));
 });
 
 for (const [partition, src] of websites) {
@@ -48,7 +66,7 @@ for (const [partition, src] of websites) {
 
 test('a conflicting partition cannot borrow another website session', () => {
   let refused = false;
-  secureWebsiteAttachment({ event: { preventDefault() { refused = true; } }, webPreferences: { partition: websites[0][0] }, params: { partition: websites[1][0], src: websites[1][1] }, localParent: true });
+  secureWebsiteAttachment({ event: { preventDefault() { refused = true; } }, webPreferences: { partition: websites[0][0] }, params: { partition: 'persist:open-carter-other', src: websites[0][1] }, localParent: true });
   assert.equal(refused, true);
 });
 

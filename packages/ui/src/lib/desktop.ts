@@ -150,7 +150,17 @@ export const createDesktopThemeFileAPI = (): RuntimeAPIs['themeFiles'] => {
 export const invokeDesktop = async <T = unknown>(command: string, args?: Record<string, unknown>): Promise<T | null> => {
   const bridge = getDesktopBridge();
   if (typeof bridge?.invoke !== 'function') return null;
-  return bridge.invoke(command, args ?? {}) as Promise<T>;
+  try {
+    return (await bridge.invoke(command, args ?? {})) as T;
+  } catch (error) {
+    if (error instanceof Error && typeof error.message === 'string') {
+      const cleaned = error.message.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/i, '');
+      if (cleaned !== error.message) {
+        throw new Error(cleaned);
+      }
+    }
+    throw error;
+  }
 };
 
 // This reads the current native CLI preflight, never a persisted boot hint. Compare the

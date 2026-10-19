@@ -7,12 +7,15 @@ const failed = (message = 'Local transcription failed.') => meetingError('transc
 
 // Resolves only once the OS confirms the worker process is gone. Callers stay
 // busy until then so audio-bearing memory never outlives the call that owned it.
+// Waits on 'exit', not 'close': under Node/Electron a forked worker that was
+// disconnected before being killed emits 'exit' but never 'close', which hung
+// every release() in the packaged app (Bun emits both).
 function joinWorkerClosure(client, terminated) {
   const worker = client.worker ?? terminated;
   const closed = worker && worker.exitCode === null && worker.signalCode === null
     ? new Promise((resolve) => {
       const killTimer = setTimeout(() => worker.kill('SIGKILL'), 1000);
-      worker.once('close', () => { clearTimeout(killTimer); resolve(); });
+      worker.once('exit', () => { clearTimeout(killTimer); resolve(); });
     }) : Promise.resolve();
   client.shutdown();
   return closed;

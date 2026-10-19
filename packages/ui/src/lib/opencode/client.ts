@@ -64,7 +64,7 @@ import {
 import { ascendingId } from "./ids"
 import { projectRulesConfiguration } from "./rules"
 import { toJsonRecord } from "./json"
-import { deniesAnyProvider, mergeConfigDocuments, projectAgent, projectMessages, projectProject, projectSession, projectVcs } from "./projection"
+import { allowedProvidersFromPolicies, deniesAnyProvider, mergeConfigDocuments, projectAgent, projectMessages, projectProject, projectSession, projectVcs } from "./projection"
 
 export type { OpenCodeClient }
 
@@ -1533,6 +1533,12 @@ class OpencodeService {
   async configDeniesAnyProvider(directory?: string | null): Promise<boolean> {
     const entries = await call("config.get", () => this.clientFor(this.resolveDirectory(directory)).config.get())
     return deniesAnyProvider(entries)
+  }
+
+  /** The providers a directory's config binds it to (`provider.use` deny-all plus allows), or null when unrestricted. */
+  async getAllowedProviders(directory?: string | null): Promise<string[] | null> {
+    const entries = await call("config.get", () => this.clientFor(this.resolveDirectory(directory)).config.get())
+    return allowedProvidersFromPolicies(entries)
   }
 
   /** Fresh read-only configuration and provenance for the rules inspector. */

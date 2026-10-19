@@ -1,5 +1,4 @@
 import { useChatGPTStore } from '@/stores/useChatGPTStore';
-import { useMuseStore } from '@/stores/useMuseStore';
 import { useClaudeStore } from '@/stores/useClaudeStore';
 import React from 'react';
 import { Header } from './Header';
@@ -17,6 +16,7 @@ import { NotionSearchPalette } from './NotionSearchPalette';
 import { PillToaster } from './PillToaster';
 import { openTodayCard } from '@/lib/searchPalette';
 import { personalHomeSupported } from '@/lib/personal-home';
+import { parseRoute } from '@/lib/router';
 import { HelpDialog } from '../ui/HelpDialog';
 import { OpenCodeStatusDialog } from '../ui/OpenCodeStatusDialog';
 import { SessionSidebar } from '@/components/session/SessionSidebar';
@@ -43,7 +43,6 @@ import { useSessionListSync } from '@/components/session/sidebar/list/useSession
 
 import { ChatView } from '@/components/views/ChatView';
 import { ChatGPTWorkspace } from '@/components/views/ChatGPTWorkspace';
-import { MuseWorkspace } from '@/components/views/MuseWorkspace';
 import { ClaudeWorkspace } from '@/components/views/ClaudeWorkspace';
 import { MeetingWorkspace } from '@/components/views/MeetingWorkspace';
 import { MeetingReminders } from '@/components/views/MeetingReminders';
@@ -73,6 +72,7 @@ const installAutoHideScrollbars = () => {
 };
 
 export const MainLayout: React.FC = () => {
+    const [launchSessionId] = React.useState(() => parseRoute().sessionId);
     React.useEffect(() => installAutoHideScrollbars(), []);
     // The first time the app is opened (or brought forward) each day, the Today
     // card greets you: today's meetings and what is due. Once per day; Esc closes it.
@@ -92,33 +92,10 @@ export const MainLayout: React.FC = () => {
         window.addEventListener('focus', maybeShow);
         return () => { window.clearTimeout(first); window.removeEventListener('focus', maybeShow); };
     }, []);
-    // A soft fade each time the main view changes (chat ↔ chat, chat ↔ Home,
-    // surfaces). Opacity only, so fixed popovers inside never shift.
-    const mainViewRef = React.useRef<HTMLElement | null>(null);
+    // Ordinary launches open Home. Explicit session URLs (including reloads)
+    // keep their requested chat instead of racing the startup Home policy.
     React.useEffect(() => {
-        const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-        if (reduce) return;
-        let animation: Animation | null = null;
-        const play = () => {
-            const node = mainViewRef.current;
-            if (!node?.animate) return;
-            animation?.cancel();
-            animation = node.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 200, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
-        };
-        const viewKey = () => {
-            const session = useSessionUIStore.getState();
-            const ui = useUIStore.getState();
-            return `${session.currentSessionId ?? 'home'}|${ui.isChatGPTPageOpen}|${ui.isMusePageOpen}|${ui.isClaudePageOpen}`;
-        };
-        let last = viewKey();
-        const check = () => { const next = viewKey(); if (next !== last) { last = next; play(); } };
-        const offSession = useSessionUIStore.subscribe(check);
-        const offUi = useUIStore.subscribe(check);
-        return () => { offSession(); offUi(); animation?.cancel(); };
-    }, []);
-    // Every launch opens on Home. A session restored during startup (before the
-    // user has clicked or typed anything) is swapped for Home; tabs stay intact.
-    React.useEffect(() => {
+        if (launchSessionId) return;
         const bootAt = Date.now();
         let acted = false;
         const markActed = () => { acted = true; };
@@ -137,7 +114,7 @@ export const MainLayout: React.FC = () => {
             window.removeEventListener('pointerdown', markActed, true);
             window.removeEventListener('keydown', markActed, true);
         };
-    }, []);
+    }, [launchSessionId]);
     useSessionListSync({ isVSCode: false });
     useTerminalSessionKeepalive();
     const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
@@ -158,9 +135,8 @@ export const MainLayout: React.FC = () => {
     const isUsageStatsPageOpen = useUIStore((state) => state.isUsageStatsPageOpen);
     const worktreesPageProjectId = useUIStore((state) => state.worktreesPageProjectId);
     const isChatGPTPageOpen = useUIStore((state) => state.isChatGPTPageOpen);
-    const isMusePageOpen = useUIStore((state) => state.isMusePageOpen);
     const isClaudePageOpen = useUIStore((state) => state.isClaudePageOpen);
-    const isWebsiteAssistantPageOpen = isChatGPTPageOpen || isMusePageOpen || isClaudePageOpen;
+    const isWebsiteAssistantPageOpen = isChatGPTPageOpen || isClaudePageOpen;
     const openGuestPageId = useUIStore((state) => state.openGuestPageId);
     const guestPages = useGuestPages();
     const guestPage = guestPages.find((guest) => guest.id === openGuestPageId);
@@ -171,8 +147,6 @@ export const MainLayout: React.FC = () => {
         useUIStore.getState().setOpenGuestPage(null);
         useUIStore.getState().setChatGPTPageOpen(false);
         useChatGPTStore.getState().resetWebsite();
-        useUIStore.getState().setMusePageOpen(false);
-        useMuseStore.getState().resetWebsite();
         useUIStore.getState().setClaudePageOpen(false);
         useClaudeStore.getState().resetWebsite();
     }), []);
@@ -210,6 +184,7 @@ export const MainLayout: React.FC = () => {
         <DiffWorkerProvider>
             <div
                 data-page-scroll-lock="true"
+                data-oc-personal-interactions="true"
                 className="main-content-safe-area relative flex h-[100dvh] bg-background"
             >
                 <CommandPalette />
@@ -245,7 +220,7 @@ export const MainLayout: React.FC = () => {
                                         work-status panel measures this rather than the chat,
                                         which the context panel animates. */}
                                     <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden" data-page-scroll-lock="true" data-chat-area="true">
-                                        <main ref={mainViewRef} className="flex-1 overflow-hidden bg-background relative" data-page-scroll-lock="true">
+                                        <main className="flex-1 overflow-hidden bg-background relative" data-page-scroll-lock="true">
                                             <div className={cn('absolute inset-0', isSurfacePageOpen && 'invisible')}>
                                                 <ErrorBoundary><ChatView active={!isSettingsDialogOpen && !isSurfacePageOpen} /></ErrorBoundary>
                                             </div>
@@ -260,9 +235,6 @@ export const MainLayout: React.FC = () => {
                                             <ErrorBoundary><WorktreesView /></ErrorBoundary>
                                             {isElectronShell() && isDesktopLocalOriginActive() && <ErrorBoundary>
                                                 <ChatGPTWorkspace visible={isChatGPTPageOpen} />
-                                            </ErrorBoundary>}
-                                            {isElectronShell() && isDesktopLocalOriginActive() && <ErrorBoundary>
-                                                <MuseWorkspace visible={isMusePageOpen} />
                                             </ErrorBoundary>}
                                             {isElectronShell() && isDesktopLocalOriginActive() && <ErrorBoundary>
                                                 <ClaudeWorkspace visible={isClaudePageOpen} />
