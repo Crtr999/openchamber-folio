@@ -16,6 +16,8 @@ const { I18nProvider } = await import('@/lib/i18n');
 const { HomeWidgetLayout } = await import('./HomeWidgetLayout');
 const { defaultHomeLayout, restoreHomeLayout } = await import('./home-widget-layout');
 const key = 'openchamber.personalHome.layout.v2';
+// Friends leads a fresh Home at full width; the first column pair starts with Working.
+const workingWidth = () => restoreHomeLayout(browser.localStorage.getItem(key), null).find(({ id }) => id === 'working')?.width ?? Number.NaN;
 
 afterAll(async () => {
     await browser.happyDOM.close();
@@ -37,6 +39,7 @@ async function fixture() {
         habits: { label: 'Habits', content: <p>Habits content</p> },
         projects: { label: 'Projects', content: <p>Projects content</p> },
         shortcuts: { label: 'Shortcuts', content: <p>Shortcuts content</p> },
+        friends: { label: 'Friends', content: <p>Friends content</p> },
     };
     await act(async () => root.render(<I18nProvider><HomeWidgetLayout widgets={widgets} /></I18nProvider>));
     const divider = browser.document.querySelector('[role="separator"]');
@@ -60,7 +63,7 @@ test('focused divider resizes with keyboard, persists fractional preferences and
         await view.key('ArrowRight', true);
         expect(view.divider.getAttribute('aria-valuenow')).toBe('62');
         await view.key('ArrowLeft');
-        expect(restoreHomeLayout(browser.localStorage.getItem(key), null)[0].width).toBe(60);
+        expect(workingWidth()).toBe(60);
         await view.key('End');
         expect(view.divider.getAttribute('aria-valuenow')).toBe('80');
         await view.key('ArrowRight');
@@ -120,11 +123,11 @@ test('pointer resizing previews continuously and only persists the released prop
         await pointer('pointerdown', 508);
         await pointer('pointermove', 621.7);
         expect(Math.abs(Number.parseFloat(columns.style.getPropertyValue('--home-left-width')) - 61.37) < 0.000001).toBe(true);
-        expect(restoreHomeLayout(browser.localStorage.getItem(key), null)[0].width).toBe(50);
+        expect(workingWidth()).toBe(50);
         await pointer('pointermove', 622.8);
         expect(Math.abs(Number.parseFloat(columns.style.getPropertyValue('--home-left-width')) - 61.48) < 0.000001).toBe(true);
         await pointer('pointerup', 622.8);
-        expect(Math.abs(restoreHomeLayout(browser.localStorage.getItem(key), null)[0].width - 61.48) < 0.000001).toBe(true);
+        expect(Math.abs(workingWidth() - 61.48) < 0.000001).toBe(true);
         expect(view.divider.getAttribute('data-resizing')).toBeNull();
     } finally {
         await view.cleanup();

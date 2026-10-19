@@ -1,4 +1,3 @@
-import { HomeFriends } from './HomeFriends';
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
@@ -17,6 +16,7 @@ import coastalLandscape from '@/assets/home-coast.webp';
 import './HomeDashboard.css';
 import { HomePersonalPanels, HomeChatExport } from './HomePersonalPanels';
 import { HomeWidgetLayout } from './HomeWidgetLayout';
+import { HomeFriends } from './HomeFriends';
 import { openMeetingWorkspace } from '@/lib/meetings/workspace';
 import { meetingsSupported } from '@/lib/meetings/contract';
 
@@ -107,8 +107,8 @@ export const HomeDashboard: React.FC = () => {
     return (
         <div className="flex min-w-0 flex-col gap-4">
         <HomeQuickActions className="flex justify-end xl:hidden" />
-        <HomeFriends />
         <HomePersonalPanels>{(personalPanels) => <HomeWidgetLayout widgets={{
+            friends: { label: t('friends.title'), content: <HomeFriends /> },
             working: { label: t('home.working'), content: <section>
                 <h2 className="oc-home-card-heading">
                     <Icon name="flashlight" className="size-3.5" />

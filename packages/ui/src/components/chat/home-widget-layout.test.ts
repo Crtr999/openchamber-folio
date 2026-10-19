@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { restoreHomeLayout, homeLayoutSections, homeColumnWidth, resizeHomeColumns, moveHomeWidget } from './home-widget-layout';
+import { defaultHomeLayout, restoreHomeLayout, homeLayoutSections, homeColumnWidth, resizeHomeColumns, moveHomeWidget } from './home-widget-layout';
 
 const previous = JSON.stringify([
     { id: 'tasks', wide: false }, { id: 'habits', wide: false },
@@ -41,9 +41,9 @@ describe('personal home column layout', () => {
     test('moves into empty column space without changing widths or duplicating widgets', () => {
         const layout = restoreHomeLayout(null, previous);
         const moved = moveHomeWidget(layout, 'recent', 'home-column:start:left', { kind: 'column', section: 'start', column: 'left' }, true);
-        expect(moved.filter((item) => item.column === 'left').at(-1)?.id).toBe('recent');
+        expect(homeLayoutSections(moved)[0].items.filter((item) => item.column === 'left').at(-1)?.id).toBe('recent');
         expect(moved.find((item) => item.id === 'recent')?.wide).toBe(false);
-        expect(new Set(moved.map((item) => item.id)).size).toBe(7);
+        expect(new Set(moved.map((item) => item.id)).size).toBe(8);
     });
     test('places above or below a widget in the chosen column', () => {
         const layout = restoreHomeLayout(null, previous);
@@ -65,7 +65,15 @@ describe('personal home column layout', () => {
         const layout = restoreHomeLayout(null, previous);
         expect(moveHomeWidget(layout, 'recent', 'removed', { kind: 'widget', section: 'start', column: 'right' }, false)).toEqual(layout);
         const restored = restoreHomeLayout(JSON.stringify([layout[0], layout[0]]), null);
-        expect(new Set(restored.map((item) => item.id)).size).toBe(7);
-        expect(restored).toHaveLength(7);
+        expect(new Set(restored.map((item) => item.id)).size).toBe(8);
+        expect(restored).toHaveLength(8);
+    });
+    test('a fresh Home leads with full-width Friends; saved layouts keep their order and gain Friends below', () => {
+        expect(defaultHomeLayout()[0]).toEqual({ id: 'friends', wide: true, column: 'left', width: 50 });
+        const saved = restoreHomeLayout(null, previous).filter(({ id }) => id !== 'friends');
+        const restored = restoreHomeLayout(JSON.stringify(saved), null);
+        expect(restored.slice(0, saved.length)).toEqual(saved);
+        expect(restored.at(-1)).toEqual({ id: 'friends', wide: true, column: 'left', width: 50 });
+        expect(restoreHomeLayout(JSON.stringify(restored), null)).toEqual(restored);
     });
 });
