@@ -259,7 +259,7 @@ export function resolveFolderPrimaryAgent(
   if (configuredName) {
     const exact = visiblePrimary.find(item => item.name === configuredName)
       ?? visiblePrimary.find(item => item.name.toLowerCase() === configuredName.toLowerCase());
-    if (exact && (exact.name !== 'manager' || !visiblePrimary.some(item => item.name === 'operator'))) {
+    if (exact) {
       return exact;
     }
   }
@@ -372,32 +372,35 @@ export function summarizeFolderGuardrails(
   };
 }
 
-const MANAGED_GUARDRAIL_ACTIONS = new Set([
-  'carterbot_*',
-  'carterbot_mac_*',
-  'carterbot_approved_click',
-  'carterbot_mac_save_routine',
-  'control-mac_*',
-  'playwright_*',
-  'control-chrome_*',
-  'chrome-devtools_*',
-  'websearch',
-  'webfetch',
-  'edit',
-  'shell',
-  'external_directory',
-  'subagent',
-]);
+type GuardrailConfiguration = {
+  policies: Array<{ resource: string; effect: 'allow' | 'deny' }>;
+  permissions: Array<{ action: string; resource: string; effect: FolderGuardrailEffect }>;
+};
 
 /** Converts the unified Guardrail toggles into canonical OpenCode `policies` and `permissions`. */
 export function buildGuardrailPoliciesAndPermissions(
   state: FolderGuardrailState,
   existingPermissions: ReadonlyArray<{ action: string; resource: string; effect: FolderGuardrailEffect }> = [],
-): {
-  policies: Array<{ resource: string; effect: 'allow' | 'deny' }>;
-  permissions: Array<{ action: string; resource: string; effect: FolderGuardrailEffect }>;
-} {
-  const preserved = existingPermissions.filter(rule => !MANAGED_GUARDRAIL_ACTIONS.has(rule.action));
+  previousState?: FolderGuardrailState,
+): GuardrailConfiguration {
+  // A brain-only save must not flatten granular folder permissions. Replace a
+  // capability's rules only when the user changed that capability.
+  const changed = new Set<string>();
+  const groups: Array<[keyof Omit<FolderGuardrailState, 'zdrLocked' | 'allowedProviders'>, string[]]> = [
+    ['computerUse', ['carterbot_*', 'carterbot_mac_*', 'carterbot_approved_click', 'carterbot_mac_save_routine']],
+    ['macControl', ['control-mac_*']],
+    ['browserControl', ['playwright_*', 'control-chrome_*', 'chrome-devtools_*']],
+    ['webAccess', ['websearch', 'webfetch']],
+    ['fileAndShell', ['edit', 'shell']],
+    ['externalDirectory', ['external_directory']],
+    ['subagents', ['subagent']],
+  ];
+  for (const [key, actions] of groups) {
+    if (!previousState || (state.zdrLocked && key !== 'fileAndShell') || state.zdrLocked !== previousState.zdrLocked || state[key] !== previousState[key]) {
+      for (const action of actions) changed.add(action);
+    }
+  }
+  const preserved = existingPermissions.filter(rule => !changed.has(rule.action));
 
   if (state.zdrLocked) {
     return {
@@ -407,6 +410,7 @@ export function buildGuardrailPoliciesAndPermissions(
       ],
       permissions: [
         ...preserved,
+        ...([
         { action: 'carterbot_*', resource: '*', effect: 'deny' },
         { action: 'carterbot_mac_*', resource: '*', effect: 'deny' },
         { action: 'playwright_*', resource: '*', effect: 'deny' },
@@ -419,6 +423,7 @@ export function buildGuardrailPoliciesAndPermissions(
         { action: 'subagent', resource: '*', effect: 'deny' },
         { action: 'edit', resource: '*', effect: state.fileAndShell },
         { action: 'shell', resource: '*', effect: state.fileAndShell },
+        ] satisfies Array<{ action: string; resource: string; effect: FolderGuardrailEffect }>).filter(rule => changed.has(rule.action)),
       ],
     };
   }
@@ -431,7 +436,6 @@ export function buildGuardrailPoliciesAndPermissions(
     : [];
 
   const permissions: Array<{ action: string; resource: string; effect: FolderGuardrailEffect }> = [
-    ...preserved,
     { action: 'carterbot_*', resource: '*', effect: state.computerUse },
     { action: 'carterbot_mac_*', resource: '*', effect: state.computerUse },
     { action: 'carterbot_approved_click', resource: '*', effect: state.computerUse === 'deny' ? 'deny' : 'ask' },
@@ -448,7 +452,7 @@ export function buildGuardrailPoliciesAndPermissions(
     { action: 'subagent', resource: '*', effect: state.subagents },
   ];
 
-  return { policies, permissions };
+  return { policies, permissions: [...preserved, ...permissions.filter(rule => changed.has(rule.action))] };
 }
 
 export const OPEN_FRIEND_STUDIO_EVENT = 'open-carter:open-friend-studio';

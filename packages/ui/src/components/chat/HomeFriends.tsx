@@ -288,8 +288,8 @@ export function HomeFriends() {
             try {
                 next.set(
                     project.id,
-                    readFriendLink(localStorage, runtime, project.path, primaryAgent.name)
-                    ?? readFriendLink(localStorage, runtime, project.path, folderFriendKey(project.path)),
+                    readFriendLink(localStorage, runtime, project.path, folderFriendKey(project.path))
+                    ?? readFriendLink(localStorage, runtime, project.path, primaryAgent.name),
                 );
             } catch {
                 next.set(project.id, null);
@@ -314,7 +314,7 @@ export function HomeFriends() {
                 .filter(session => {
                     if (session.parentID || session.time?.archived || !session.directory) return false;
                     const normDir = normalizeFolderKeyPath(session.directory);
-                    return normDir === normRoot || normDir.startsWith(`${normRoot}/`);
+                    return normDir === normRoot;
                 })
                 .sort((a, b) => (b.time?.updated ?? 0) - (a.time?.updated ?? 0));
             byFolder.set(project.id, matching);
@@ -371,7 +371,7 @@ export function HomeFriends() {
     const talkInFolder = async (projectId: string, fresh: boolean) => {
         const project = projects.find(item => item.id === projectId);
         if (!project || mutation.current) return;
-        const { catalog, primaryAgent, name: display } = resolveProjectFriend(project);
+        const { name: display } = resolveProjectFriend(project);
         const owner = runtime;
         const directory = project.path;
         mutation.current = true;
@@ -379,9 +379,15 @@ export function HomeFriends() {
         setError('');
         const token = sequence.current;
         try {
+            const [liveAgents, liveConfiguration] = await Promise.all([
+                opencodeClient.listAgents(directory), opencodeClient.getRulesConfiguration(directory),
+            ]);
+            const resolvedLive = resolveFolderPrimaryAgent(project, liveAgents, liveConfiguration);
+            if (!resolvedLive || resolvedLive.hidden || resolvedLive.mode === 'subagent') throw new Error(t('friends.changedChat'));
+            const agentId = resolvedLive.name;
             const link = fresh ? null : (
-                readFriendLink(localStorage, owner, directory, primaryAgent.name)
-                ?? readFriendLink(localStorage, owner, directory, folderFriendKey(directory))
+                readFriendLink(localStorage, owner, directory, folderFriendKey(directory))
+                ?? readFriendLink(localStorage, owner, directory, agentId)
             );
             if (link?.state === 'creating') throw new Error(t('friends.ambiguous'));
 
@@ -391,41 +397,40 @@ export function HomeFriends() {
                 if (link?.state === 'ready') {
                     try {
                         const candidate = await opencodeClient.getSession(link.sessionId, directory);
-                        if (!candidate.time.archived) session = candidate;
+                        if (!candidate.time.archived && normalizeFolderKeyPath(candidate.directory) === normalizeFolderKeyPath(directory) && candidate.agent === agentId) session = candidate;
                     } catch {
                         // Fall back to the most recent active conversation in this folder.
                     }
                 }
                 if (!session && folderSessions.length > 0) {
-                    session = folderSessions[0];
+                    const recent = folderSessions.find(item => item.agent === agentId);
+                    if (recent) {
+                        const candidate = await opencodeClient.getSession(recent.id, directory);
+                        if (!candidate.time.archived && normalizeFolderKeyPath(candidate.directory) === normalizeFolderKeyPath(directory) && candidate.agent === agentId) session = candidate;
+                    }
                 }
             }
 
             if (!session) {
-                const liveAgents = await opencodeClient.listAgents(directory);
-                const resolvedLive = resolveFolderPrimaryAgent(project, liveAgents, catalog?.configuration)
-                    ?? liveAgents.find(item => !item.hidden && item.mode !== 'subagent');
-                const agentId = resolvedLive?.name ?? primaryAgent.name;
                 const folderModel = parseModelSelection(project.defaultModel);
-                const configModel = parseModelSelection(catalog?.configuration.defaultModel);
+                const configModel = parseModelSelection(liveConfiguration.defaultModel);
                 const chosen = folderModel ?? configModel;
                 const model = folderModel
                     ? { providerID: folderModel.providerID, id: folderModel.modelID, variant: project.defaultVariant ?? folderModel.variant }
                     : resolvedLive?.model ?? (chosen ? { providerID: chosen.providerID, id: chosen.modelID, variant: chosen.variant } : undefined);
                 if (getRuntimeKey() !== owner || token !== sequence.current) return;
-                writeFriendLink(localStorage, owner, directory, agentId, { state: 'creating' });
+                writeFriendLink(localStorage, owner, directory, folderFriendKey(directory), { state: 'creating' });
                 reloadLinks();
                 const chatNumber = folderSessions.length + 1;
                 const title = fresh && chatNumber > 1
                     ? `${display} · #${chatNumber}`
                     : `${display} · ${project.label || project.path.split('/').pop()}`;
                 session = await opencodeClient.createSession({ agent: agentId, model, title }, directory);
-                writeFriendLink(localStorage, owner, directory, agentId, { state: 'ready', sessionId: session.id });
-            } else {
-                writeFriendLink(localStorage, owner, directory, session.agent || primaryAgent.name, { state: 'ready', sessionId: session.id });
             }
 
             if (getRuntimeKey() !== owner || token !== sequence.current) return;
+            if (normalizeFolderKeyPath(session.directory) !== normalizeFolderKeyPath(directory) || session.agent !== agentId || session.time.archived) throw new Error(t('friends.changedChat'));
+            writeFriendLink(localStorage, owner, directory, folderFriendKey(directory), { state: 'ready', sessionId: session.id });
             reloadLinks();
             setDetails(null);
             useProjectsStore.getState().setActiveProject(project.id);

@@ -37,3 +37,5 @@ guardrails (`opencode.json`).
 - Customize (`HomeFriendCustomize.tsx`): edits Friend name, role/specialty, body
   shape, and theme color, persisted under `open-carter:friends:v1:<runtime>` and
   synced with the left sidebar folder header.
+
+Brain-only saves preserve existing provider policies and granular permission rules. Capability controls replace only the categories explicitly changed. Conversation continuation re-reads the actual session and requires the exact folder and its configured primary agent; a nested folder remains a separate Friend. Configured primary agents, including manager, take precedence over the generic Operator fallback.

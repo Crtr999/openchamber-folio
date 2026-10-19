@@ -236,7 +236,7 @@ function FolderGuardrailsStudio({
             const effectiveModel = guardrails.zdrLocked && !model.startsWith('openrouter-zdr/')
                 ? 'openrouter-zdr/anthropic/claude-sonnet-5'
                 : model.trim();
-            const built = buildGuardrailPoliciesAndPermissions(guardrails, currentSnap.settings.permissions ?? []);
+            const built = buildGuardrailPoliciesAndPermissions(guardrails, currentSnap.settings.permissions ?? [], initialSummary);
             const next = await files.saveProjectRules({
                 directory: project.path,
                 kind: 'configuration',
@@ -246,7 +246,9 @@ function FolderGuardrailsStudio({
                     model: effectiveModel,
                     defaultAgent: effectiveAgent,
                     share: guardrails.zdrLocked ? 'disabled' : currentSnap.settings.share,
-                    policies: built.policies,
+                    policies: !guardrails.zdrLocked && guardrails.zdrLocked === initialSummary.zdrLocked
+                        && JSON.stringify(guardrails.allowedProviders) === JSON.stringify(initialSummary.allowedProviders)
+                        ? currentSnap.settings.policies : built.policies,
                     permissions: built.permissions,
                 },
             });
