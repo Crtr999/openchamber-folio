@@ -4,18 +4,20 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 
 /**
  * A project folder can be bound to specific providers: Carter's Claude folder
- * only runs the Claude Code provider, the ChatGPT folder only OpenAI. The
- * binding is read from the folder's own OpenCode config (`provider.use` deny-all
- * plus allows), the same policy the server enforces on every send, so the
- * picker and the server cannot disagree. Folders without such a policy are
- * unbound and keep the unrestricted pickers.
+ * only runs the Claude Code provider, the ChatGPT folder only OpenAI, and the
+ * ZDR Legal folder only OpenRouter ZDR (`openrouter-zdr`). The binding is read
+ * from the folder's own OpenCode config (`provider.use` deny-all plus allows),
+ * the same policy the server enforces on every send, so the picker and the
+ * server cannot disagree. Folders without such a policy are unbound and keep
+ * the unrestricted pickers.
  */
 
 type CatalogProvider = { id: string; models: ReadonlyArray<{ id: string }> };
 
 /**
  * Fallback for when the folder's config cannot be read: the personal
- * "Open Carter/<Name>" workspace folders are named for their provider.
+ * "Open Carter/<Name>" workspace folders and ZDR Legal folders are named for
+ * their provider policy.
  */
 const OPEN_CARTER_FOLDER_PROVIDERS: Record<string, string[]> = {
   claude: ['claude-code'],
@@ -25,9 +27,17 @@ const OPEN_CARTER_FOLDER_PROVIDERS: Record<string, string[]> = {
 
 export const providerBindingFromFolderName = (directory: string | null | undefined): string[] | null => {
   const parts = (directory ?? '').split(/[\\/]+/).filter(Boolean);
+  if (parts.length === 0) return null;
+  const leaf = parts[parts.length - 1]?.toLowerCase() ?? '';
+  if (leaf === 'zdr management' || leaf === 'zdr legal' || leaf.startsWith('zdr ')) {
+    return ['openrouter-zdr'];
+  }
   if (parts.length < 2 || parts[parts.length - 2]?.toLowerCase() !== 'open carter') return null;
-  return OPEN_CARTER_FOLDER_PROVIDERS[parts[parts.length - 1].toLowerCase()] ?? null;
+  return OPEN_CARTER_FOLDER_PROVIDERS[leaf] ?? null;
 };
+
+export const isStrictlyZdrBound = (binding: readonly string[] | null | undefined): boolean =>
+  Boolean(binding && binding.length === 1 && binding[0] === 'openrouter-zdr');
 
 export type UnboundDraftTarget = {
   selectedProjectId: string | null;
@@ -63,7 +73,7 @@ export const consumeUnboundDraftTarget = (fallbackChatProjectId: string): Unboun
 
 export const isBoundAgentName = (agentName: string | null | undefined): boolean => {
   const normalized = agentName?.trim().toLowerCase();
-  return normalized === 'claude' || normalized === 'chatgpt';
+  return normalized === 'claude' || normalized === 'chatgpt' || normalized === 'zdr';
 };
 
 /** Providers the binding allows; unbound (null/empty) allows everything. */
@@ -127,7 +137,7 @@ export const readProviderBinding = (directory: string): Promise<string[] | null>
   const pending = bindingInFlight.get(key);
   if (pending) return pending;
   const request = opencodeClient.getAllowedProviders(directory)
-    .then((binding) => binding ?? null, () => providerBindingFromFolderName(directory))
+    .then((binding) => binding ?? providerBindingFromFolderName(directory), () => providerBindingFromFolderName(directory))
     .then((binding) => {
       bindingCache.set(key, binding);
       return binding;
@@ -148,5 +158,5 @@ export const useDirectoryProviderBinding = (directory: string | null | undefined
     });
     return () => { cancelled = true; };
   }, [directory]);
-  return directory && state.directory === directory ? state.binding : null;
+  return directory && state.directory === directory ? state.binding : providerBindingFromFolderName(directory);
 };

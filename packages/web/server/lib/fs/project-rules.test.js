@@ -23,6 +23,23 @@ describe('project rules saves', () => {
     expect(await service.save(directory, save(latest, 'instructions', 'draft'))).toEqual({ conflict: true });
     expect(await fs.readFile(file, 'utf8')).toBe('outside');
   }));
+  it('saves and loads folder Friend shared memory (MEMORY.md) and folder guardrails', () => fixture(async (directory, service) => {
+    const memSnap = await service.load(directory, 'memory');
+    const savedMem = await service.save(directory, save(memSnap, 'memory', '# Folder Memory\n- Remember client preference'));
+    expect(savedMem.content).toContain('Remember client preference');
+    expect(await fs.readFile(path.join(directory, 'MEMORY.md'), 'utf8')).toContain('Remember client preference');
+
+    const cfgSnap = await service.load(directory, 'configuration');
+    const savedCfg = await service.save(directory, save(cfgSnap, 'configuration', '', {
+      model: 'openrouter-zdr/anthropic/claude-sonnet-5',
+      defaultAgent: 'zdr',
+      share: 'disabled',
+      policies: [{ resource: '*', effect: 'deny' }, { resource: 'openrouter-zdr', effect: 'allow' }],
+      permissions: [{ action: 'carterbot_*', resource: '*', effect: 'deny' }],
+    }));
+    expect(savedCfg.settings.defaultAgent).toBe('zdr');
+    expect(savedCfg.settings.permissions).toEqual([{ action: 'carterbot_*', resource: '*', effect: 'deny' }]);
+  }));
   it('keeps JSONC comments, credentials and unrelated policies without returning credentials', () => fixture(async (directory, service) => {
     const file = path.join(directory, 'opencode.jsonc');
     await fs.writeFile(file, `{// retained comment

@@ -1,5 +1,23 @@
 import { describe, expect, test } from 'bun:test';
-import { FRIEND_COLORS, FRIEND_BODIES, FriendRevisionConflict, defaultFriendAppearance, friendAppearance, friendName, readFriendProfiles, saveFriendProfile, readFriendLink, writeFriendLink } from './friends';
+import {
+  FRIEND_COLORS,
+  FRIEND_BODIES,
+  FriendRevisionConflict,
+  buildGuardrailPoliciesAndPermissions,
+  defaultFriendAppearance,
+  folderFriendAppearance,
+  folderFriendKey,
+  folderFriendName,
+  folderFriendRole,
+  friendAppearance,
+  friendName,
+  readFriendLink,
+  readFriendProfiles,
+  resolveFolderPrimaryAgent,
+  saveFriendProfile,
+  summarizeFolderGuardrails,
+  writeFriendLink,
+} from './friends';
 
 const storage = () => { const values = new Map<string, string>(); return { values, getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); } }; };
 const key = (runtime: string) => `open-carter:friends:v1:${JSON.stringify(runtime)}`;
@@ -81,5 +99,43 @@ describe('friend identity and scope', () => {
     expect(readFriendLink(s, 'local', '/legal', 'manager')).toEqual({ state: 'creating' });
     const broken = { getItem: () => '{broken', setItem: () => { throw new Error('Must not overwrite'); } };
     expect(() => readFriendProfiles(broken, 'local')).toThrow();
+  });
+  test('maps each folder to a unified Friend with built-in Operator capabilities or strict ZDR lock', () => {
+    const s = storage();
+    const agents = [
+      { id: 'build', name: 'build', displayName: 'Build', mode: 'primary', permissions: [] },
+      { id: 'operator', name: 'operator', displayName: 'Operator', mode: 'all', permissions: [] },
+      { id: 'zdr', name: 'zdr', displayName: 'ZDR', mode: 'all', permissions: [] },
+    ] as any[];
+    const businessProject = { path: '/Users/carter/Business Launch', label: 'Business Launch', color: 'comment' };
+    const zdrProject = { path: '/Users/carter/Built Apps/ZDR Management', label: 'ZDR Legal (cite+ZDR)', color: 'keyword' };
+
+    expect(resolveFolderPrimaryAgent(businessProject, agents)?.name).toBe('operator');
+    expect(resolveFolderPrimaryAgent(zdrProject, agents)?.name).toBe('zdr');
+
+    const zdrGuardrails = summarizeFolderGuardrails(undefined, { name: 'zdr', permissions: [] }, zdrProject.path);
+    expect(zdrGuardrails.zdrLocked).toBe(true);
+    expect(zdrGuardrails.computerUse).toBe('deny');
+    expect(zdrGuardrails.badges).toContain('ZDR Locked');
+
+    expect(folderFriendName(null, businessProject)).toBe('Business Launch');
+    expect(folderFriendAppearance(null, businessProject.path, 'comment').color).toBe('comment');
+
+    const profiles = saveFriendProfile(s, 'local', folderFriendKey(businessProject.path), {
+      name: 'BizBot',
+      role: 'Business Strategist',
+      body: 'hex',
+      color: 'operator',
+    }, 0);
+    expect(folderFriendName(profiles, businessProject)).toBe('BizBot');
+    expect(folderFriendRole(profiles, businessProject)).toBe('Business Strategist');
+    expect(folderFriendAppearance(profiles, businessProject.path, 'comment')).toEqual({ body: 'hex', color: 'operator' });
+
+    const built = buildGuardrailPoliciesAndPermissions(zdrGuardrails);
+    expect(built.policies).toEqual([
+      { resource: '*', effect: 'deny' },
+      { resource: 'openrouter-zdr', effect: 'allow' },
+    ]);
+    expect(built.permissions.some(p => p.action === 'carterbot_*' && p.effect === 'deny')).toBe(true);
   });
 });

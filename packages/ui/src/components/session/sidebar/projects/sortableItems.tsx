@@ -1,6 +1,7 @@
 import { DirectoryActionIndicator } from '../sessions/DirectoryActionIndicator';
 import React from 'react';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
+import { HomeFriendAvatar } from '@/components/chat/HomeFriendAvatar';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
@@ -16,6 +17,15 @@ import { cn } from '@/lib/utils';
 import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useI18n } from '@/lib/i18n';
+import {
+  folderFriendAppearance,
+  folderFriendName,
+  openFolderFriendStudio,
+  readFriendProfiles,
+  type FriendProfiles,
+} from '@/lib/friends';
+import { providerBindingFromFolderName } from '@/lib/projectProviderBinding';
+import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { CrossfadeZoneHeader } from './CrossfadeZoneHeaders';
 import { useProjectFolderMissing } from './useProjectFolderMissing';
 
@@ -27,6 +37,7 @@ export type SortableDragHandleProps = {
 type ProjectIdentityProps = {
   id: string;
   projectLabel: string;
+  projectDirectory?: string;
   projectIcon?: string;
   projectColor?: string;
   projectIconImage?: { mime: string; updatedAt: number; source: 'custom' | 'auto' };
@@ -36,19 +47,46 @@ type ProjectIdentityProps = {
 type ProjectHeaderIdentityProps = ProjectIdentityProps & {
   isCollapsed?: boolean;
   alwaysShowActions?: boolean;
+  friendProfiles?: FriendProfiles | null;
 };
 
 type ProjectPickerOption = ProjectIdentityProps & { projectDescription: string };
 
+function useSidebarFriendProfiles(): FriendProfiles | null {
+  const [runtime, setRuntime] = React.useState(getRuntimeKey);
+  const [profiles, setProfiles] = React.useState<FriendProfiles | null>(() => {
+    try { return typeof localStorage !== 'undefined' ? readFriendProfiles(localStorage, getRuntimeKey()) : null; }
+    catch { return null; }
+  });
+  React.useEffect(() => subscribeRuntimeEndpointChanged(() => setRuntime(getRuntimeKey())), []);
+  React.useEffect(() => {
+    const reload = () => {
+      try { setProfiles(typeof localStorage !== 'undefined' ? readFriendProfiles(localStorage, runtime) : null); }
+      catch { setProfiles(null); }
+    };
+    reload();
+    if (typeof window === 'undefined') return;
+    window.addEventListener('storage', reload);
+    window.addEventListener('open-carter:friends-updated', reload);
+    return () => {
+      window.removeEventListener('storage', reload);
+      window.removeEventListener('open-carter:friends-updated', reload);
+    };
+  }, [runtime]);
+  return profiles;
+}
+
 const ProjectHeaderIdentity: React.FC<ProjectHeaderIdentityProps> = ({
   id,
   projectLabel,
+  projectDirectory,
   projectIcon,
   projectColor,
   projectIconImage,
   projectIconBackground,
   isCollapsed,
   alwaysShowActions = false,
+  friendProfiles = null,
 }) => {
   const { currentTheme } = useThemeSystem();
   const projectIconName = projectIcon ? PROJECT_ICON_MAP[projectIcon] : null;
@@ -58,9 +96,19 @@ const ProjectHeaderIdentity: React.FC<ProjectHeaderIdentityProps> = ({
     ? (alwaysShowActions ? 'hidden' : 'group-hover/project:hidden group-focus-within/project:hidden')
     : undefined;
 
+  const friendLook = projectDirectory
+    ? folderFriendAppearance(friendProfiles ?? null, projectDirectory, projectColor)
+    : null;
+  const displayLabel = projectDirectory
+    ? folderFriendName(friendProfiles ?? null, { path: projectDirectory, label: projectLabel })
+    : projectLabel;
+  const isZdrFolder = Boolean(
+    projectDirectory && providerBindingFromFolderName(projectDirectory)?.includes('openrouter-zdr'),
+  );
+
   return (
     <>
-      <span className="inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center">
+      <span className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center">
         {hasCollapseControl ? (
           <span className={cn(
             'h-3.5 w-3.5 items-center justify-center text-muted-foreground',
@@ -94,13 +142,27 @@ const ProjectHeaderIdentity: React.FC<ProjectHeaderIdentityProps> = ({
           </span>
         ) : projectIcon === 'chatgpt' ? (
           <ProviderLogo providerId="chatgpt" className={cn('h-3.5 w-3.5', iconVisibilityClassName)} alt="ChatGPT" />
+        ) : friendLook ? (
+          <HomeFriendAvatar
+            body={friendLook.body}
+            color={friendLook.color}
+            className={cn('h-4 w-4', iconVisibilityClassName)}
+          />
         ) : projectIconName ? (
           <Icon name={projectIconName} className={cn('h-3.5 w-3.5', iconVisibilityClassName)} style={iconColor ? { color: iconColor } : undefined} />
         ) : (
           <Icon name="folder" className={cn('h-3.5 w-3.5 text-muted-foreground/80', iconVisibilityClassName)} style={iconColor ? { color: iconColor } : undefined} />
         )}
       </span>
-      <span className="truncate typography-ui-label font-semibold text-foreground">{projectLabel}</span>
+      <span className="truncate typography-ui-label font-semibold text-foreground">{displayLabel}</span>
+      {isZdrFolder && (
+        <span
+          className="ml-0.5 inline-flex shrink-0 items-center rounded border border-border/70 bg-surface-subtle px-1 py-0 text-[9px] font-medium text-muted-foreground"
+          title="Strict Zero Data Retention (openrouter-zdr)"
+        >
+          ZDR
+        </span>
+      )}
     </>
   );
 };
@@ -161,6 +223,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   onProjectSelect,
 }) => {
   const { t } = useI18n();
+  const friendProfiles = useSidebarFriendProfiles();
   const folderMissing = useProjectFolderMissing(projectDirectory);
   // Project headers only exist in the projects view, which always pins them.
   const stickyZoneHeaders = true;
@@ -198,6 +261,13 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
           {t('sessions.sidebar.project.actions.manageWorktrees')}
         </Item>
       )}
+      <Item onClick={() => {
+        openFolderFriendStudio(id);
+        onRenameStart();
+      }}>
+        <Icon name="shield" className="mr-1.5 h-4 w-4" />
+        Friend &amp; Guardrails
+      </Item>
       <Item onClick={onRenameStart}>
         <Icon name="pencil-ai" className="mr-1.5 h-4 w-4" />
         {t('sessions.sidebar.project.actions.edit')}
@@ -228,10 +298,6 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   }, []);
 
   const handleToggleClick = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
-    // Drop mouse-click focus so hover-revealed chrome (chevron, actions)
-    // hides again on mouse-leave instead of sticking via :focus-within.
-    // Keyboard users keep their focus-visible ring (blur only fires here
-    // for pointer interactions that produced a click).
     event.currentTarget.blur();
     if (suppressNextToggleRef.current) {
       suppressNextToggleRef.current = false;
@@ -251,11 +317,6 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
           <ContextMenu open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
             <ContextMenuTrigger
               render={
-                // Keep the live context-menu trigger when the shared zone
-                // header moves between the section and the pinned layer.
-                // Full-bleed band: pull past the list container's padding so
-                // the section band spans the entire sidebar width (ref: edge-
-                // to-edge section headers, not rounded pills).
                 <CrossfadeZoneHeader
                   className={cn(
                     '-ml-2.5 -mr-2 text-left group/project select-none',
@@ -263,7 +324,6 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                   )}
                   data-sidebar-sticky-header={stickyZoneHeaders ? 'true' : undefined}
                   onContextMenu={(event) => {
-                    // VS Code hides project actions entirely (hideDirectoryControls).
                     if (hideDirectoryControls) return;
                     event.preventDefault();
                     setIsContextMenuOpen(true);
@@ -282,15 +342,22 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                       type="button"
                       className={cn(
                         'flex min-w-0 flex-1 items-center gap-1.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-[padding]',
-                        // Reserve hover space for the absolute action buttons,
-                        // matching the collapse-toggle branch below.
                         isRepo && !hideDirectoryControls
                           ? (alwaysShowActions || isMenuOpen ? 'pr-20' : 'pr-0 group-hover/project:pr-20 group-focus-within/project:pr-20')
                           : (alwaysShowActions || isMenuOpen ? 'pr-14' : 'pr-0 group-hover/project:pr-14 group-focus-within/project:pr-14'),
                       )}
                       aria-label={t('sessions.sidebar.project.selectAria', { project: projectLabel })}
                     >
-                      <ProjectHeaderIdentity id={id} projectLabel={projectLabel} projectIcon={projectIcon} projectColor={projectColor} projectIconImage={projectIconImage} projectIconBackground={projectIconBackground} />
+                      <ProjectHeaderIdentity
+                        id={id}
+                        projectLabel={projectLabel}
+                        projectDirectory={projectDirectory}
+                        projectIcon={projectIcon}
+                        projectColor={projectColor}
+                        projectIconImage={projectIconImage}
+                        projectIconBackground={projectIconBackground}
+                        friendProfiles={friendProfiles}
+                      />
                       <Icon name="arrow-down-s" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
                       {projectDirectory ? <DirectoryActionIndicator directory={projectDirectory} className="ml-auto" /> : null}
                     </button>
@@ -299,7 +366,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                     {projectPickerOptions?.map((option) => (
                       <DropdownMenuItem key={option.id} onClick={() => onProjectSelect?.(option.id)} className="flex items-center justify-between gap-3" title={option.projectDescription}>
                         <span className="flex min-w-0 items-center gap-1.5">
-                          <ProjectHeaderIdentity {...option} />
+                          <ProjectHeaderIdentity {...option} friendProfiles={friendProfiles} />
                         </span>
                         {option.id === id ? <Icon name="check" className="h-4 w-4 flex-shrink-0 text-primary" /> : null}
                       </DropdownMenuItem>
@@ -323,12 +390,14 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                     <ProjectHeaderIdentity
                       id={id}
                       projectLabel={projectLabel}
+                      projectDirectory={projectDirectory}
                       projectIcon={projectIcon}
                       projectColor={projectColor}
                       projectIconImage={projectIconImage}
                       projectIconBackground={projectIconBackground}
                       isCollapsed={isCollapsed}
                       alwaysShowActions={alwaysShowActions}
+                      friendProfiles={friendProfiles}
                     />
                     {folderMissing ? (
                       <span

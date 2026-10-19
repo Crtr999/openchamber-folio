@@ -63,6 +63,7 @@ import {
     consumeUnboundDraftTarget,
     filterProvidersByBinding,
     isBoundAgentName,
+    isStrictlyZdrBound,
     pickBoundModel,
     providerBindingFromFolderName,
     useDirectoryProviderBinding,
@@ -605,6 +606,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     }, [isAgentSelectorOpen, isCompact, selection]);
 
     const selectableDesktopAgents = React.useMemo(() => {
+        if (isStrictlyZdrBound(providerBinding)) {
+            const zdrOnly = agents.filter((agent) => isPrimaryMode(agent.mode) && agent.name.trim().toLowerCase() === 'zdr');
+            if (zdrOnly.length > 0) return zdrOnly;
+        }
         return agents.filter((agent) => isPrimaryMode(agent.mode) && agentAllowedByBinding(agent, providerBinding));
     }, [agents, providerBinding]);
 
@@ -616,14 +621,22 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         if (selection || currentSessionId || !providerBinding || providerBinding.length === 0) return;
         if (!currentAgentName || selectableDesktopAgents.length === 0) return;
         const lowered = currentAgentName.trim().toLowerCase();
-        const boundProvider = lowered === 'claude' ? 'claude-code' : lowered === 'chatgpt' ? 'openai' : null;
+        const boundProvider = lowered === 'claude' ? 'claude-code' : lowered === 'chatgpt' ? 'openai' : lowered === 'zdr' ? 'openrouter-zdr' : null;
         const current = agents.find((agent) => agent.name === currentAgentName);
         const allowed = Boolean(current)
+            && (!isStrictlyZdrBound(providerBinding) || lowered === 'zdr')
             && agentAllowedByBinding(current!, providerBinding)
             && (!boundProvider || providerBinding.includes(boundProvider));
         if (allowed) return;
-        const preferred = providerBinding.includes('claude-code') ? 'claude' : providerBinding.includes('openai') ? 'chatgpt' : null;
+        const preferred = isStrictlyZdrBound(providerBinding)
+            ? 'zdr'
+            : providerBinding.includes('claude-code')
+                ? 'claude'
+                : providerBinding.includes('openai')
+                    ? 'chatgpt'
+                    : null;
         const fallback = selectableDesktopAgents.find((agent) => agent.name.trim().toLowerCase() === preferred)
+            ?? selectableDesktopAgents.find((agent) => agent.name === 'operator')
             ?? selectableDesktopAgents.find((agent) => !isBoundAgentName(agent.name))
             ?? selectableDesktopAgents[0];
         if (fallback && fallback.name !== currentAgentName) setAgent(fallback.name);
@@ -639,6 +652,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             const found = selectableDesktopAgents.find(a => a.name === settingsDefaultAgent);
             if (found) return found.name;
         }
+        const operatorAgent = selectableDesktopAgents.find(a => a.name === 'operator');
+        if (operatorAgent) return operatorAgent.name;
         const buildAgent = selectableDesktopAgents.find(a => a.name === 'build');
         if (buildAgent) return buildAgent.name;
         return selectableDesktopAgents[0]?.name;

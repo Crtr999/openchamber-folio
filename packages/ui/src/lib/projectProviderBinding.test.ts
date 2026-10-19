@@ -5,6 +5,7 @@ import {
   consumeUnboundDraftTarget,
   filterProvidersByBinding,
   isBoundAgentName,
+  isStrictlyZdrBound,
   pickBoundModel,
   providerBindingFromFolderName,
   rememberUnboundDraftTarget,
@@ -59,14 +60,18 @@ describe('provider binding helpers', () => {
       .toEqual({ providerId: 'claude-code', modelId: 'sonnet' })
     expect(pickBoundModel({ providers, binding: ['missing'] })).toBeNull()
   })
-  test('derives a fallback binding only for Open Carter workspace folders', () => {
+  test('derives a fallback binding only for Open Carter workspace folders and ZDR Legal folders', () => {
     expect(providerBindingFromFolderName('/Users/c/Documents/Open Carter/Claude')).toEqual(['claude-code'])
     expect(providerBindingFromFolderName('/Users/c/Documents/Open Carter/ChatGPT')).toEqual(['openai'])
+    expect(providerBindingFromFolderName('/Users/c/Built Apps/ZDR Management')).toEqual(['openrouter-zdr'])
     expect(providerBindingFromFolderName('/Users/c/code/Claude')).toBeNull()
+    expect(isStrictlyZdrBound(['openrouter-zdr'])).toBe(true)
+    expect(isStrictlyZdrBound(['openai'])).toBe(false)
   })
-  test('remembers and restores unbound draft target when leaving Claude/ChatGPT folders for an outside agent', () => {
+  test('remembers and restores unbound draft target when leaving Claude/ChatGPT/ZDR folders for an outside agent', () => {
     expect(isBoundAgentName('Claude')).toBe(true)
     expect(isBoundAgentName('ChatGPT')).toBe(true)
+    expect(isBoundAgentName('zdr')).toBe(true)
     expect(isBoundAgentName('manager')).toBe(false)
 
     rememberUnboundDraftTarget({
