@@ -271,7 +271,7 @@ export function HomeFriends() {
 
     const resolveProjectFriend = React.useCallback((project: ProjectEntry) => {
         const catalog = catalogsByPath[project.path];
-        const fallbackAgent = /\bzdr\b/i.test(project.path) || /\bzdr\b/i.test(project.label ?? '') ? SYNTHETIC_ZDR : SYNTHETIC_OPERATOR;
+        const fallbackAgent = /\bzdr\b/i.test(project.path) || /^\s*zdr\b/i.test(project.label ?? '') ? SYNTHETIC_ZDR : SYNTHETIC_OPERATOR;
         const primaryAgent = resolveFolderPrimaryAgent(project, catalog?.agents ?? [fallbackAgent], catalog?.configuration) ?? fallbackAgent;
         const guardrails = summarizeFolderGuardrails(catalog?.configuration, primaryAgent, project.path);
         const specialists = resolveFolderSpecialists(catalog?.agents ?? [], primaryAgent.name, guardrails.zdrLocked);

@@ -248,7 +248,7 @@ export function resolveFolderPrimaryAgent(
   const allowedProviders = extractAllowedProviders(configuration, project.path);
   const isZdrFolder = (allowedProviders.length === 1 && allowedProviders[0] === 'openrouter-zdr')
     || /\bzdr\b/i.test(project.path)
-    || /\bzdr\b/i.test(project.label ?? '');
+    || /^\s*zdr\b/i.test(project.label ?? '');
 
   if (isZdrFolder) {
     const zdrAgent = visiblePrimary.find(item => item.name.toLowerCase() === 'zdr');
