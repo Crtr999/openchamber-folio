@@ -126,6 +126,11 @@ does not hide its entry actions behind the chat header.
 
 ## Layers
 
+The attachment menu also launches personal creation and reference workflows.
+Their editable `.ocwork` format, runtime behavior, export limits and source
+attachment rules are owned by `lib/personal-workspace/DOCUMENTATION.md`.
+The native editors do not start model work until the prepared request is sent.
+
 | Directory | Owns |
 |---|---|
 | `language/` | What the text *means*: `@` references, `/` and `#` tokens, markdown, and which picker a caret asks for |

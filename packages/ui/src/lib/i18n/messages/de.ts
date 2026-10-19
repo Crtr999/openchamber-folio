@@ -20,7 +20,10 @@ import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
+import { personalWorkspaceI18n } from './personal-workspace.i18n';
 export const dict = {
+  ...personalWorkspaceI18n.de,
+  'workspace.officePreview': 'Nur Text und eingebettete Bilder. Originallayout, Diagramme, Animationen und laufende Berechnungen werden nicht dargestellt.',
   ...chatgptI18n['de'],
   ...museI18n.de,
   ...claudeI18n.de,

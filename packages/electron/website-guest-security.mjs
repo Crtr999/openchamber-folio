@@ -1,7 +1,14 @@
 const WEBSITE_ORIGINS = new Map([
   ['persist:open-carter-muse', 'https://muse.ai'],
   ['persist:open-carter-claude', 'https://claude.ai'],
+  ['open-carter-teaching', ''],
 ]);
+
+export function setTeachingOrigin(origin) {
+  const url = new URL(origin);
+  if (url.origin !== origin || !(url.protocol === 'https:' || (url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))) throw new Error('Invalid teaching origin');
+  WEBSITE_ORIGINS.set('open-carter-teaching', origin);
+}
 
 /** The browser-panel session and its controller are deliberately not included. */
 export const hardenWebsiteSessions = (fromPartition) => {
@@ -17,7 +24,7 @@ export const hardenWebsiteSessions = (fromPartition) => {
 export const secureWebsiteAttachment = ({ event, webPreferences, params, localParent }) => {
   const origin = WEBSITE_ORIGINS.get(params.partition);
   const preferenceOrigin = WEBSITE_ORIGINS.get(webPreferences.partition);
-  if (!origin && !preferenceOrigin) return;
+  if (!WEBSITE_ORIGINS.has(params.partition) && !WEBSITE_ORIGINS.has(webPreferences.partition)) return;
   let officialSource = false;
   try {
     const url = new URL(params.src);

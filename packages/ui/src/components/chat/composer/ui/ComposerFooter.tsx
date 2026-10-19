@@ -26,6 +26,7 @@ import { FocusModeButton } from './FocusModeButton';
 import { PermissionAutoAcceptButton } from './PermissionAutoAcceptButton';
 import type { PermissionMode } from '@/stores/utils/permissionAutoAccept';
 import type { BtwSelection } from '@/stores/useBtwStore';
+import type { PersonalTool } from '@/lib/personal-workspace/model';
 
 const MemoModelControls = React.memo(ModelControls);
 const MemoComposerDictation = React.memo(ComposerDictation);
@@ -62,6 +63,7 @@ export interface ComposerFooterProps {
     onOpenLinearPicker?: () => void;
     attachGuests?: readonly GuestAttachItem[];
     onOpenGuestAttach?: (guestId: string) => void;
+    onOpenPersonalTool?: (tool: PersonalTool) => void;
     onOpenAttachSheet: () => void;
     onToggleExpandedInput: () => void;
     onCyclePermissionMode: () => void;
@@ -161,6 +163,7 @@ export function ComposerFooter(props: ComposerFooterProps) {
                                 onOpenMobileSheet={onOpenAttachSheet}
                                 attachGuests={attachGuests}
                                 onOpenGuestAttach={onOpenGuestAttach}
+                                onOpenPersonalTool={isBtw ? undefined : props.onOpenPersonalTool}
                                 filesOnly={isBtw}
                             />
                             <PermissionAutoAcceptButton
@@ -234,6 +237,7 @@ export function ComposerFooter(props: ComposerFooterProps) {
                             onOpenSettings={isBtw ? undefined : onOpenSettings}
                             attachGuests={attachGuests}
                             onOpenGuestAttach={onOpenGuestAttach}
+                            onOpenPersonalTool={isBtw ? undefined : props.onOpenPersonalTool}
                             filesOnly={isBtw}
                         />
                         {!isBtw ? <FocusModeButton

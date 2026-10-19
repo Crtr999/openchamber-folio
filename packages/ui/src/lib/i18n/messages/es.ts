@@ -21,7 +21,10 @@ import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
+import { personalWorkspaceI18n } from './personal-workspace.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...personalWorkspaceI18n.es,
+  'workspace.officePreview': 'Solo texto e imágenes incrustadas. No se muestran el diseño original, gráficos, animaciones ni cálculos en vivo.',
   ...chatgptI18n['es'],
   ...museI18n.es,
   ...claudeI18n.es,

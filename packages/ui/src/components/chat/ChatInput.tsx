@@ -31,6 +31,11 @@ import { useSnippetsStore } from '@/stores/useSnippetsStore';
 import { renderMagicPrompt } from '@/lib/magicPrompts';
 import { startReviewFlow } from '@/lib/reviewFlow';
 import { getRuntimeKey } from '@/lib/runtime-switch';
+import { PersonalWorkspaceDialog } from '@/components/personal/PersonalWorkspaceDialog';
+import { Button } from '@/components/ui/button';
+import type { PersonalTool } from '@/lib/personal-workspace/model';
+import { PERSONAL_TOOL_ICONS, personalToolIconClass } from '@/lib/personal-workspace/toolIcons';
+import { resolveReference, type PersonalReference } from '@/lib/personal-workspace/references';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import {
     createChatDraftIdentity,
@@ -393,6 +398,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const closeAutocomplete = React.useCallback(() => setOpenAutocomplete(null), []);
     const [mobileControlsPanel, setMobileControlsPanel] = React.useState<MobileControlsPanel>(null);
     const [mobileAttachMenuOpen, setMobileAttachMenuOpen] = React.useState(false);
+    const [personalTool, setPersonalTool] = React.useState<PersonalTool | null>(null);
+    const personalScope = useInputStore((state) => state.attachmentDraftKey);
+    React.useEffect(() => { setPersonalTool(null); }, [personalScope]);
+    const openPersonalTool = React.useCallback((tool: PersonalTool) => setPersonalTool(tool), []);
     const [mobileDraftPicker, setMobileDraftPicker] = React.useState<'project' | 'branch' | null>(null);
     // Message history navigation state (up/down arrow to recall previous messages)
     const composerRef = React.useRef<ComposerEditorHandle>(null);
@@ -2986,6 +2995,31 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         composerRef.current?.focus();
     };
 
+    const handlePersonalReference = async (reference: PersonalReference, fromMention = false) => {
+        const scope = useInputStore.getState().attachmentDraftKey;
+        const runtime = getRuntimeKey();
+        const text = composerRef.current?.getValue() ?? messageRef.current;
+        const caret = composerRef.current?.getSelection().start ?? text.length;
+        closeAutocomplete();
+        const content = await resolveReference(reference, AbortSignal.timeout(30_000));
+        if (scope !== useInputStore.getState().attachmentDraftKey || getRuntimeKey() !== runtime) return;
+        const bounded = content.length > 200_000 ? `${content.slice(0, 200_000)}\n[Reference truncated to 200000 characters.]` : content;
+        const filename = `reference-${reference.kind}-${reference.id.replace(/[^a-z0-9_-]/gi, '-')}.txt`;
+        if (!await addAttachedFile(new File([bounded], filename, { type: 'text/plain' }))) throw new Error(t('workspace.error'));
+        if (scope !== useInputStore.getState().attachmentDraftKey || getRuntimeKey() !== runtime) return;
+        const latest = composerRef.current?.getValue() ?? messageRef.current;
+        if (fromMention && latest === text) {
+            const at = text.slice(0, caret).lastIndexOf('@');
+            if (at >= 0) {
+                const insertion = `[${filename}] `;
+                setMessage(text.slice(0, at) + insertion + text.slice(caret));
+                requestAnimationFrame(() => { composerRef.current?.setSelection(at + insertion.length); composerRef.current?.focus(); });
+                return;
+            }
+        }
+        insertTextAtSelection(`[${filename}] `);
+    };
+
     const handleAgentSelect = (agentName: string) => {
         const textarea = composerRef.current;
         const cursorPosition = textarea?.getSelection().start ?? message.length;
@@ -3904,6 +3938,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         onSnippetSelect={handleSnippetSelect}
                         onFileSelect={handleFileSelect}
                         onAgentSelect={handleAgentSelect}
+                        onReferenceSelect={(reference) => { void handlePersonalReference(reference, true).catch(() => toast.error(t('workspace.error'))); }}
                         onClose={closeAutocomplete}
                     />
                 {/* The lift shadow lives on this wrapper, away from the glass
@@ -4078,6 +4113,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         onOpenLinearPicker={openLinearPicker}
                         attachGuests={isMobile ? [] : guestAttachItems}
                         onOpenGuestAttach={openGuestAttach}
+                        onOpenPersonalTool={openPersonalTool}
                         onOpenAttachSheet={openMobileAttachSheet}
                         onToggleExpandedInput={handleToggleExpandedInput}
                         onCyclePermissionMode={handlePermissionModeCycle}
@@ -4224,6 +4260,27 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             submitting={reviewFlowSubmitting}
             onConfirm={handleStartReviewFlow}
         />
+        {personalTool ? <PersonalWorkspaceDialog
+            key={`${personalScope}:${personalTool}`}
+            tool={personalTool}
+            directory={currentSessionDirectoryForSync ?? currentDirectory ?? undefined}
+            isCurrent={() => useInputStore.getState().attachmentDraftKey === personalScope}
+            onClose={() => setPersonalTool(null)}
+            onPrompt={(text) => {
+                const existing = composerRef.current?.getValue() ?? messageRef.current;
+                setMessage(existing ? `${existing}\n\n${text}` : text);
+                requestAnimationFrame(() => composerRef.current?.focus());
+            }}
+            onAttach={async (files) => {
+                const scope = useInputStore.getState().attachmentDraftKey;
+                for (const file of files) {
+                    if (scope !== useInputStore.getState().attachmentDraftKey) throw new Error('draft_changed');
+                    if (!await addAttachedFile(file)) throw new Error(t('workspace.error'));
+                }
+                if (scope === useInputStore.getState().attachmentDraftKey) insertTextAtSelection(buildAttachmentCitationText(files.map((file) => file.name)));
+            }}
+            onReference={handlePersonalReference}
+        /> : null}
         {attachmentPreviewMounted ? (
             <React.Suspense fallback={null}>
                 <ToolOutputDialog
@@ -4258,6 +4315,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 onClose={() => setMobileAttachMenuOpen(false)}
             >
                 <div className="flex flex-col px-3 pb-4 pt-1">
+                    {(['sketch', 'document', 'spreadsheet', 'presentation', 'pdf', 'templates', 'library', 'teach', 'sites', 'references', 'notion'] as const).map((tool) => <Button key={tool} variant="ghost" className="justify-start gap-2.5 px-2" onClick={() => { mobileShell.skipNextOverlayCloseRestore(); setMobileAttachMenuOpen(false); setPersonalTool(tool); }}><Icon name={PERSONAL_TOOL_ICONS[tool]} className={personalToolIconClass(tool)} />{t(`workspace.${tool}`)}</Button>)}
                     <button
                         type="button"
                         className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-3 text-left typography-ui-label hover:bg-[var(--interactive-hover)]"

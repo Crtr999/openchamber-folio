@@ -61,6 +61,9 @@ import { subscribeToFileContentInvalidation } from '@/lib/fileContentInvalidatio
 import { DiagramEditor } from '@/components/diagram';
 import { EMPTY_CANVAS_READ, shouldShowFileCanvas, type FileCanvasHandle } from '@/components/views/files/fileCanvas';
 import { GuestFileEditor } from '@/components/views/files/GuestFileEditor';
+import { WorkspaceFileEditor } from '@/components/personal/WorkspaceEditor';
+import { OfficeTextArtifact } from '@/components/views/files/previews/OfficeTextArtifact';
+import { isWorkspaceArtifact } from '@/lib/personal-workspace/model';
 import { findGuestFileEditor, useGuestFileEditor } from '@/lib/guests/file-editors';
 import { useGuestsStore } from '@/lib/guests/store';
 import { GUEST_FILE_EDITOR_CONTENT_MAX } from '@openchamber/sdk';
@@ -352,7 +355,7 @@ const isMarkdownFile = (path: string): boolean => {
  * code reads the reactive `useGuestFileEditor` instead.
  */
 const opensInFileCanvas = (path: string | null | undefined): boolean => Boolean(
-  path && findGuestFileEditor(useGuestsStore.getState().guests, path),
+  path && (isWorkspaceArtifact(path) || findGuestFileEditor(useGuestsStore.getState().guests, path)),
 );
 
 const isJsonFile = (path: string): boolean => {
@@ -2601,11 +2604,12 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   const isSelectedMedia = isSelectedVideo || Boolean(selectedFile?.path && isAudioFile(selectedFile.path));
   const isSelectedFont = Boolean(selectedFile?.path && isFontFile(selectedFile.path));
   const isSelectedDocx = Boolean(selectedFile?.path && /\.docx$/i.test(selectedFile.path));
+  const isSelectedOfficeText = Boolean(selectedFile?.path && /\.(xlsx|pptx|odt|ods|odp)$/i.test(selectedFile.path));
   const isSelectedBinary = Boolean(
     selectedFile?.path
     && (isBinaryFile(selectedFile.path) || contentDetectedBinary)
   );
-  const isUnsupportedBinary = isSelectedBinary && !isSelectedImage && !isSelectedPdf && !isSelectedMedia && !isSelectedFont && !isSelectedDocx;
+  const isUnsupportedBinary = isSelectedBinary && !isSelectedImage && !isSelectedPdf && !isSelectedMedia && !isSelectedFont && !isSelectedDocx && !isSelectedOfficeText;
   // Everything the viewer shows as an artifact rather than as text.
   const isSelectedNonText = isSelectedBinary || (isSelectedImage && !isSvgSource);
   const pendingNavigationTargetPath = React.useMemo(
@@ -2648,9 +2652,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   const isDrawio = !claimedByGuest && Boolean(selectedFile?.path && isDrawioFile(selectedFile.path));
   const isMermaid = !claimedByGuest && Boolean(selectedFile?.path && isMermaidFile(selectedFile.path));
   const isTable = !claimedByGuest && Boolean(selectedFile?.path && isDelimitedTableFile(selectedFile.path));
-  const hasCanvas = claimedByGuest;
+  const nativeWorkspace = !claimedByGuest && isTextFile && isWorkspaceArtifact(selectedFile?.path);
+  const hasCanvas = claimedByGuest || nativeWorkspace;
   // A binary editor checks the bytes it reads too; the stat size spares a read.
-  const canMountCanvas = claimedByGuest && (binaryCanvas
+  const canMountCanvas = hasCanvas && (binaryCanvas
     ? artifactSize === null || artifactSize <= GUEST_FILE_EDITOR_CONTENT_MAX
     : draftContent.length <= GUEST_FILE_EDITOR_CONTENT_MAX);
   // Excalidraw drawings open in the Excalidraw extension. Without it they show
@@ -3390,7 +3395,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
 
   // PDFs, audio, video and fonts are handed to the browser as a URL it owns
   // (iframe, media element, FontFace), so they need the scoped URL token.
-  const usesRawAssetUrl = isSelectedPdf || isSelectedMedia || isSelectedFont || isSelectedDocx;
+  const usesRawAssetUrl = isSelectedPdf || isSelectedMedia || isSelectedFont || isSelectedDocx || isSelectedOfficeText;
   const pdfAssetAuthKey = selectedFile?.path
     && usesRawAssetUrl
     ? `${selectedFile.path}|${selectedFileReadOptions.allowOutsideWorkspace ? 'outside' : 'workspace'}|${fileContentRevision}`
@@ -3478,6 +3483,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     if (isSelectedDocx) {
       return <DocxArtifact key={pdfPreviewNonce} src={pdfSrc} name={file.name} sizeBytes={artifactSize} download={downloadButton} />;
     }
+    if (isSelectedOfficeText) return <OfficeTextArtifact key={pdfPreviewNonce} src={pdfSrc} name={file.name} download={downloadButton} />;
     if (isUnsupportedBinary) {
       return <BinaryArtifact name={file.name} path={file.path} sizeBytes={artifactSize} download={downloadButton} />;
     }
@@ -4255,7 +4261,19 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   const canvasKey = selectedFile
     ? `${selectedFile.path}:${canvasRemountNonce}:${canvasInFullscreen ? 'fullscreen' : 'docked'}`
     : '';
-  const canvasElement = showCanvas && selectedFile && guestFileEditor ? (
+  const canvasElement = showCanvas && selectedFile && nativeWorkspace ? (
+    <div ref={canvasWrapperRef} className="h-full overflow-hidden p-3" style={{ minHeight: '400px' }}>
+      <WorkspaceFileEditor
+        key={canvasKey}
+        ref={canvasEditorRef}
+        content={draftContent}
+        directory={root}
+        readOnly={selectedFileIsOutsideWorkspace || !files.writeFile}
+        onDirtyChange={setCanvasDirty}
+        onEdit={() => { canvasLastEditAtRef.current = Date.now(); }}
+      />
+    </div>
+  ) : showCanvas && selectedFile && guestFileEditor ? (
     <div ref={canvasWrapperRef} className="h-full overflow-hidden" style={{ minHeight: '400px' }}>
       <GuestFileEditor
         key={`${canvasKey}:${guestFileEditor.guestId}:${guestFileEditor.editor.id}`}

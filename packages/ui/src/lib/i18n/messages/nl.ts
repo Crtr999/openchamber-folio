@@ -20,7 +20,10 @@ import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
+import { personalWorkspaceI18n } from './personal-workspace.i18n';
 export const dict = {
+  ...personalWorkspaceI18n.nl,
+  'workspace.officePreview': 'Alleen tekst en ingesloten afbeeldingen. Oorspronkelijke opmaak, grafieken, animaties en liveberekeningen worden niet weergegeven.',
   ...chatgptI18n['nl'],
   ...museI18n.nl,
   ...claudeI18n.nl,

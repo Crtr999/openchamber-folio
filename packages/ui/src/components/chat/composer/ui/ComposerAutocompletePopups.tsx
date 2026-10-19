@@ -19,6 +19,7 @@ import { FileMentionAutocomplete, type FileMentionHandle } from '../../FileMenti
 import { SkillAutocomplete, type SkillAutocompleteHandle } from '../../SkillAutocomplete';
 import { SnippetAutocomplete, type SnippetAutocompleteHandle } from '../../SnippetAutocomplete';
 import type { AutocompleteKind } from '../language/triggers';
+import type { PersonalReference } from '@/lib/personal-workspace/references';
 
 export interface AutocompleteOverlayPosition {
     top: number;
@@ -70,6 +71,7 @@ export interface ComposerAutocompletePopupsProps {
     onSnippetSelect: (snippet: unknown, trigger: string) => void;
     onFileSelect: (file: { name: string; path: string; relativePath?: string }) => void;
     onAgentSelect: (agentName: string) => void;
+    onReferenceSelect?: (reference: PersonalReference) => void;
     onClose: () => void;
 }
 
@@ -117,6 +119,7 @@ export function ComposerAutocompletePopups(props: ComposerAutocompletePopupsProp
                     searchQuery={query}
                     onFileSelect={props.onFileSelect}
                     onAgentSelect={props.onAgentSelect}
+                    onReferenceSelect={props.onReferenceSelect}
                     onClose={onClose}
                     style={style}
                 />

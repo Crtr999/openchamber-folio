@@ -43,6 +43,9 @@ import { z } from 'zod';
  * - Desktop personal-home Notion OAuth, data access and chat export are off
  *   (`packages/electron/personal-home.mjs`); local EventKit remains available.
  * - Meeting summaries are off (`meetings/summary.js`), even after user approval.
+ * - CarterBot teaching capture, playback, skill drafting, installation and tests
+ *   are off (`personal-teaching.js`, `teaching-skills.js`).
+ *   Stopping already-owned capture remains allowed and sends no user content.
  *   Meeting capture, local transcription and private local notes stay available.
  * - Native OpenRouter credit refresh and added billing keys are off
  *   (`packages/electron/openrouter-credits.mjs`).

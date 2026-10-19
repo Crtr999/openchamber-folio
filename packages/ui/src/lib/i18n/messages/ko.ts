@@ -21,7 +21,10 @@ import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
+import { personalWorkspaceI18n } from './personal-workspace.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...personalWorkspaceI18n.ko,
+  'workspace.officePreview': '텍스트와 포함된 이미지만 표시합니다. 원래 레이아웃, 차트, 애니메이션, 실시간 계산은 표시하지 않습니다.',
   ...chatgptI18n['ko'],
   ...museI18n.ko,
   ...claudeI18n.ko,

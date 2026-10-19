@@ -20,6 +20,8 @@ import {
 import type { GuestAttachItem } from '@/hooks/useGuestSurfaces';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import type { PersonalTool } from '@/lib/personal-workspace/model';
+import { MENU_ICON_CLASS as menuIconClass, PERSONAL_TOOL_ICONS, personalToolIconClass } from '@/lib/personal-workspace/toolIcons';
 
 type ComposerAttachmentControlsProps = {
     isVSCode: boolean;
@@ -36,6 +38,7 @@ type ComposerAttachmentControlsProps = {
     onOpenMobileSheet?: () => void;
     attachGuests?: readonly GuestAttachItem[];
     onOpenGuestAttach?: (guestId: string) => void;
+    onOpenPersonalTool?: (tool: PersonalTool) => void;
     /**
      * Only offer local files. The `/btw` composer takes files but none of the
      * linked context (issues, PRs, guests), which stays with the main draft.
@@ -111,15 +114,21 @@ export const ComposerAttachmentControls = React.memo(function ComposerAttachment
                                     requestAnimationFrame(handlePickLocalFiles);
                                 }}
                             >
-                                <Icon name="attachment-2"/>
+                                <Icon name="attachment-2" className={menuIconClass} />
                                 {t('chat.chatInput.actions.attachFiles')}
                             </DropdownMenuItem>
+                            {props.onOpenPersonalTool ? (['sketch', 'document', 'spreadsheet', 'presentation', 'pdf', 'templates', 'library', 'teach', 'sites', 'references', 'notion'] as const).map((tool) => (
+                                <DropdownMenuItem key={tool} onSelect={() => requestAnimationFrame(() => props.onOpenPersonalTool?.(tool))}>
+                                    <Icon name={PERSONAL_TOOL_ICONS[tool]} className={personalToolIconClass(tool)} />
+                                    {t(`workspace.${tool}`)}
+                                </DropdownMenuItem>
+                            )) : null}
                             <DropdownMenuItem
                                 onSelect={() => {
                                     requestAnimationFrame(openIssuePicker);
                                 }}
                             >
-                                <Icon name="github"/>
+                                <Icon name="github" className={menuIconClass} />
                                 {t('chat.chatInput.actions.linkGithubIssue')}
                             </DropdownMenuItem>
                             <DropdownMenuItem
@@ -127,7 +136,7 @@ export const ComposerAttachmentControls = React.memo(function ComposerAttachment
                                     requestAnimationFrame(openPrPicker);
                                 }}
                             >
-                                <Icon name="git-pull-request"/>
+                                <Icon name="git-pull-request" className={menuIconClass} />
                                 {t('chat.chatInput.actions.linkGithubPr')}
                             </DropdownMenuItem>
                             {showLinearPicker && openLinearPicker ? (
@@ -136,7 +145,7 @@ export const ComposerAttachmentControls = React.memo(function ComposerAttachment
                                         requestAnimationFrame(openLinearPicker);
                                     }}
                                 >
-                                    <Icon name="linear"/>
+                                    <Icon name="linear" className={menuIconClass} />
                                     {t('chat.chatInput.actions.linkLinearIssue')}
                                 </DropdownMenuItem>
                             ) : null}
@@ -178,6 +187,7 @@ export const ComposerAttachmentControls = React.memo(function ComposerAttachment
     && prev.onMenuOpenChange === next.onMenuOpenChange
     && prev.onOpenMobileSheet === next.onOpenMobileSheet
     && prev.onOpenGuestAttach === next.onOpenGuestAttach
+    && prev.onOpenPersonalTool === next.onOpenPersonalTool
     && prev.filesOnly === next.filesOnly
     && (prev.attachGuests ?? []).map((guest) => `${guest.id}:${guest.name}:${guest.mode}`).join()
         === (next.attachGuests ?? []).map((guest) => `${guest.id}:${guest.name}:${guest.mode}`).join()

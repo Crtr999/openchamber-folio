@@ -1,8 +1,11 @@
 import { createPersonalHome } from './personal-home.mjs';
+import { z } from 'zod';
 import { createMeetingBoundary, isMeetingCommand, supportsMeetingSystemAudio } from './meeting-boundary.mjs';
 import { createMeetingService } from '@openchamber/web/server/lib/meetings/service.js';
 import { createMeetingSummaryService } from '@openchamber/web/server/lib/meetings/summary.js';
-import { hardenWebsiteSessions, secureWebsiteAttachment } from './website-guest-security.mjs';
+import { hardenWebsiteSessions, secureWebsiteAttachment, setTeachingOrigin } from './website-guest-security.mjs';
+import { createPersonalTeaching } from '@openchamber/web/server/lib/personal-teaching.js';
+import { createTeachingSkills } from '@openchamber/web/server/lib/teaching-skills.js';
 import { createPersonalCalendar } from './personal-calendar.mjs';
 import { canReuseManagedOpenCodePreflight } from './opencode-readiness.mjs';
 import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, MessageChannelMain, nativeImage, nativeTheme, net as electronNet, Notification, powerMonitor, powerSaveBlocker, protocol, safeStorage, session, shell, Tray, webContents } from 'electron';
@@ -425,8 +428,10 @@ const shutdownBackgroundServices = () => {
   if (!state.backgroundShutdownPromise) {
     setDesktopKeepAwakeActive(false);
     shellEnvironmentAbort.abort();
+    teachingSkills.cancel();
     state.backgroundShutdownPromise = Promise.all([
       meetingBoundary.dispose(),
+      personalTeaching.dismiss().catch(() => { log.warn('[teaching] recording cleanup could not be confirmed'); }),
       startShellEnvironmentProbe().catch(() => {}),
       Promise.resolve(openRouterCredits.stop()),
       killSidecar(),
@@ -3630,8 +3635,41 @@ const closeAllDevTunnels = () => {
   pending.then((client) => client.closeAll()).catch(() => {});
 };
 
+const personalTeaching = createPersonalTeaching();
+const teachingSkills = createTeachingSkills({
+  broker: personalTeaching, root: path.join(app.getPath('userData'), 'private-teaching'),
+  localConnection: () => state.sidecarUrl ? { baseUrl: state.sidecarUrl, headers: { Authorization: `Bearer ${readDesktopLocalClientToken()}` } } : null,
+});
+const teachingModelInput = z.object({ id: z.string().min(1).max(200), providerID: z.string().min(1).max(200) }).strict();
+const teachingDraftInput = { source: z.string().regex(/^[a-zA-Z0-9-]+-open-carter-teach$/).max(200), name: z.string().max(100), markdown: z.string().max(60_000) };
+const teachingSkillInput = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('models') }).strict(),
+  z.object({ action: z.literal('draft'), source: teachingDraftInput.source }).strict(),
+  z.object({ action: z.literal('saveDraft'), ...teachingDraftInput }).strict(),
+  z.object({ action: z.literal('compile'), source: teachingDraftInput.source, notes: z.string().min(1).max(6000), model: teachingModelInput, approved: z.literal(true) }).strict(),
+  z.object({ action: z.literal('install'), ...teachingDraftInput, approved: z.literal(true) }).strict(),
+  z.object({ action: z.literal('test'), source: teachingDraftInput.source, task: z.string().min(1).max(6000), directory: z.string().min(1).max(4096), model: teachingModelInput, approved: z.literal(true) }).strict(),
+]);
+const teachingOwners = new WeakSet();
 const handleInvoke = async (browserWindow, command, args = {}) => {
   switch (command) {
+    case 'desktop_personal_teaching': {
+      const input = z.discriminatedUnion('action', [z.object({ action: z.enum(['status', 'start', 'stop', 'dismiss']) }).strict(), z.object({ action: z.literal('review'), id: z.string().regex(/^[a-zA-Z0-9-]+$/) }).strict()]).parse(args);
+      if (input.action === 'dismiss') { teachingSkills.cancel(); return personalTeaching.dismiss(); }
+      const result = input.action === 'review' ? await personalTeaching.review(input.id) : await personalTeaching[input.action]();
+      if (browserWindow && !teachingOwners.has(browserWindow.webContents)) {
+        const contents = browserWindow.webContents;
+        teachingOwners.add(contents);
+        const finish = () => { teachingSkills.cancel(); void personalTeaching.dismiss().catch(() => { log.warn('[teaching] interrupted recording cleanup could not be confirmed'); }); };
+        contents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => { if (mainFrame && !inPlace) finish(); });
+        contents.once('render-process-gone', finish);
+        contents.once('destroyed', finish);
+      }
+      const credentials = personalTeaching.credentials();
+      setTeachingOrigin(credentials.origin);
+      await session.fromPartition('open-carter-teaching').cookies.set({ url: credentials.origin, name: 'cb_key', value: credentials.token, httpOnly: true, sameSite: 'strict', secure: credentials.origin.startsWith('https:') });
+      return result;
+    }
     case 'desktop_personal_home': {
       const runtime = getWindowRuntimeConfig(browserWindow);
       if (!browserWindow || !sameOrigin(runtime.apiBaseUrl, state.localOrigin || state.sidecarUrl || '')) throw new Error('Personal connections require the local desktop instance.');
@@ -4971,6 +5009,19 @@ const COMMANDS_SAFE_FOR_REMOTE = new Set([
 ]);
 
 ipcMain.handle('openchamber:invoke', async (event, command, args) => {
+  const localHostCommand = ['desktop_ai_host_status', 'desktop_ai_host_configure', 'desktop_personal_teaching', 'desktop_teaching_skill'].includes(command);
+  const localTeamCommand = command === 'desktop_personal_home' && z.object({ action: z.string().startsWith('team-') }).safeParse(args).success;
+  if ((localHostCommand || localTeamCommand) && !authorizeOpenRouterCredits(event)) {
+    throw new Error('AI host controls require the trusted local main application.');
+  }
+  if (command === 'desktop_teaching_skill') {
+    const input = teachingSkillInput.parse(args);
+    const authorize = () => { if (!authorizeOpenRouterCredits(event)) throw new Error('teaching_local_required'); };
+    try {
+      const result = await teachingSkills[input.action](input.action === 'draft' ? input.source : input, authorize);
+      authorize(); return result;
+    } catch { throw new Error('teaching_skill_failed'); }
+  }
   if (isMeetingCommand(command)) {
     try {
       return await meetingBoundary.invoke(event, command, args);
@@ -4993,6 +5044,9 @@ ipcMain.handle('openchamber:invoke', async (event, command, args) => {
   }
   const browserWindow = BrowserWindow.fromWebContents(event.sender);
   const result = await handleInvoke(browserWindow, command, args);
+  if ((localHostCommand || localTeamCommand) && !authorizeOpenRouterCredits(event)) {
+    throw new Error('AI host controls require the trusted local main application.');
+  }
   if (command === 'desktop_openrouter_credits' && !authorizeOpenRouterCredits(event)) {
     throw new Error('Billing is available only in the trusted local main application.');
   }
@@ -5001,6 +5055,8 @@ ipcMain.handle('openchamber:invoke', async (event, command, args) => {
 
 // An isolated-preload notification can revoke capture, never grant it.
 ipcMain.on('openchamber:meeting-runtime-changing', (event) => {
+  if (authorizeOpenRouterCredits(event)) teachingSkills.cancel();
+  if (authorizeOpenRouterCredits(event)) void personalTeaching.dismiss().catch(() => { log.warn('[teaching] runtime-change recording cleanup could not be confirmed'); });
   void meetingBoundary.runtimeChanging(event).catch(() => {
     log.warn('[meetings] runtime-change recording interruption failed');
   });

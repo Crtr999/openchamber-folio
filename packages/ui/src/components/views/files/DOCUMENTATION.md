@@ -92,6 +92,13 @@ tool, so the event never reaches it.
 
 ## Canvas editors
 
+Native `.ocwork` files use `WorkspaceFileEditor` through the same canvas handle.
+It supports documents, workbooks, slide text/notes and sketches. The owning format,
+export limits and runtime table are in `lib/personal-workspace/DOCUMENTATION.md`.
+External reloads, source toggles and fullscreen moves remount it just like guest
+editors; its own saves preserve the live editor. Malformed files report an error
+without producing a writable blank replacement.
+
 A "canvas" is an editor with its own document model instead of the text
 editor: an extension's file editor (`contributes.fileEditors`, see
 `packages/sdk/DOCUMENTATION.md`). It exposes `FileCanvasHandle`

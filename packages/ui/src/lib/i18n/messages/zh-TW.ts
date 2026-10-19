@@ -21,7 +21,10 @@ import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
+import { personalWorkspaceI18n } from './personal-workspace.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...personalWorkspaceI18n['zh-TW'],
+  'workspace.officePreview': '僅顯示文字及嵌入影像，不呈現原始版面配置、圖表、動畫或即時計算。',
   ...chatgptI18n['zh-TW'],
   ...museI18n['zh-TW'],
   ...claudeI18n['zh-TW'],
