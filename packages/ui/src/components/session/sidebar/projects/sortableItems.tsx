@@ -26,6 +26,7 @@ import {
 } from '@/lib/friends';
 import { providerBindingFromFolderName } from '@/lib/projectProviderBinding';
 import { useFolderActivity } from '@/hooks/useFolderActivity';
+import { useFriendProfiles } from '@/hooks/useFriendProfiles';
 import './friendActivity.css';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { CrossfadeZoneHeader } from './CrossfadeZoneHeaders';
@@ -54,29 +55,8 @@ type ProjectHeaderIdentityProps = ProjectIdentityProps & {
 
 type ProjectPickerOption = ProjectIdentityProps & { projectDescription: string };
 
-function useSidebarFriendProfiles(): FriendProfiles | null {
-  const [runtime, setRuntime] = React.useState(getRuntimeKey);
-  const [profiles, setProfiles] = React.useState<FriendProfiles | null>(() => {
-    try { return typeof localStorage !== 'undefined' ? readFriendProfiles(localStorage, getRuntimeKey()) : null; }
-    catch { return null; }
-  });
-  React.useEffect(() => subscribeRuntimeEndpointChanged(() => setRuntime(getRuntimeKey())), []);
-  React.useEffect(() => {
-    const reload = () => {
-      try { setProfiles(typeof localStorage !== 'undefined' ? readFriendProfiles(localStorage, runtime) : null); }
-      catch { setProfiles(null); }
-    };
-    reload();
-    if (typeof window === 'undefined') return;
-    window.addEventListener('storage', reload);
-    window.addEventListener('open-carter:friends-updated', reload);
-    return () => {
-      window.removeEventListener('storage', reload);
-      window.removeEventListener('open-carter:friends-updated', reload);
-    };
-  }, [runtime]);
-  return profiles;
-}
+/** The friends the user has named or shaped, for this runtime. */
+const useSidebarFriendProfiles = (): FriendProfiles | null => useFriendProfiles();
 
 const ProjectHeaderIdentity: React.FC<ProjectHeaderIdentityProps> = ({
   id,

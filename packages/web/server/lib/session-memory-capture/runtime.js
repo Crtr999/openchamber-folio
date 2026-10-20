@@ -92,6 +92,17 @@ export const createSessionMemoryCaptureRuntime = ({
     }
   };
 
+  /**
+   * Why a capture did not happen.
+   *
+   * A capture that quietly does not happen is a feature nobody can trust, so
+   * every path that skips says so. The reason is the first thing worth
+   * looking at when a folder is not learning anything.
+   */
+  const skip = (reason, detail) => {
+    console.log(`[session-memory-capture] skipped: ${reason}${detail ? ` (${detail})` : ''}`);
+  };
+
   const announce = (projectId) => {
     if (typeof onMemoryChanged !== 'function') return;
     try {
@@ -150,22 +161,22 @@ export const createSessionMemoryCaptureRuntime = ({
     const controller = new AbortController();
     inflight.set(sessionId, controller);
     try {
-      if (!(await isAgentMemoryEnabled())) return;
-      if (!(await isCaptureEnabled())) return;
-      if (!isCapturableDirectory(directory)) return;
+      if (!(await isAgentMemoryEnabled())) { skip('memory is off'); return; }
+      if (!(await isCaptureEnabled())) { skip('capture is switched off'); return; }
+      if (!isCapturableDirectory(directory)) { skip('not a capturable directory', directory); return; }
       const projectId = asNonEmptyString(await resolveProjectId(directory));
-      if (!projectId) return;
-      if (exhausted.has(projectId)) return;
+      if (!projectId) { skip('no project for this directory', directory); return; }
+      if (exhausted.has(projectId)) { skip('the store for this project is full', projectId); return; }
 
       const pending = await captureTurns(sessionId, directory, controller.signal);
-      if (!pending) return;
+      if (!pending) { skip('nothing new to read', sessionId); return; }
 
       const { describeSmallModel, generateSmallModelText } = await getSmallModelService();
       const last = pending.at(-1);
       const preferredProviderID = last?.assistant?.providerID;
       const preferredModelID = last?.assistant?.modelID;
       const described = await describeSmallModel({ directory, preferredProviderID, preferredModelID });
-      if (!described) return;
+      if (!described) { skip('no small model is available', directory); return; }
       /**
        * The folder's own provider policy decides.
        *
@@ -177,11 +188,14 @@ export const createSessionMemoryCaptureRuntime = ({
        * anything at all.
        */
       const allowedProviders = await resolveAllowedProviders(directory);
-      if (allowedProviders.length > 0 && !allowedProviders.includes(described.providerID)) return;
+      if (allowedProviders.length > 0 && !allowedProviders.includes(described.providerID)) {
+        skip('the folder is bound to another provider', `${described.providerID} is not allowed`);
+        return;
+      }
 
       const system = buildCaptureSystemPrompt();
       const prompt = buildCapturePrompt(pending, described.inputCharBudget - system.length - 512);
-      if (!prompt) return;
+      if (!prompt) { skip('the conversation did not fit the budget'); return; }
 
       const generated = await generateSmallModelText({
         prompt: prompt.text,
@@ -197,6 +211,7 @@ export const createSessionMemoryCaptureRuntime = ({
       });
 
       const memories = parseCaptureResponse(generated?.text);
+      console.log(`[session-memory-capture] read ${pending.length} turn(s) for ${projectId}; ${memories.length} worth keeping`);
       // The cursor advances even when nothing was worth keeping: those turns
       // were read and judged, and reading them again would judge them again.
       const newest = last?.assistant?.id;

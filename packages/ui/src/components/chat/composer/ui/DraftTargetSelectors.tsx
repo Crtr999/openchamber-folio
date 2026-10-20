@@ -39,6 +39,9 @@ import {
 import { useI18n } from '@/lib/i18n';
 import { matchesRankQuery, rankByQuery } from '@/lib/search/fuzzySearch';
 import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
+import { folderFriendAppearance } from '@/lib/friends';
+import { HomeFriendAvatar } from '@/components/chat/HomeFriendAvatar';
+import { useFriendProfiles } from '@/hooks/useFriendProfiles';
 import { createWorktreeDraft } from '@/lib/worktreeSessionCreator';
 import { shortcutRegistry } from '@/lib/shortcuts';
 import { useKeybind } from '@/hooks/useKeybind';
@@ -84,12 +87,24 @@ export interface DraftTargetProps {
 const getProjectIconColor = (projectColor?: string | null): string | undefined =>
     projectColor ? PROJECT_COLOR_MAP[projectColor] ?? undefined : undefined;
 
-/** A project's icon (custom image, configured icon, or a folder) plus its name. */
+/**
+ * A project's icon plus its name.
+ *
+ * A folder is a friend, so the picker shows the friend's face rather than a
+ * folder glyph: the same mark the sidebar shows, so the two places say the
+ * same thing about the same folder. A project with its own picture keeps it.
+ */
 export function ProjectLabel({ project, theme }: { project: DraftTargetProject; theme: Theme }) {
     const projectIconName = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
     const iconColor = getProjectIconColor(project.color);
+    const friendProfiles = useFriendProfiles();
+    const friendLook = project.kind === 'chat' || !project.path
+        ? null
+        : folderFriendAppearance(friendProfiles, project.path, project.color);
     const fallbackIcon = project.kind === 'chat' ? (
         <Icon name="chat-4" className="h-3.5 w-3.5 shrink-0 text-muted-foreground/80" />
+    ) : friendLook ? (
+        <HomeFriendAvatar body={friendLook.body} color={friendLook.color} className="size-4 shrink-0" />
     ) : projectIconName ? (
         <Icon name={projectIconName} className="h-3.5 w-3.5 shrink-0" style={iconColor ? { color: iconColor } : undefined} />
     ) : (
