@@ -9,13 +9,14 @@ import { useUIStore } from '@/stores/useUIStore';
 /**
  * The agent's computer, inside the app.
  *
- * The computer belongs to a tool, and the tool's control centre is a web page.
- * So the honest way to show it inside Open Carter is to open that page in the
- * app's own browser panel — the same panel every other page uses, with the
- * key already set as a cookie, so nothing secret is ever in an address bar.
+ * The computer belongs to a tool, and the tool's control centre is a web page
+ * that shows the screen live. So the computer is shown here the way every other
+ * page is shown: embedded, resizable with the panel, and expandable to the
+ * full window.
  *
- * This pane is the way in: it lists the screens the computer has open and
- * opens the one the user picks.
+ * The control centre needs the tool's key. The Electron main sets it as a
+ * cookie on this window's own session, so the page authenticates itself and
+ * the key never reaches the renderer.
  */
 
 type ComputerState = {
@@ -42,10 +43,16 @@ const readComputerState = async (signal?: AbortSignal): Promise<ComputerState> =
 export function ComputerPane({ directory }: { directory: string | null }) {
   const { t } = useI18n();
   const [state, setState] = React.useState<ComputerState | null>(null);
+  const [selected, setSelected] = React.useState<string | null>(null);
   const openContextBrowser = useUIStore((state) => state.openContextBrowser);
 
   const refresh = React.useCallback(async (signal?: AbortSignal) => {
-    setState(await readComputerState(signal));
+    const next = await readComputerState(signal);
+    setState(next);
+    setSelected((current) => {
+      if (current && next.screens.some((screen) => screen.name === current)) return current;
+      return next.screens[0]?.name ?? null;
+    });
   }, []);
 
   React.useEffect(() => {
@@ -61,12 +68,6 @@ export function ComputerPane({ directory }: { directory: string | null }) {
     };
   }, [refresh]);
 
-  const openScreen = React.useCallback((screenName: string) => {
-    if (!state?.baseUrl || !directory) return;
-    const url = `${state.baseUrl}/?screen=${encodeURIComponent(screenName)}&solo=1`;
-    openContextBrowser(directory, url);
-  }, [directory, openContextBrowser, state?.baseUrl]);
-
   if (!state) {
     return <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">{t('common.loading')}</div>;
   }
@@ -81,34 +82,47 @@ export function ComputerPane({ directory }: { directory: string | null }) {
     );
   }
 
+  const screen = selected;
+  const embedUrl = screen ? `${state.baseUrl}/?screen=${encodeURIComponent(screen)}&solo=1` : null;
+
   return (
-    <div className="flex h-full flex-col gap-3 overflow-y-auto p-4">
-      <div>
-        <h3 className="typography-ui-label font-semibold text-foreground">{t('computer.title')}</h3>
-        <p className="text-[11px] text-muted-foreground">{t('computer.hint')}</p>
-      </div>
-      {state.screens.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{t('computer.noScreens')}</p>
-      ) : (
-        <ul className="flex flex-col gap-1.5">
-          {state.screens.map((screen) => (
-            <li key={screen.name}>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="oc-home-row flex w-full items-center justify-between text-xs"
-                onClick={() => openScreen(screen.name)}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <Icon name="window" className="size-3.5 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{screen.name}</span>
-                </span>
-                <Icon name="arrow-right" className="size-3.5 shrink-0 opacity-40" />
-              </Button>
-            </li>
+    <div className="flex h-full min-h-0 flex-col">
+      {state.screens.length > 0 && (
+        <div className="flex items-center gap-1 overflow-x-auto border-b border-border/50 px-3 py-2">
+          {state.screens.map((item) => (
+            <Button
+              key={item.name}
+              type="button"
+              variant="ghost"
+              size="xs"
+              aria-pressed={item.name === selected}
+              className={item.name === selected ? 'bg-interactive-selection text-interactive-selection-foreground' : 'text-muted-foreground'}
+              onClick={() => setSelected(item.name)}
+            >
+              {item.name}
+            </Button>
           ))}
-        </ul>
+        </div>
+      )}
+      {embedUrl ? (
+        <iframe
+          key={embedUrl}
+          src={embedUrl}
+          title={t('computer.title')}
+          className="min-h-0 flex-1 border-0 bg-black"
+          allow="clipboard-read; clipboard-write"
+        />
+      ) : (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
+          <Icon name="window" className="size-6 text-muted-foreground" />
+          <p className="text-sm font-medium">{t('computer.noScreens')}</p>
+          <p className="max-w-xs text-xs text-muted-foreground">{t('computer.noScreensHint')}</p>
+          {directory && (
+            <Button variant="outline" size="sm" onClick={() => openContextBrowser(directory, state.baseUrl ?? '')}>
+              {t('computer.openControl')}
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );

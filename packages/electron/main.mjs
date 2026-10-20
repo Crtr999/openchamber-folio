@@ -1101,13 +1101,24 @@ const grantComputerAccess = async () => {
     const { resolveComputerEndpoint } = await import('@openchamber/web/server/lib/computer/endpoint.js');
     const endpoint = resolveComputerEndpoint();
     if (!endpoint) return;
-    const browserSession = session.fromPartition(BROWSER_PANEL_PARTITION);
-    await browserSession.cookies.set({
+    // The key goes on as a cookie, never into the renderer: the computer's
+    // control centre is a web page, and a page authenticates itself with a
+    // cookie rather than with a token in its address.
+    //
+    // `SameSite=None` because the control centre is embedded in a frame that
+    // belongs to the app, and the app is a different site from localhost.
+    // `Secure` is allowed on localhost, which Chromium treats as a secure
+    // context, so the cookie is accepted.
+    const cookie = {
       url: endpoint.baseUrl,
       name: 'cb_key',
       value: endpoint.token,
       path: '/',
-    });
+      sameSite: 'none',
+      secure: true,
+    };
+    await session.defaultSession.cookies.set(cookie);
+    await session.fromPartition(BROWSER_PANEL_PARTITION).cookies.set(cookie);
     log.info('[electron] computer access granted', { baseUrl: endpoint.baseUrl, source: endpoint.name });
   } catch (error) {
     log.warn('[electron] computer access was not granted', { error: error?.message });

@@ -117,7 +117,12 @@ export const ComposerAttachmentControls = React.memo(function ComposerAttachment
                                 <Icon name="attachment-2" className={menuIconClass} />
                                 {t('chat.chatInput.actions.attachFiles')}
                             </DropdownMenuItem>
-                            {props.onOpenPersonalTool ? (['sketch', 'document', 'spreadsheet', 'presentation', 'pdf', 'templates', 'library', 'teach', 'sites', 'references', 'notion'] as const).map((tool) => (
+                            {/* The creation options a person reaches for. The
+                                others — document, spreadsheet, presentation,
+                                PDF, templates — stay out of the menu: the
+                                agent can still use them, and the menu is
+                                for the things worth one click. */}
+                            {props.onOpenPersonalTool ? (['sketch', 'library', 'teach', 'sites', 'references', 'notion'] as const).map((tool) => (
                                 <DropdownMenuItem key={tool} onSelect={() => requestAnimationFrame(() => props.onOpenPersonalTool?.(tool))}>
                                     <Icon name={PERSONAL_TOOL_ICONS[tool]} className={personalToolIconClass(tool)} style={personalToolIconStyle(tool)} />
                                     {t(`workspace.${tool}`)}

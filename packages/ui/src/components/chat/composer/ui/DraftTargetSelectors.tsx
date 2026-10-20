@@ -40,6 +40,7 @@ import { useI18n } from '@/lib/i18n';
 import { matchesRankQuery, rankByQuery } from '@/lib/search/fuzzySearch';
 import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
 import { folderFriendAppearance, folderFriendKey } from '@/lib/friends';
+import { allChatsFriendName } from '@/lib/allChatsFriend';
 import { useChatsRoot } from '@/hooks/useChatsRoot';
 import { HomeFriendAvatar } from '@/components/chat/HomeFriendAvatar';
 import { useFriendProfiles } from '@/hooks/useFriendProfiles';
@@ -170,6 +171,10 @@ function useDirtyFlashTooltip(hasUncommittedChanges: boolean, announce: boolean)
 
 export function DraftTargetSelectors(props: DraftTargetProps) {
     const { t } = useI18n();
+    // A chat with no folder is the All Chats friend, not an unnamed choice.
+    const friendProfiles = useFriendProfiles();
+    const chatsRoot = useChatsRoot();
+    const allChatsName = allChatsFriendName(friendProfiles, chatsRoot) ?? t('chat.chatInput.allChats');
     const dirtyTooltip = useDirtyFlashTooltip(props.hasUncommittedChanges, props.announceDirtyState);
     const {
         projects,
@@ -340,7 +345,7 @@ export function DraftTargetSelectors(props: DraftTargetProps) {
                 >
                     <span className="flex min-w-0 items-center gap-1.5">
                         {selectedProject.kind === 'chat'
-                            ? <span className="truncate typography-ui-label">{t('chat.chatInput.chooseProject')}</span>
+                            ? <span className="truncate typography-ui-label">{allChatsName}</span>
                             : <ProjectLabel project={selectedProject} theme={theme} />}
                         <Icon name="arrow-down-s" className="size-4 shrink-0 opacity-50" />
                     </span>
@@ -531,8 +536,11 @@ export function MobileDraftTargetTriggers(
     props: Pick<DraftTargetProps, 'selectedProject' | 'selectedBranchLabel' | 'showBranchSelector' | 'theme'>
         & { onOpenPicker: (picker: 'project' | 'branch') => void },
 ) {
-    const { t } = useI18n();
     const { selectedProject, selectedBranchLabel, showBranchSelector, theme, onOpenPicker } = props;
+    const { t } = useI18n();
+    const friendProfiles = useFriendProfiles();
+    const chatsRoot = useChatsRoot();
+    const allChatsName = allChatsFriendName(friendProfiles, chatsRoot) ?? t('chat.chatInput.allChats');
 
     return (
         <div className="mb-1.5 flex min-w-0 items-center gap-x-2 px-0.5">
@@ -542,7 +550,7 @@ export function MobileDraftTargetTriggers(
                 onClick={() => onOpenPicker('project')}
             >
                 {selectedProject.kind === 'chat'
-                    ? <span className="truncate typography-ui-label">{t('chat.chatInput.chooseProject')}</span>
+                    ? <span className="truncate typography-ui-label">{allChatsName}</span>
                     : <ProjectLabel project={selectedProject} theme={theme} />}
                 <Icon name="arrow-down-s" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
             </button>

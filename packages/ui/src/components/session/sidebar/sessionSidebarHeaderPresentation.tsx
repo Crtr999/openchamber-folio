@@ -5,6 +5,7 @@ import { useI18n } from '@/lib/i18n';
 import { folderFriendAppearance } from '@/lib/friends';
 import { useFriendProfiles } from '@/hooks/useFriendProfiles';
 import { useChatsRoot } from '@/hooks/useChatsRoot';
+import { useFolderActivity } from '@/hooks/useFolderActivity';
 import { HomeFriendAvatar } from '@/components/chat/HomeFriendAvatar';
 import type { SessionSidebarActivityKey } from './sessionSidebarRowModel';
 
@@ -19,6 +20,7 @@ const ACTIVITY_TITLE_KEY = {
 
 export const SessionSidebarActivityHeader: React.FC<{
   activityKey: SessionSidebarActivityKey;
+
   collapsed: boolean;
   forceExpanded: boolean;
   alwaysShowActions: boolean;
@@ -33,10 +35,13 @@ export const SessionSidebarActivityHeader: React.FC<{
   const { t } = useI18n();
   const chats = activityKey === 'chats';
   const title = titleOverride?.trim() || t(ACTIVITY_TITLE_KEY[activityKey]);
-  // All Chats is a friend: the section heading carries its face.
+  // All Chats is a friend: the section heading carries its face, and it moves
+  // while a conversation in it is working, exactly like the folder rows.
   const friendProfiles = useFriendProfiles();
   const chatsRoot = useChatsRoot();
   const friendLook = chats && chatsRoot ? folderFriendAppearance(friendProfiles, chatsRoot) : null;
+  const activity = useFolderActivity(chats ? chatsRoot : null);
+  const activityWorking = chats && activity.working;
   if (timelineView) {
     // Timeline zone header: no icon, text flush with the rows' left edge, and
     // an always-visible chevron right after the title showing collapse state.
@@ -65,8 +70,8 @@ export const SessionSidebarActivityHeader: React.FC<{
     >
       {/* A friend replaces the area's own mark: the face is the mark. */}
       {friendLook ? (
-        <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
-          <HomeFriendAvatar body={friendLook.body} color={friendLook.color} className="size-3.5" />
+        <span className="oc-friend-activity relative inline-flex size-5 shrink-0 items-center justify-center" data-working={activityWorking ? 'true' : undefined}>
+          <HomeFriendAvatar body={friendLook.body} color={friendLook.color} className="size-5" />
         </span>
       ) : (
         <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
