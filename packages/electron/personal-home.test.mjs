@@ -24,7 +24,7 @@ async function fixture(options = {}) {
     const body = JSON.parse(request.body); calls.push(body);
     if (body.method === 'notifications/initialized') return new Response(null, { status: 202 });
     if (body.method === 'initialize') return Response.json({ result: { protocolVersion: '2025-06-18' } });
-    if (body.method === 'tools/list') { const names = ['get_tool_access', 'fetch', 'query_data_sources', 'update_page', 'create_pages', ...(options.deleteTool ? ['delete_page'] : [])]; const wraps = (name) => options.wrappedUpdates && (name === 'update_page' || name === 'query_data_sources' || name === 'delete_page'); return Response.json({ result: { tools: names.map((name) => { const advertised = { properties: name === 'delete_page' ? { page_id: { type: 'string' } } : {} }; return { name, inputSchema: wraps(name) ? { properties: { data: advertised } } : advertised }; }) } }); }
+    if (body.method === 'tools/list') { const names = ['get_tool_access', 'fetch', 'query_data_sources', 'update_page', 'create_pages', 'search', 'list_recent_pages', ...(options.deleteTool ? ['delete_page'] : [])]; const wraps = (name) => options.wrappedUpdates && (name === 'update_page' || name === 'query_data_sources' || name === 'delete_page'); return Response.json({ result: { tools: names.map((name) => { const advertised = { properties: name === 'delete_page' ? { page_id: { type: 'string' } } : {} }; return { name, inputSchema: wraps(name) ? { properties: { data: advertised } } : advertised }; }) } }); }
     const name = body.params.name;
     let result;
     if (name === 'get_tool_access') result = { current_tool_access: { query_data_sources: { status: 'available' } } };
@@ -37,6 +37,8 @@ async function fixture(options = {}) {
         : { results: [{ url: 'https://www.notion.so/28d13d2f13da80859015c65c62d969c6', 'Task name': 'Example', Status: 'To do',
           'date:Due:start': options.dates?.dueStart ?? null, 'date:Due:end': options.dates?.dueEnd ?? null, 'date:Due:is_datetime': options.dates?.dueIsDatetime ?? null }], has_more: false };
     }
+    else if (name === 'search') result = { results: options.searchResults ?? [{ url: 'https://www.notion.so/Weekly-Planning-28d13d2f13da80859015c65c62d969c6', title: 'Weekly Planning', last_edited_time: '2026-10-19T12:00:00.000Z' }], has_more: false };
+    else if (name === 'list_recent_pages') result = { results: options.recentResults ?? [] };
     else { if (name === 'update_page' && options.failMove) return Response.json({ result: { isError: true, content: [] } }); if ((name === 'update_page' || name === 'delete_page') && options.wrappedUpdates) { assert.deepEqual(Object.keys(body.params.arguments), ['data']); assert.match(body.params.arguments.data.page_id, /^[0-9a-f]{32}$/); } result = { saved: true }; }
     return Response.json({ result: { content: [{ type: 'text', text: JSON.stringify(result) }] } });
   };
@@ -67,10 +69,48 @@ test('Habit view reads select the local day and only fetched checkbox fields can
     assert.deepEqual(f.calls.find((call) => call.params?.name === 'update_page').params.arguments.properties, { Pray: '__YES__' });
   } finally { await f.clean(); }
 });
+test('Notion page search returns page metadata for the composer picker, never a page body', async () => {
+  const f = await fixture(); try {
+    const result = await f.service.handle({ action: 'search', query: 'planning' });
+    assert.equal(result.connected, true);
+    assert.equal(result.pages.length, 1);
+    assert.equal(result.pages[0].title, 'Weekly Planning');
+    assert.equal(result.pages[0].id, '28d13d2f13da80859015c65c62d969c6');
+    assert.equal(result.pages[0].url, 'https://www.notion.so/28d13d2f13da80859015c65c62d969c6');
+    assert.equal(result.pages[0].lastEdited, '2026-10-19T12:00:00.000Z');
+    assert.equal(Object.keys(result.pages[0]).includes('content'), false);
+    assert.deepEqual(f.calls.find((call) => call.params?.name === 'search').params.arguments, { query: 'planning', query_type: 'internal' });
+  } finally { await f.clean(); }
+});
+test('Notion search drops results that are not pages and falls back to a title from the URL', async () => {
+  const f = await fixture({ searchResults: [
+    { url: 'https://www.notion.so/Quarterly-Notes-1a2b3c4d5e6f708192a3b4c5d6e7f809', title: 'Quarterly Notes' },
+    { url: 'https://www.notion.so/Not-A-Page' },
+  ] }); try {
+    const result = await f.service.handle({ action: 'search', query: 'notes' });
+    assert.equal(result.pages.length, 1);
+    assert.equal(result.pages[0].title, 'Quarterly Notes');
+  } finally { await f.clean(); }
+});
+test('An empty Notion query lists recently opened pages', async () => {
+  const f = await fixture({ recentResults: [{ url: 'https://www.notion.so/28d13d2f13da80859015c65c62d969c6', title: 'Example' }] }); try {
+    const result = await f.service.handle({ action: 'search', query: '' });
+    assert.equal(result.pages.length, 1);
+    assert.equal(result.pages[0].title, 'Example');
+    assert.equal(f.calls.find((call) => call.params?.name === 'list_recent_pages') !== undefined, true);
+  } finally { await f.clean(); }
+});
+test('A disconnected Notion reports itself instead of an empty result set', async () => {
+  const f = await fixture({ connected: false }); try {
+    const result = await f.service.handle({ action: 'search', query: 'planning' });
+    assert.deepEqual(result, { connected: false, pages: [] });
+    assert.equal(f.calls.length, 0);
+  } finally { await f.clean(); }
+});
 test('Enterprise policy refuses every Notion entry before network egress; Calendar and disconnect remain available', async () => {
   const f = await fixture(); try {
     f.block();
-    for (const action of ['status', 'connect', 'configure', 'board', 'habits', 'habit', 'start-day', 'move', 'create-task', 'rename-task', 'delete-task', 'export']) await assert.rejects(f.service.handle({ action }), /enterprise/);
+    for (const action of ['status', 'connect', 'configure', 'search', 'board', 'habits', 'habit', 'start-day', 'move', 'create-task', 'rename-task', 'delete-task', 'export']) await assert.rejects(f.service.handle({ action }), /enterprise/);
     assert.equal(f.calls.length, 0);
     assert.equal((await f.service.handle({ action: 'calendar', op: 'read' })).access, 'unsupported');
     await f.service.handle({ action: 'disconnect' });

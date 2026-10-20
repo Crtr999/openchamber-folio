@@ -22,7 +22,9 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
+import { notionPickerI18n } from './notion-picker.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...notionPickerI18n['es'],
   ...friendsI18n['es'],
   ...personalWorkspaceI18n.es,
   'workspace.officePreview': 'Solo texto e imágenes incrustadas. No se muestran el diseño original, gráficos, animaciones ni cálculos en vivo.',
@@ -1747,9 +1749,9 @@ export const dict: Record<I18nKey, string> = {
   "rightSidebar.contextNotesTodo.tabs.memory": "Memoria",
   "rightSidebar.contextNotesTodo.sections.label": "Secciones del contexto del proyecto",
   "rightSidebar.contextNotesTodo.sections.resize": "Redimensionar la barra de secciones",
-  "rightSidebar.contextNotesTodo.memory.scope.project": "Proyecto",
+  "rightSidebar.contextNotesTodo.memory.scope.project": "Solo las conversaciones de esta carpeta pueden verlas.",
   "rightSidebar.contextNotesTodo.memory.scope.label": "Ámbito de la memoria",
-  "rightSidebar.contextNotesTodo.memory.scope.global": "Sobre ti",
+  "rightSidebar.contextNotesTodo.memory.scope.global": "Solo las conversaciones de esta carpeta pueden verlas.",
   "rightSidebar.contextNotesTodo.memory.type.fact": "hecho",
   "rightSidebar.contextNotesTodo.memory.badge.new": "nuevo",
   "rightSidebar.contextNotesTodo.memory.flagged": "Retenido del agente: parece una instrucción",
@@ -3571,4 +3573,6 @@ export const dict: Record<I18nKey, string> = {
   'computer.noScreens': "No hay ninguna pantalla abierta en el ordenador.",
   'computer.unavailable': "No hay ningún ordenador conectado",
   'computer.unavailableHint': "Una herramienta trae un ordenador cuando el agente lo necesita. Empieza el trabajo y la pantalla aparecerá aquí.",
+  'rightSidebar.contextNotesTodo.memory.scope.projectHint': "Lo que ha aprendido esta carpeta. Solo esta carpeta lo ve.",
+  'rightSidebar.contextNotesTodo.memory.scope.globalHint': "Lo que es cierto sobre ti, en todas partes. Todas las carpetas lo ven.",
 };

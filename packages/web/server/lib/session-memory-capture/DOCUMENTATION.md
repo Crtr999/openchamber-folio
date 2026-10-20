@@ -48,6 +48,19 @@ folder — is a project scope like any other, so All Chats keeps a memory of its
 own and shares none of it with any folder. The only store every project reads
 is the global one, which the agent alone writes.
 
+## Which model does the reading
+
+The model the small-model service resolves, asked for by name. The service
+resolves the conversation's own provider first and falls back to the cheap
+default when that provider has no small model of its own; the capture then
+asks for the model that was resolved.
+
+Forcing the conversation's provider was wrong twice over: a provider a
+conversation ran on is often one that cannot serve a generation at all — the
+free tier a session runs on is exactly such a provider — and the folder's
+binding, not the conversation, is what should decide. The first version of
+this forced it, and every capture failed.
+
 ## What it will not do
 
 - **It never reads a folder through a provider the folder is bound away from.**
@@ -88,10 +101,11 @@ Two switches, and they are not the same thing:
 
 ## What is not proven
 
-The capture is driven by the same small model the recap uses, and it inherits
-that service's provider and credential rules. It has not been run against a
-live OpenCode in this repository's test suite: the tests drive the runtime
-with an injected client and an injected model, which proves the wiring and the
-refusals, not the quality of what a real model distils. A capture that stores
-the wrong thing is corrected the way any memory is corrected — the panel, or
-the agent saving the same memory again.
+The capture has been run end to end against the live app: it read a real
+conversation, distilled four durable preferences from it, and wrote them into
+the folder's project store, where the next conversation in that folder will be
+told about them. The tests drive the runtime with an injected client and an
+injected model, which proves the wiring and the refusals rather than the
+quality of what a real model distils. A capture that stores the wrong thing
+is corrected the way any memory is corrected — the panel, or the agent saving
+the same memory again.

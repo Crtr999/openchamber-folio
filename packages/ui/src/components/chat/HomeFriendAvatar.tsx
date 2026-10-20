@@ -18,6 +18,12 @@ const figures = {
     peak: { outline: <polygon points="32,13 54,51 10,51" {...rounded} stroke="currentColor" />, eyes: [27, 37, 39] },
     capsule: { outline: <rect x="5" y="15" width="54" height="35" rx="17.5" />, eyes: [25, 39, 32] },
     bean: { outline: <path d="M19 10C29 5 35 15 44 13C54 11 60 22 58 35C56 49 44 58 30 57C15 56 6 45 7 31C8 21 12 13 19 10Z" />, eyes: [26, 40, 33] },
+    crystal: { outline: <polygon points="32,4 54,24 45,54 19,54 10,24" {...rounded} stroke="currentColor" />, eyes: [27, 37, 34] },
+    crown: { outline: <path d="M8 49L12 15L25 31L32 9L39 31L52 15L56 49Z" {...rounded} stroke="currentColor" />, eyes: [26, 38, 36] },
+    crescent: { outline: <path d="M41 6A26 26 0 1 0 41 58A21 21 0 1 1 41 6Z" />, eyes: [21, 30, 32] },
+    bolt: { outline: <path d="M38 3L12 37H27L23 61L52 25H35L38 3Z" {...rounded} stroke="currentColor" />, eyes: [27, 37, 27] },
+    shield: { outline: <path d="M32 4L55 12V31C55 44 45 55 32 60C19 55 9 44 9 31V12Z" />, eyes: [26, 38, 29] },
+    heart: { outline: <path d="M32 58C8 40 4 24 14 14C22 5 32 13 32 23C32 13 42 5 50 14C60 24 56 40 32 58Z" />, eyes: [26, 38, 27] },
 } satisfies Record<FriendBody, { outline: React.ReactNode; eyes: readonly [number, number, number] }>;
 
 /** Decorative friend face: a soft body in a theme color with two small eyes. */

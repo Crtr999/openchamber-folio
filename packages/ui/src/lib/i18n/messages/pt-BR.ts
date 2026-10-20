@@ -22,7 +22,9 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
+import { notionPickerI18n } from './notion-picker.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...notionPickerI18n['pt-BR'],
   ...friendsI18n['pt-BR'],
   ...personalWorkspaceI18n['pt-BR'],
   'workspace.officePreview': 'Somente texto e imagens incorporadas. O layout original, gráficos, animações e cálculos ao vivo não são exibidos.',
@@ -1747,9 +1749,9 @@ export const dict: Record<I18nKey, string> = {
   "rightSidebar.contextNotesTodo.tabs.memory": "Memória",
   "rightSidebar.contextNotesTodo.sections.label": "Seções do contexto do projeto",
   "rightSidebar.contextNotesTodo.sections.resize": "Redimensionar a barra de seções",
-  "rightSidebar.contextNotesTodo.memory.scope.project": "Projeto",
+  "rightSidebar.contextNotesTodo.memory.scope.project": "Só as conversas desta pasta podem ver estes.",
   "rightSidebar.contextNotesTodo.memory.scope.label": "Escopo da memória",
-  "rightSidebar.contextNotesTodo.memory.scope.global": "Sobre você",
+  "rightSidebar.contextNotesTodo.memory.scope.global": "Só as conversas desta pasta podem ver estes.",
   "rightSidebar.contextNotesTodo.memory.type.fact": "fato",
   "rightSidebar.contextNotesTodo.memory.badge.new": "novo",
   "rightSidebar.contextNotesTodo.memory.flagged": "Retido do agente — parece uma instrução",
@@ -3571,4 +3573,6 @@ export const dict: Record<I18nKey, string> = {
   'computer.noScreens': "Nenhuma tela está aberta no computador.",
   'computer.unavailable': "Nenhum computador conectado",
   'computer.unavailableHint': "Uma ferramenta traz um computador quando o agente precisa de um. Comece o trabalho e a tela aparece aqui.",
+  'rightSidebar.contextNotesTodo.memory.scope.projectHint': "O que esta pasta aprendeu. Só esta pasta vê.",
+  'rightSidebar.contextNotesTodo.memory.scope.globalHint': "O que é verdade sobre você, em todo lugar. Toda pasta vê.",
 };

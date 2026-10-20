@@ -21,7 +21,9 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
+import { notionPickerI18n } from './notion-picker.i18n';
 export const dict = {
+  ...notionPickerI18n['de'],
   ...friendsI18n['de'],
   ...personalWorkspaceI18n.de,
   'workspace.officePreview': 'Nur Text und eingebettete Bilder. Originallayout, Diagramme, Animationen und laufende Berechnungen werden nicht dargestellt.',
@@ -1579,9 +1581,9 @@ export const dict = {
   'rightSidebar.contextNotesTodo.tabs.memory': 'Gedächtnis',
   'rightSidebar.contextNotesTodo.sections.label': 'Bereiche des Projektkontexts',
   'rightSidebar.contextNotesTodo.sections.resize': 'Breite der Bereichsleiste ändern',
-  'rightSidebar.contextNotesTodo.memory.scope.project': 'Projekt',
+  'rightSidebar.contextNotesTodo.memory.scope.project': 'Nur Gespräche in diesem Ordner sehen diese.',
   'rightSidebar.contextNotesTodo.memory.scope.label': 'Gedächtnisbereich',
-  'rightSidebar.contextNotesTodo.memory.scope.global': 'Über Sie',
+  'rightSidebar.contextNotesTodo.memory.scope.global': 'Nur Gespräche in diesem Ordner sehen diese.',
   'rightSidebar.contextNotesTodo.memory.type.fact': 'Fakt',
   'rightSidebar.contextNotesTodo.memory.badge.new': 'neu',
   'rightSidebar.contextNotesTodo.memory.flagged': 'Vom Agenten zurückgehalten — liest sich wie eine Anweisung',
@@ -3568,4 +3570,6 @@ export const dict = {
   'computer.noScreens': "Auf dem Computer ist kein Bildschirm geöffnet.",
   'computer.unavailable': "Kein Computer verbunden",
   'computer.unavailableHint': "Ein Werkzeug bringt einen Computer mit, wenn der Agent ihn braucht. Beginne die Arbeit, und der Bildschirm erscheint hier.",
+  'rightSidebar.contextNotesTodo.memory.scope.projectHint': "Was dieser Ordner gelernt hat. Nur dieser Ordner sieht es.",
+  'rightSidebar.contextNotesTodo.memory.scope.globalHint': "Was über dich gilt, überall. Jeder Ordner sieht es.",
 };

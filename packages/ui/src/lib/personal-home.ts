@@ -179,6 +179,17 @@ export async function exportHomeChat(session: Session, roles: { user: string; as
 /** Save a meeting (summary, notes, transcript) as a page under the saved-chats Notion page. */
 export const exportMeetingToNotion = (title: string, content: string) => invoke({ action: 'export', title, content });
 
+const notionPageSchema = z.object({ id: z.string(), url: z.string(), title: z.string(), lastEdited: z.string().nullable() });
+export type NotionPageSummary = z.infer<typeof notionPageSchema>;
+const notionSearchResultSchema = z.object({ connected: z.boolean(), pages: z.array(notionPageSchema) });
+/**
+ * Read-only page lookup for the composer's @ picker. Metadata only: the page
+ * body is fetched live by the agent through the Notion MCP tools. A
+ * disconnected Notion is reported as such, never as an empty result set.
+ */
+export const searchNotionPages = async (query: string): Promise<z.infer<typeof notionSearchResultSchema>> =>
+  notionSearchResultSchema.parse(await invoke({ action: 'search', query }));
+
 const habitsSchema = z.object({ day: z.string(), page: z.string().nullable(), items: z.array(z.object({ name: z.string(), checked: z.boolean() })) });
 export type HomeHabits = z.infer<typeof habitsSchema>;
 export const readHomeHabits = async (day: string) => habitsSchema.parse(await invoke({ action: 'habits', day }));

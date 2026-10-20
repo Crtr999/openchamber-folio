@@ -3,7 +3,7 @@ import type { Agent } from '@/lib/opencode/model';
 import { providerBindingFromFolderName } from './projectProviderBinding';
 
 /** Avatar shapes drawn by `HomeFriendAvatar`; ids are persisted, so only append. */
-export const FRIEND_BODIES = ['blob', 'pebble', 'cloud', 'drop', 'squircle', 'hex', 'star', 'flower', 'ghost', 'peak', 'capsule', 'bean'] as const;
+export const FRIEND_BODIES = ['blob', 'pebble', 'cloud', 'drop', 'squircle', 'hex', 'star', 'flower', 'ghost', 'peak', 'capsule', 'bean', 'crystal', 'crown', 'crescent', 'bolt', 'shield', 'heart'] as const;
 /** Theme color roles an avatar may use; ids are persisted, so only append. */
 export const FRIEND_COLORS = ['primary', 'keyword', 'type', 'function', 'number', 'string', 'operator', 'variable', 'success', 'comment'] as const;
 export type FriendBody = (typeof FRIEND_BODIES)[number];

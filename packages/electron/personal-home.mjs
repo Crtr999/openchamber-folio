@@ -88,6 +88,15 @@ const requireClosedNotesCode = (content) => {
   if (fence) throw new Error('Close the code block in your notes before saving, so it cannot absorb the task results. Your draft is still here.');
 };
 const renameTaskSchema = z.object({ page: z.string().min(1), title: z.string().trim().min(1).max(500) });
+// Search and recent-page results carry the same page fields under `results`.
+const notionPageListSchema = z.object({
+  results: z.array(z.object({
+    url: z.string().min(1),
+    title: z.string().optional(),
+    last_edited_time: z.string().optional(),
+    type: z.string().optional(),
+  })).default([]),
+});
 const deleteTaskSchema = z.object({ page: z.string().min(1) });
 const exportSchema = z.object({ title: z.string().min(1).max(500), content: z.string().min(1).max(500000) });
 const deleteToolCandidates = ['delete-page', 'delete-pages', 'archive-page', 'move-to-trash'];
@@ -98,6 +107,28 @@ export function notionPageId(value) {
   const id = value.match(/(?:^|[/\-])([0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:[?#]|$)/i)?.[1];
   if (!id) throw new Error('Choose a valid Notion page ID or page URL.');
   return id;
+}
+
+/**
+ * The canonical workspace URL for a page, or null when the value is not a page
+ * reference. Search results arrive as browser URLs carrying a title slug;
+ * hosted fetch only takes the canonical form.
+ */
+function canonicalNotionPage(value) {
+  const id = value.match(/([0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i)?.[1];
+  if (!id) return null;
+  const canonical = id.replaceAll('-', '').toLowerCase();
+  return { id: canonical, url: `https://www.notion.so/${canonical}` };
+}
+
+/** A page title from the URL slug, for results that carry no title of their own. */
+function notionTitleFromUrl(value) {
+  try {
+    const slug = decodeURIComponent(new URL(value).pathname.split('/').filter(Boolean).pop() ?? '');
+    return slug.replace(/-[0-9a-f]{32}$/i, '').replace(/[-_]+/g, ' ').trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 export function parseBoardSource(text) {
@@ -500,6 +531,35 @@ export function createPersonalHome({ filePath, safeStorage, openExternal, isBloc
     invalidateReads();
     return { saved: true };
   };
+  /**
+   * Read-only page lookup for the composer's @ picker.
+   *
+   * Metadata only. The page body is fetched live by the agent through the
+   * Notion MCP tools, so neither the picker nor the message carries a copy of
+   * a page that is already stale. An empty query lists the pages the user
+   * opened most recently, which is what the picker shows before they type.
+   */
+  const searchPages = async (raw) => {
+    const query = z.object({ query: z.string().max(200).default('') }).parse(raw).query.trim();
+    const result = query
+      ? await tool('search', { query, query_type: 'internal' })
+      : await tool('list-recent-pages', {});
+    const parsed = notionPageListSchema.safeParse(result);
+    if (!parsed.success) throw new Error('Notion did not return readable page results.');
+    const pages = [];
+    for (const entry of parsed.data.results) {
+      const page = canonicalNotionPage(entry.url);
+      if (!page) continue;
+      pages.push({
+        id: page.id,
+        url: page.url,
+        title: entry.title?.trim() || notionTitleFromUrl(entry.url) || 'Untitled',
+        lastEdited: entry.last_edited_time ?? null,
+      });
+    }
+    return pages.slice(0, 24);
+  };
+
   const automation = {
     async prepareCreateBoard() {
       // Authenticate and discover capabilities before the durable creation
@@ -684,6 +744,11 @@ export function createPersonalHome({ filePath, safeStorage, openExternal, isBloc
         cachedBoard = undefined;
         cachedHabits = undefined;
         return { saved: true };
+      }
+      if (action === 'search') {
+        // Disconnected is its own answer, not an empty result set.
+        if (!current.token) return { connected: false, pages: [] };
+        return { connected: true, pages: await searchPages(raw) };
       }
       if (action === 'board') return shareBoardRead('daily', () => board(false).catch((error) => { sourceReads.clear(); throw error; }));
       if (action === 'habits') return habits(z.object({ day: z.string() }).parse(raw).day);

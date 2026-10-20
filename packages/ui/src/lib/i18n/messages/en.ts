@@ -21,7 +21,9 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
+import { notionPickerI18n } from './notion-picker.i18n';
 export const dict = {
+  ...notionPickerI18n['en'],
   ...friendsI18n['en'],
   ...personalWorkspaceI18n.en,
   'workspace.officePreview': 'Text and embedded images only. Original layout, charts, animations, and live calculations are not rendered.',
@@ -1769,9 +1771,9 @@ export const dict = {
   'rightSidebar.contextNotesTodo.tabs.memory': 'Memory',
   'rightSidebar.contextNotesTodo.sections.label': 'Project context sections',
   'rightSidebar.contextNotesTodo.sections.resize': 'Resize sections sidebar',
-  'rightSidebar.contextNotesTodo.memory.scope.project': 'Project',
+  'rightSidebar.contextNotesTodo.memory.scope.project': 'Only conversations in this folder can see these.',
   'rightSidebar.contextNotesTodo.memory.scope.label': 'Memory scope',
-  'rightSidebar.contextNotesTodo.memory.scope.global': 'About you',
+  'rightSidebar.contextNotesTodo.memory.scope.global': 'Only conversations in this folder can see these.',
   'rightSidebar.contextNotesTodo.memory.type.fact': 'fact',
   'rightSidebar.contextNotesTodo.memory.badge.new': 'new',
   'rightSidebar.contextNotesTodo.memory.flagged': 'Withheld from the agent — reads as an instruction',
@@ -3570,6 +3572,8 @@ export const dict = {
   'computer.noScreens': "No screen is open on the computer.",
   'computer.unavailable': "No computer is connected",
   'computer.unavailableHint': "A tool brings a computer when the agent needs one. Start the work and the screen appears here.",
+  'rightSidebar.contextNotesTodo.memory.scope.projectHint': "What this folder has learned. Only this folder sees it.",
+  'rightSidebar.contextNotesTodo.memory.scope.globalHint': "What is true about you, everywhere. Every folder sees it.",
 } as const;
 
 export type I18nKey = keyof typeof dict;

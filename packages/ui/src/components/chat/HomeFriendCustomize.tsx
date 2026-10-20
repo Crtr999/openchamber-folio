@@ -74,33 +74,42 @@ export function HomeFriendCustomize({ target, onClose, onSave }: { target: Frien
         catch (failure) { setError(failure instanceof FriendRevisionConflict ? t('friends.saveConflict') : t('friends.saveFailed')); }
     };
     return <Dialog open={Boolean(target)} onOpenChange={open => { if (!open) onClose(); }}>
-        <DialogContent ref={popup} className="oc-friend-customize max-h-[85vh] max-w-md gap-5 overflow-y-auto" data-testid="friend-customize">
+        {/* A side panel that opens beside the friend, not a modal over
+            everything: the page behind stays readable, and the panel is tall
+            and narrow rather than short and centred. */}
+        <DialogContent
+            ref={popup}
+            layerClassName="justify-end p-3"
+            backdropProps={{ className: 'bg-transparent' }}
+            className="oc-friend-customize h-full max-h-full w-[min(500px,100%)] max-w-none gap-5 overflow-y-auto p-5"
+            data-testid="friend-customize"
+        >
             <DialogHeader><DialogTitle>{t('friends.customizeTitle')}</DialogTitle><DialogDescription>{t('friends.customizeDescription')}</DialogDescription></DialogHeader>
             {draft && target && <form className="flex flex-col gap-4" onSubmit={save}>
                 <div className="oc-friend-preview">
-                    <HomeFriendAvatar key={`${draft.body}:${draft.color}`} body={draft.body} color={draft.color} className="size-24" label={t('friends.preview', { name: name || target.name })} />
-                    <p className="text-xs text-muted-foreground">{draft.role?.trim() || target.role}</p>
+                    <HomeFriendAvatar key={`${draft.body}:${draft.color}`} body={draft.body} color={draft.color} className="size-28" label={t('friends.preview', { name: name || target.name })} />
+                    <p className="text-sm text-muted-foreground">{draft.role?.trim() || target.role}</p>
                 </div>
-                <label className="flex flex-col gap-1.5 text-sm font-medium">{t('friends.name')}
+                <label className="flex flex-col gap-1.5 text-[13px] font-medium">{t('friends.name')}
                     <Input value={draft.name} maxLength={32} required autoFocus onChange={event => setDraft({ ...draft, name: event.target.value })} />
                 </label>
-                {target.folderLabel && <label className="flex flex-col gap-1.5 text-sm font-medium">Role & specialty
+                {target.folderLabel && <label className="flex flex-col gap-1.5 text-[13px] font-medium">Role & specialty
                     <Input value={draft.role ?? ''} maxLength={80} placeholder={target.role} onChange={event => setDraft({ ...draft, role: event.target.value })} />
                 </label>}
-                <fieldset className="flex flex-col gap-2"><legend className="mb-2 text-sm font-medium">{t('friends.body')}</legend>
+                <fieldset className="flex flex-col gap-2"><legend className="mb-2 text-[13px] font-medium">{t('friends.body')}</legend>
                     <div className="oc-friend-body-grid">{FRIEND_BODIES.map((body, index) => <Button key={body} type="button" variant="chip" size="icon"
-                        className="oc-friend-option size-12" aria-pressed={draft.body === body} aria-label={t('friends.bodyOption', { number: index + 1 })}
-                        onClick={() => setDraft({ ...draft, body })}><HomeFriendAvatar body={body} color={draft.color} className="size-8" /></Button>)}</div>
+                        className="oc-friend-option size-14" aria-pressed={draft.body === body} aria-label={t('friends.bodyOption', { number: index + 1 })}
+                        onClick={() => setDraft({ ...draft, body })}><HomeFriendAvatar body={body} color={draft.color} className="size-10" /></Button>)}</div>
                 </fieldset>
-                <fieldset className="flex flex-col gap-2"><legend className="mb-2 text-sm font-medium">{t('friends.color')}</legend>
+                <fieldset className="flex flex-col gap-2"><legend className="mb-2 text-[13px] font-medium">{t('friends.color')}</legend>
                     <div className="flex flex-wrap gap-2">{FRIEND_COLORS.map((color, index) => <Button key={color} type="button" variant="chip" size="icon"
-                        className="oc-friend-swatch size-8 rounded-full" aria-pressed={draft.color === color} aria-label={t('friends.colorOption', { number: index + 1 })}
-                        onClick={() => setDraft({ ...draft, color })}><span aria-hidden="true" className="size-5 rounded-full" style={{ background: friendColorVariable(color) }} /></Button>)}</div>
+                        className="oc-friend-swatch size-9 rounded-full" aria-pressed={draft.color === color} aria-label={t('friends.colorOption', { number: index + 1 })}
+                        onClick={() => setDraft({ ...draft, color })}><span aria-hidden="true" className="size-6 rounded-full" style={{ background: friendColorVariable(color) }} /></Button>)}</div>
                 </fieldset>
                 {memoryPath && (
                     <section className="flex flex-col gap-2">
-                        <h4 className="text-sm font-medium">{t('friends.customizeMemory')}</h4>
-                        <p className="text-[11px] text-muted-foreground">{t('friends.customizeMemoryHint')}</p>
+                        <h4 className="text-[13px] font-medium">{t('friends.customizeMemory')}</h4>
+                        <p className="text-xs text-muted-foreground">{t('friends.customizeMemoryHint')}</p>
                         <div className="max-h-72 overflow-y-auto rounded-lg border border-border/60 p-2">
                             <MemorySection projectPath={memoryPath} query="" />
                         </div>

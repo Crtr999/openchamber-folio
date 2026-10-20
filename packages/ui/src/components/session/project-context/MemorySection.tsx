@@ -238,6 +238,15 @@ export const MemorySection: React.FC<{
           </Button>
         ))}
       </div>
+      {/* Which store is being read, and who can see it. The two stores are the
+          whole difference between a folder's memory and a note about the user,
+          so the panel says which one is open rather than leaving two chips to
+          be guessed at. */}
+      <p className="typography-meta text-muted-foreground">
+        {scope === 'global'
+          ? t('rightSidebar.contextNotesTodo.memory.scope.globalHint')
+          : t('rightSidebar.contextNotesTodo.memory.scope.projectHint')}
+      </p>
 
       {scope === 'project' && !projectPath ? (
         <p className="typography-meta text-muted-foreground">

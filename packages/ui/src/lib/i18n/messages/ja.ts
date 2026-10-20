@@ -22,7 +22,9 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
+import { notionPickerI18n } from './notion-picker.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...notionPickerI18n['ja'],
   ...friendsI18n['ja'],
   ...personalWorkspaceI18n.ja,
   'workspace.officePreview': 'テキストと埋め込み画像のみ表示します。元のレイアウト、グラフ、アニメーション、リアルタイムの計算は表示しません。',
@@ -1765,9 +1767,9 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.tabs.memory': 'メモリ',
   'rightSidebar.contextNotesTodo.sections.label': 'プロジェクトコンテキストのセクション',
   'rightSidebar.contextNotesTodo.sections.resize': 'セクションサイドバーの幅を変更',
-  'rightSidebar.contextNotesTodo.memory.scope.project': 'プロジェクト',
+  'rightSidebar.contextNotesTodo.memory.scope.project': 'このフォルダの会話だけがこれらを見ます。',
   'rightSidebar.contextNotesTodo.memory.scope.label': 'メモリの範囲',
-  'rightSidebar.contextNotesTodo.memory.scope.global': 'あなたについて',
+  'rightSidebar.contextNotesTodo.memory.scope.global': 'このフォルダの会話だけがこれらを見ます。',
   'rightSidebar.contextNotesTodo.memory.type.fact': '事実',
   'rightSidebar.contextNotesTodo.memory.badge.new': '新規',
   'rightSidebar.contextNotesTodo.memory.flagged': 'エージェントには渡されません — 指示のように読めます',
@@ -3570,4 +3572,6 @@ export const dict: Record<I18nKey, string> = {
   'computer.noScreens': "コンピューターに開いている画面はありません。",
   'computer.unavailable': "コンピューターが接続されていません",
   'computer.unavailableHint': "エージェントが必要としたとき、ツールがコンピューターを持ち込みます。作業を始めるとここに画面が現れます。",
+  'rightSidebar.contextNotesTodo.memory.scope.projectHint': "このフォルダが学んだこと。このフォルダだけが知っています。",
+  'rightSidebar.contextNotesTodo.memory.scope.globalHint': "あなたについて全国どこでも通用すること。すべてのフォルダが知っています。",
 };

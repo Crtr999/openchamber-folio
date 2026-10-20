@@ -22,7 +22,9 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
+import { notionPickerI18n } from './notion-picker.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...notionPickerI18n['zh-CN'],
   ...friendsI18n['zh-CN'],
   ...personalWorkspaceI18n['zh-CN'],
   'workspace.officePreview': '仅显示文本和嵌入图像，不呈现原始布局、图表、动画或实时计算。',
@@ -1735,9 +1737,9 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.tabs.memory': '记忆',
   'rightSidebar.contextNotesTodo.sections.label': '项目上下文分区',
   'rightSidebar.contextNotesTodo.sections.resize': '调整分区侧栏宽度',
-  'rightSidebar.contextNotesTodo.memory.scope.project': '项目',
+  'rightSidebar.contextNotesTodo.memory.scope.project': '只有这个文件夹里的对话能看到这些。',
   'rightSidebar.contextNotesTodo.memory.scope.label': '记忆范围',
-  'rightSidebar.contextNotesTodo.memory.scope.global': '关于你',
+  'rightSidebar.contextNotesTodo.memory.scope.global': '只有这个文件夹里的对话能看到这些。',
   'rightSidebar.contextNotesTodo.memory.type.fact': '事实',
   'rightSidebar.contextNotesTodo.memory.badge.new': '新增',
   'rightSidebar.contextNotesTodo.memory.flagged': '不会发送给智能体 — 读起来像指令',
@@ -3571,4 +3573,6 @@ export const dict: Record<I18nKey, string> = {
   'computer.noScreens': "电脑上没有打开任何屏幕。",
   'computer.unavailable': "没有连接电脑",
   'computer.unavailableHint': "当代理需要时，工具会带上一台电脑。开始工作，屏幕就会出现在这里。",
+  'rightSidebar.contextNotesTodo.memory.scope.projectHint': "这个文件夹学到的东西。只有这个文件夹看得到。",
+  'rightSidebar.contextNotesTodo.memory.scope.globalHint': "关于你、在任何地方都成立的事。每个文件夹都看得到。",
 };

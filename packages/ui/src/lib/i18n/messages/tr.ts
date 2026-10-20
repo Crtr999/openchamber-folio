@@ -21,7 +21,9 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
+import { notionPickerI18n } from './notion-picker.i18n';
 export const dict = {
+  ...notionPickerI18n['tr'],
   ...personalWorkspaceI18n.tr,
   'workspace.officePreview': 'Yalnızca metin ve gömülü görüntüler. Özgün düzen, grafikler, animasyonlar ve canlı hesaplamalar gösterilmez.',
   ...friendsI18n['tr'],
@@ -1730,9 +1732,9 @@ export const dict = {
   'rightSidebar.contextNotesTodo.tabs.memory': 'Hafıza',
   'rightSidebar.contextNotesTodo.sections.label': 'Proje bağlamı bölümleri',
   'rightSidebar.contextNotesTodo.sections.resize': 'Bölüm kenar çubuğunu yeniden boyutlandır',
-  'rightSidebar.contextNotesTodo.memory.scope.project': 'Proje',
+  'rightSidebar.contextNotesTodo.memory.scope.project': 'Bunları yalnızca bu klasördeki sohbetler görür.',
   'rightSidebar.contextNotesTodo.memory.scope.label': 'Hafıza kapsamı',
-  'rightSidebar.contextNotesTodo.memory.scope.global': 'Senin hakkında',
+  'rightSidebar.contextNotesTodo.memory.scope.global': 'Bunları yalnızca bu klasördeki sohbetler görür.',
   'rightSidebar.contextNotesTodo.memory.type.fact': 'olgu',
   'rightSidebar.contextNotesTodo.memory.badge.new': 'yeni',
   'rightSidebar.contextNotesTodo.memory.flagged': 'Agent\'tan gizleniyor — talimat gibi okunuyor',
@@ -3568,4 +3570,6 @@ export const dict = {
   'computer.noScreens': "Bilgisayarda açık bir ekran yok.",
   'computer.unavailable': "Bağlı bilgisayar yok",
   'computer.unavailableHint': "Ajan bir bilgisayara ihtiyaç duyduğunda araç onu getirir. İşe başlayın, ekran burada görünür.",
+  'rightSidebar.contextNotesTodo.memory.scope.projectHint': "Bu klasörün öğrendikleri. Bunu yalnızca bu klasör görür.",
+  'rightSidebar.contextNotesTodo.memory.scope.globalHint': "Senin hakkında her yerde geçerli olan. Her klasör görür.",
 };

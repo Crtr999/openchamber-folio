@@ -282,7 +282,7 @@
 .oc-friends-heading > h2 { margin: 0; font: inherit; color: inherit; }
 .oc-friends-folder { flex-shrink: 1; }
 .oc-friends-folder [data-slot="select-value"] { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.oc-friend-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
+.oc-friend-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(216px, 1fr)); gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
 .oc-friend-card {
     position: relative;
     min-width: 0;
@@ -327,17 +327,19 @@
 }
 .oc-friend-card-text { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 1px; }
 /* Leave room for the corner actions so they never cover the name. */
-.oc-friend-card-name, .oc-friend-card-role { padding-inline-end: 52px; }
-.oc-friend-card-name { overflow: hidden; color: var(--surface-elevated-foreground); font-size: 13px; font-weight: 500; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
-.oc-friend-card-role { overflow: hidden; color: var(--surface-muted-foreground); font-size: 10.5px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
-.oc-friend-card-status { display: flex; min-width: 0; align-items: center; gap: 5px; margin-top: 3px; color: var(--surface-muted-foreground); font-size: 11px; line-height: 1.4; }
+/* The name gets the whole width of the block and wraps to a second line
+   rather than being cut to an ellipsis. The corner actions sit at the bottom
+   of the card now, so they no longer steal the name's first line. */
+.oc-friend-card-name { overflow: hidden; color: var(--surface-elevated-foreground); font-size: 13.5px; font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; }
+.oc-friend-card-role { overflow: hidden; color: var(--surface-muted-foreground); font-size: 11px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.oc-friend-card-status { display: flex; min-width: 0; align-items: center; gap: 5px; margin-top: 3px; padding-inline-end: 46px; color: var(--surface-muted-foreground); font-size: 11px; line-height: 1.4; }
 .oc-friend-card-status[data-kind="working"], .oc-friend-card-status[data-kind="retrying"] { color: var(--surface-elevated-foreground); }
 .oc-friend-status-dot { flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--status-success); animation: oc-friend-pulse 1.6s ease-in-out infinite; }
 [data-kind="retrying"] > .oc-friend-status-dot { background: var(--status-warning); }
 @keyframes oc-friend-pulse { 50% { opacity: 0.35; } }
 .oc-friend-card-actions {
     position: absolute;
-    top: 5px;
+    bottom: 5px;
     right: 5px;
     display: flex;
     gap: 2px;

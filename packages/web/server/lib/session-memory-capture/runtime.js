@@ -197,14 +197,22 @@ export const createSessionMemoryCaptureRuntime = ({
       const prompt = buildCapturePrompt(pending, described.inputCharBudget - system.length - 512);
       if (!prompt) { skip('the conversation did not fit the budget'); return; }
 
+      /**
+       * The model the service resolved, asked for by name.
+       *
+       * Forcing the conversation's own provider was wrong twice over: the
+       * provider a conversation ran on is often one that cannot serve a
+       * generation at all, and the folder's binding is what should decide.
+       * The model above was resolved with the conversation's provider first
+       * and only then fell back, and the binding check above has already
+       * refused anything the folder is not allowed to use.
+       */
       const generated = await generateSmallModelText({
         prompt: prompt.text,
         system,
         directory,
         sessionID: sessionId,
-        preferredProviderID,
-        preferredModelID,
-        restrictToPreferredProvider: true,
+        model: `${described.providerID}/${described.modelID}`,
         onOverflow: 'error',
         timeoutMs: GENERATION_TIMEOUT_MS,
         signal: controller.signal,
@@ -240,7 +248,9 @@ export const createSessionMemoryCaptureRuntime = ({
       if (stored > 0) announce(projectId);
     } catch (error) {
       if (!controller.signal.aborted) {
-        console.warn('[session-memory-capture] capture failed');
+        // The reason matters: a capture that fails for a reason nobody can see
+        // is a capture that never gets fixed.
+        console.warn(`[session-memory-capture] capture failed: ${error?.message ?? error}`);
       }
     } finally {
       inflight.delete(sessionId);

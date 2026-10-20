@@ -22,7 +22,9 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
+import { notionPickerI18n } from './notion-picker.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...notionPickerI18n['pl'],
   ...friendsI18n['pl'],
   ...personalWorkspaceI18n.pl,
   'workspace.officePreview': 'Tylko tekst i osadzone obrazy. Oryginalny układ, wykresy, animacje i bieżące obliczenia nie są odtwarzane.',
@@ -2856,9 +2858,9 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.tabs.memory': 'Pamięć',
   'rightSidebar.contextNotesTodo.sections.label': 'Sekcje kontekstu projektu',
   'rightSidebar.contextNotesTodo.sections.resize': 'Zmień szerokość paska sekcji',
-  'rightSidebar.contextNotesTodo.memory.scope.project': 'Projekt',
+  'rightSidebar.contextNotesTodo.memory.scope.project': 'Widzą je tylko rozmowy w tym folderze.',
   'rightSidebar.contextNotesTodo.memory.scope.label': 'Zakres pamięci',
-  'rightSidebar.contextNotesTodo.memory.scope.global': 'O Tobie',
+  'rightSidebar.contextNotesTodo.memory.scope.global': 'Widzą je tylko rozmowy w tym folderze.',
   'rightSidebar.contextNotesTodo.memory.type.fact': 'fakt',
   'rightSidebar.contextNotesTodo.memory.badge.new': 'nowe',
   'rightSidebar.contextNotesTodo.memory.flagged': 'Wstrzymane — czyta się jak instrukcja',
@@ -3575,4 +3577,6 @@ export const dict: Record<I18nKey, string> = {
   'computer.noScreens': "Na komputerze nie otwarto żadnego ekranu.",
   'computer.unavailable': "Brak podłączonego komputera",
   'computer.unavailableHint': "Narzędzie przynosi komputer, gdy agent go potrzebuje. Rozpocznij pracę, a ekran pojawi się tutaj.",
+  'rightSidebar.contextNotesTodo.memory.scope.projectHint': "Czego nauczył się ten folder. Widzi to tylko ten folder.",
+  'rightSidebar.contextNotesTodo.memory.scope.globalHint': "Co jest prawdą o tobie, wszędzie. Widzi to każdy folder.",
 } as const;

@@ -22,7 +22,9 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
+import { notionPickerI18n } from './notion-picker.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...notionPickerI18n['ko'],
   ...friendsI18n['ko'],
   ...personalWorkspaceI18n.ko,
   'workspace.officePreview': '텍스트와 포함된 이미지만 표시합니다. 원래 레이아웃, 차트, 애니메이션, 실시간 계산은 표시하지 않습니다.',
@@ -1771,9 +1773,9 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.tabs.memory': '메모리',
   'rightSidebar.contextNotesTodo.sections.label': '프로젝트 컨텍스트 섹션',
   'rightSidebar.contextNotesTodo.sections.resize': '섹션 사이드바 너비 조절',
-  'rightSidebar.contextNotesTodo.memory.scope.project': '프로젝트',
+  'rightSidebar.contextNotesTodo.memory.scope.project': '이 폴더의 대화만 이것을 봅니다.',
   'rightSidebar.contextNotesTodo.memory.scope.label': '메모리 범위',
-  'rightSidebar.contextNotesTodo.memory.scope.global': '사용자 정보',
+  'rightSidebar.contextNotesTodo.memory.scope.global': '이 폴더의 대화만 이것을 봅니다.',
   'rightSidebar.contextNotesTodo.memory.type.fact': '사실',
   'rightSidebar.contextNotesTodo.memory.badge.new': '신규',
   'rightSidebar.contextNotesTodo.memory.flagged': '에이전트에 전달되지 않음 — 지시문처럼 읽힘',
@@ -3570,4 +3572,6 @@ export const dict: Record<I18nKey, string> = {
   'computer.noScreens': "컴퓨터에 열린 화면이 없습니다.",
   'computer.unavailable': "연결된 컴퓨터가 없습니다",
   'computer.unavailableHint': "에이전트가 필요로 할 때 도구가 컴퓨터를 가져옵니다. 작업을 시작하면 여기에 화면이 나타납니다.",
+  'rightSidebar.contextNotesTodo.memory.scope.projectHint': "이 폴더가 배운 것. 이 폴더만 봅니다.",
+  'rightSidebar.contextNotesTodo.memory.scope.globalHint': "당신에 대해 어디에서나 맞는 것. 모든 폴더가 봅니다.",
 };

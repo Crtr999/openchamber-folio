@@ -21,7 +21,9 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
+import { notionPickerI18n } from './notion-picker.i18n';
 export const dict = {
+  ...notionPickerI18n['nl'],
   ...personalWorkspaceI18n.nl,
   'workspace.officePreview': 'Alleen tekst en ingesloten afbeeldingen. Oorspronkelijke opmaak, grafieken, animaties en liveberekeningen worden niet weergegeven.',
   ...friendsI18n['nl'],
@@ -1769,9 +1771,9 @@ export const dict = {
   'rightSidebar.contextNotesTodo.tabs.memory': 'Geheugen',
   'rightSidebar.contextNotesTodo.sections.label': 'Secties met projectcontext',
   'rightSidebar.contextNotesTodo.sections.resize': 'Grootte van de sectiezijbalk aanpassen',
-  'rightSidebar.contextNotesTodo.memory.scope.project': 'Project',
+  'rightSidebar.contextNotesTodo.memory.scope.project': 'Alleen gesprekken in deze map zien deze.',
   'rightSidebar.contextNotesTodo.memory.scope.label': 'Geheugenbereik',
-  'rightSidebar.contextNotesTodo.memory.scope.global': 'Over u',
+  'rightSidebar.contextNotesTodo.memory.scope.global': 'Alleen gesprekken in deze map zien deze.',
   'rightSidebar.contextNotesTodo.memory.type.fact': 'feit',
   'rightSidebar.contextNotesTodo.memory.badge.new': 'nieuw',
   'rightSidebar.contextNotesTodo.memory.flagged': 'Achtergehouden voor de agent — leest als een instructie',
@@ -3570,4 +3572,6 @@ export const dict = {
   'computer.noScreens': "Er is geen scherm geopend op de computer.",
   'computer.unavailable': "Geen computer verbonden",
   'computer.unavailableHint': "Een tool brengt een computer mee wanneer de agent er een nodig heeft. Begin het werk en het scherm verschijnt hier.",
+  'rightSidebar.contextNotesTodo.memory.scope.projectHint': "Wat deze map heeft geleerd. Alleen deze map ziet het.",
+  'rightSidebar.contextNotesTodo.memory.scope.globalHint': "Wat over jou waar geldt, overal. Elke map ziet het.",
 } as const;

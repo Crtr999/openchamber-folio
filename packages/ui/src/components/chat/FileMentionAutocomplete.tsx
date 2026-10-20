@@ -8,6 +8,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useChatSearchDirectory } from '@/hooks/useChatSearchDirectory';
 import type { ProjectFileSearchHit } from '@/lib/opencode/client';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { Button } from '@/components/ui/button';
 import { Icon } from "@/components/icon/Icon";
 import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
@@ -17,7 +18,8 @@ import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight
 import { mentionServerQuery, rankFileMentionResults } from './fileMentionResults';
 import { matchesRankQuery, rankByQuery } from '@/lib/search/fuzzySearch';
 import { AutocompleteRowTooltip } from './composer/ui/AutocompleteRowTooltip';
-import { usePersonalReferences, type PersonalReference } from '@/lib/personal-workspace/references';
+import { usePersonalReferences, useNotionReferences, type PersonalReference } from '@/lib/personal-workspace/references';
+import { personalHomeSupported, connectHomeNotion } from '@/lib/personal-home';
 
 type FileInfo = ProjectFileSearchHit;
 type AgentInfo = {
@@ -50,7 +52,14 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
 }, ref) => {
   const { t } = useI18n();
   const personal = usePersonalReferences(searchQuery);
-  const references = React.useMemo(() => onReferenceSelect ? personal.references : [], [onReferenceSelect, personal.references]);
+  // Notion pages come from the desktop app's own Notion connection, so the
+  // picker only offers them where that connection exists.
+  const notionEnabled = Boolean(onReferenceSelect) && personalHomeSupported();
+  const notion = useNotionReferences(searchQuery, { enabled: notionEnabled });
+  const references = React.useMemo(() => {
+    if (!onReferenceSelect) return [];
+    return [...notion.references, ...personal.references];
+  }, [onReferenceSelect, notion.references, personal.references]);
   const currentDirectory = useChatSearchDirectory() ?? '';
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const activeProjectPath = useProjectsStore(
@@ -448,6 +457,26 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
             <span className="min-w-0 flex-1"><span className="block truncate font-medium">{reference.title}</span><span className="block truncate typography-meta text-muted-foreground">{reference.detail}</span></span>
           </button>)}
         </div>}
+        {notionEnabled && notion.loading && (
+          <div className="flex items-center gap-2 px-3 py-2 typography-meta text-muted-foreground">
+            <Icon name="refresh" className="h-3.5 w-3.5 animate-spin" />
+            {t('chat.fileMentionAutocomplete.notionSearching')}
+          </div>
+        )}
+        {notionEnabled && !notion.loading && !notion.connected && !notion.error && (
+          <div className="flex items-center justify-between gap-2 px-3 py-2">
+            <span className="typography-meta text-muted-foreground">{t('chat.fileMentionAutocomplete.notionNotConnected')}</span>
+            <Button variant="outline" size="xs" className="!font-normal" onClick={() => void connectHomeNotion()}>
+              {t('chat.fileMentionAutocomplete.notionConnect')}
+            </Button>
+          </div>
+        )}
+        {notionEnabled && !notion.loading && notion.connected && !notion.error && notion.references.length === 0 && (
+          <p role="status" className="px-3 py-1 typography-meta text-muted-foreground">{t('chat.fileMentionAutocomplete.notionNoResults')}</p>
+        )}
+        {notionEnabled && notion.error && (
+          <p role="status" className="px-3 py-1 typography-meta text-destructive">{notion.error}</p>
+        )}
         {personal.error && <p role="status" className="px-3 py-1 typography-meta text-muted-foreground">{t('workspace.partial')}</p>}
         {loading ? (
           <div className="flex items-center justify-center py-4">

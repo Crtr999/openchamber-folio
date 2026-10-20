@@ -21,7 +21,9 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
+import { notionPickerI18n } from './notion-picker.i18n';
 export const dict = {
+  ...notionPickerI18n['fr'],
   ...friendsI18n['fr'],
   ...personalWorkspaceI18n.fr,
   'workspace.officePreview': 'Texte et images intégrées uniquement. La mise en page originale, les graphiques, animations et calculs ne sont pas reproduits.',
@@ -1521,9 +1523,9 @@ export const dict = {
   'rightSidebar.contextNotesTodo.tabs.memory': 'Mémoire',
   'rightSidebar.contextNotesTodo.sections.label': 'Sections du contexte du projet',
   'rightSidebar.contextNotesTodo.sections.resize': 'Redimensionner la barre des sections',
-  'rightSidebar.contextNotesTodo.memory.scope.project': 'Projet',
+  'rightSidebar.contextNotesTodo.memory.scope.project': 'Seules les conversations de ce dossier les voient.',
   'rightSidebar.contextNotesTodo.memory.scope.label': 'Portée de la mémoire',
-  'rightSidebar.contextNotesTodo.memory.scope.global': 'À votre sujet',
+  'rightSidebar.contextNotesTodo.memory.scope.global': 'Seules les conversations de ce dossier les voient.',
   'rightSidebar.contextNotesTodo.memory.type.fact': 'fait',
   'rightSidebar.contextNotesTodo.memory.badge.new': 'nouveau',
   'rightSidebar.contextNotesTodo.memory.flagged': 'Retenu — se lit comme une instruction',
@@ -3568,4 +3570,6 @@ export const dict = {
   'computer.noScreens': "Aucun écran n'est ouvert sur l'ordinateur.",
   'computer.unavailable': "Aucun ordinateur connecté",
   'computer.unavailableHint': "Un outil apporte un ordinateur quand l'agent en a besoin. Commencez le travail et l'écran apparaîtra ici.",
+  'rightSidebar.contextNotesTodo.memory.scope.projectHint': "Ce que ce dossier a appris. Seul ce dossier le voit.",
+  'rightSidebar.contextNotesTodo.memory.scope.globalHint': "Ce qui est vrai sur vous, partout. Tous les dossiers le voient.",
 } as const;
