@@ -25,6 +25,8 @@ import {
   type FriendProfiles,
 } from '@/lib/friends';
 import { providerBindingFromFolderName } from '@/lib/projectProviderBinding';
+import { useFolderActivity } from '@/hooks/useFolderActivity';
+import './friendActivity.css';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { CrossfadeZoneHeader } from './CrossfadeZoneHeaders';
 import { useProjectFolderMissing } from './useProjectFolderMissing';
@@ -105,10 +107,17 @@ const ProjectHeaderIdentity: React.FC<ProjectHeaderIdentityProps> = ({
   const isZdrFolder = Boolean(
     projectDirectory && providerBindingFromFolderName(projectDirectory)?.includes('openrouter-zdr'),
   );
+  // A friend is a folder, so the folder's icon is the friend. It moves while
+  // any conversation in that folder is working.
+  const activity = useFolderActivity(projectDirectory);
 
   return (
     <>
-      <span className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center">
+      <span
+        className="oc-friend-activity relative inline-flex h-4 w-4 flex-shrink-0 items-center justify-center"
+        data-working={activity.working ? 'true' : undefined}
+        data-retrying={activity.retrying ? 'true' : undefined}
+      >
         {hasCollapseControl ? (
           <span className={cn(
             'h-3.5 w-3.5 items-center justify-center text-muted-foreground',

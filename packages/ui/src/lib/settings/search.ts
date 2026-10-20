@@ -677,6 +677,15 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => !ctx.isVSCode && useUIStore.getState().agentMemoryFeatureAvailable,
   },
   {
+    id: 'sessions.folder-memory-capture',
+    page: 'general',
+    titleKey: 'settings.openchamber.tools.field.folderMemoryAutoCapture',
+    descriptionKey: 'settings.openchamber.tools.field.folderMemoryAutoCaptureInfo',
+    keywords: ['memory', 'remember', 'capture', 'folder', 'friend', 'conversation', 'openchamber'],
+    // Only rendered while the memory tool itself is on.
+    isAvailable: (ctx) => !ctx.isVSCode && useUIStore.getState().agentMemoryFeatureAvailable,
+  },
+  {
     id: 'sessions.agent-tools-code-mode',
     page: 'general',
     titleKey: 'settings.openchamber.tools.field.agentToolsCodeMode',

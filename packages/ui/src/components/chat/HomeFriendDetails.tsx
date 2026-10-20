@@ -23,6 +23,7 @@ import { morphFrom } from '@/lib/motion';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { HomeFriendAvatar } from './HomeFriendAvatar';
 import { HomeFriendsWork } from './HomeFriendsWork';
+import { FriendMemorySection } from './FriendMemorySection';
 
 type RulesConfiguration = Awaited<ReturnType<typeof opencodeClient.getRulesConfiguration>>;
 export type FriendDetailsTarget = {
@@ -506,6 +507,15 @@ export function HomeFriendDetails({
                             configuration={configuration}
                             onSaved={() => onRefreshFolder?.()}
                         />
+                    </details>
+                )}
+
+                {project && (
+                    <details className="oc-friend-section">
+                        <summary>{t('friends.memory')}</summary>
+                        <div className="pt-1">
+                            <FriendMemorySection projectPath={project.path} />
+                        </div>
                     </details>
                 )}
 

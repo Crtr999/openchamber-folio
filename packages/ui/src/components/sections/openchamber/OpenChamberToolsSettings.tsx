@@ -91,6 +91,8 @@ export const OpenChamberToolsSettings: React.FC = () => {
   // visible switch invites turning on something that was never announced.
   const agentMemoryAvailable = useUIStore((state) => state.agentMemoryFeatureAvailable);
   const setAgentMemoryToolEnabled = useUIStore((state) => state.setAgentMemoryToolEnabled);
+  const folderMemoryAutoCapture = useUIStore((state) => state.folderMemoryAutoCapture);
+  const setFolderMemoryAutoCapture = useUIStore((state) => state.setFolderMemoryAutoCapture);
   const agentNotifyToolEnabled = useUIStore((state) => state.agentNotifyToolEnabled);
   const setAgentNotifyToolEnabled = useUIStore((state) => state.setAgentNotifyToolEnabled);
   const agentToolsCodeMode = useUIStore((state) => state.agentToolsCodeMode);
@@ -150,6 +152,13 @@ export const OpenChamberToolsSettings: React.FC = () => {
         }
       });
   }, [setAgentMemoryToolEnabled]);
+
+  // The capture writes to disk on its own, so it has a switch of its own:
+  // turning it off leaves the memory the agent keeps itself untouched.
+  const handleFolderMemoryAutoCaptureChange = React.useCallback((enabled: boolean) => {
+    setFolderMemoryAutoCapture(enabled);
+    void updateDesktopSettings({ folderMemoryAutoCapture: enabled });
+  }, [setFolderMemoryAutoCapture]);
 
   return (
     <SettingsSection title={t('settings.openchamber.tools.title')}>
@@ -239,6 +248,19 @@ export const OpenChamberToolsSettings: React.FC = () => {
             summary={t('settings.openchamber.tools.field.agentMemoryToolSummary')}
             info={t('settings.openchamber.tools.field.agentMemoryToolInfo')}
             ariaLabel={t('settings.openchamber.tools.field.agentMemoryToolAria')}
+          />
+        ) : null}
+
+        {agentMemoryAvailable ? (
+          <ToolRow
+            icon="brain-4"
+            settingsItem="sessions.folder-memory-capture"
+            checked={folderMemoryAutoCapture}
+            onChange={handleFolderMemoryAutoCaptureChange}
+            title={t('settings.openchamber.tools.field.folderMemoryAutoCapture')}
+            summary={t('settings.openchamber.tools.field.folderMemoryAutoCaptureSummary')}
+            info={t('settings.openchamber.tools.field.folderMemoryAutoCaptureInfo')}
+            ariaLabel={t('settings.openchamber.tools.field.folderMemoryAutoCaptureAria')}
           />
         ) : null}
       </div>

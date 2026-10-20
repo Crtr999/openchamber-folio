@@ -627,6 +627,9 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.agentMemoryToolEnabled === 'boolean') {
       result.agentMemoryToolEnabled = candidate.agentMemoryToolEnabled;
     }
+    if (typeof candidate.folderMemoryAutoCapture === 'boolean') {
+      result.folderMemoryAutoCapture = candidate.folderMemoryAutoCapture;
+    }
     if (typeof candidate.agentNotifyToolEnabled === 'boolean') {
       result.agentNotifyToolEnabled = candidate.agentNotifyToolEnabled;
     }

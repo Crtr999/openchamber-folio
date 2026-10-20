@@ -1,3 +1,4 @@
+import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
 import { claudeI18n } from './claude.i18n';
 import { meetingsI18n } from './meetings.i18n';
@@ -23,6 +24,7 @@ import { personalWorkspaceI18n } from './personal-workspace.i18n';
 export const dict = {
   ...personalWorkspaceI18n.tr,
   'workspace.officePreview': 'Yalnızca metin ve gömülü görüntüler. Özgün düzen, grafikler, animasyonlar ve canlı hesaplamalar gösterilmez.',
+  ...friendsI18n['tr'],
   ...chatgptI18n['tr'],
   ...claudeI18n.tr,
   ...meetingsI18n.tr,

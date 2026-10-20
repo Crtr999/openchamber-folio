@@ -1,0 +1,63 @@
+/* The friend icon, alive while its folder is working.
+ *
+ * A friend is a folder, so the icon next to the folder name is the only place
+ * the user can see that something in that folder is running. It moves the way
+ * the rest of the app's own motion moves: a small, continuous, unhurried
+ * motion that says "working" without saying "stuck".
+ */
+
+.oc-friend-activity {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+}
+
+.oc-friend-activity[data-working="true"] {
+    animation: oc-friend-activity-bob 1.9s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.oc-friend-activity[data-retrying="true"] {
+    animation-duration: 1.1s;
+}
+
+/* The halo behind the icon: it brightens while the folder works and settles
+   back when it does not. */
+.oc-friend-activity::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: 9999px;
+    background: radial-gradient(circle, color-mix(in srgb, var(--status-success) 34%, transparent) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 220ms cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: none;
+}
+
+.oc-friend-activity[data-working="true"]::before {
+    opacity: 1;
+    animation: oc-friend-activity-halo 1.9s ease-in-out infinite;
+}
+
+.oc-friend-activity[data-retrying="true"]::before {
+    background: radial-gradient(circle, color-mix(in srgb, var(--status-warning) 38%, transparent) 0%, transparent 70%);
+}
+
+@keyframes oc-friend-activity-bob {
+    0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+    25% { transform: translate3d(0, -1.5px, 0) rotate(-4deg); }
+    50% { transform: translate3d(0, 0, 0) rotate(0deg); }
+    75% { transform: translate3d(0, -1.5px, 0) rotate(4deg); }
+}
+
+@keyframes oc-friend-activity-halo {
+    0%, 100% { opacity: 0.45; }
+    50% { opacity: 0.9; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .oc-friend-activity,
+    .oc-friend-activity::before {
+        animation: none;
+    }
+}

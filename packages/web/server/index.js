@@ -83,6 +83,7 @@ import { createSessionRuntime } from './lib/opencode/session-runtime.js';
 import { configureOpenCodeRuntimeProviders, resetOpenCodeRuntimeProviders } from './lib/small-model/client.js';
 import { createOpenCodeWatcherRuntime } from './lib/opencode/watcher.js';
 import { createSessionAssistRuntime } from './lib/session-assist/runtime.js';
+import { createSessionMemoryCaptureRuntime } from './lib/session-memory-capture/runtime.js';
 import { createSessionGoalRuntime } from './lib/session-goal/runtime.js';
 import { createContextObligatoryRuntime } from './lib/context-obligatory/runtime.js';
 import { createLinearSessionStatusRuntime } from './lib/linear/status-runtime.js';
@@ -122,7 +123,7 @@ import { createProjectContextRuntime } from './lib/project-context/runtime.js';
 import { createAgentMemoryRuntime } from './lib/agent-memory/runtime.js';
 import { createAgentMemoryActions } from './lib/agent-memory/actions.js';
 import { createMemoryProjectResolver } from './lib/agent-memory/project-resolution.js';
-import { isAgentMemoryFeatureAvailable } from './lib/agent-memory/feature-flag.js';
+import { isAgentMemoryFeatureAvailable, isMemoryToolEnabledBySettings } from './lib/agent-memory/feature-flag.js';
 import { createSpacesHost } from './lib/spaces/host.js';
 import { readIdleStopSetting, startIdleStop } from './lib/spaces/idle-stop.js';
 import { SPACE_IDLE_EXIT_CODE } from './lib/spaces/layout.js';
@@ -620,13 +621,13 @@ const agentMemoryRuntime = createAgentMemoryRuntime({
  * that still reads or writes the store.
  */
 const isAgentMemoryEnabled = async () => {
-  // The feature gate comes first: unreleased means absent, not merely switched
-  // off, so no stored setting can bring it back.
+  // The feature gate comes first: a build told to ship dark has no memory at
+  // all, so no stored setting can bring it back.
   if (!isAgentMemoryFeatureAvailable()) {
     return false;
   }
   const settings = await readSettingsFromDiskMigrated().catch(() => null);
-  return settings?.agentMemoryToolEnabled === true;
+  return isMemoryToolEnabledBySettings(settings);
 };
 
 // HMR-persistent state via globalThis
@@ -921,6 +922,53 @@ const sessionAssistRuntime = createSessionAssistRuntime({
   lineage: sessionLineage,
 });
 
+/**
+ * The managed chat directories: dated folders under the app's own config root.
+ * They are one shared project, not a folder of the user's, so nothing said
+ * there is filed as a folder memory.
+ */
+const isManagedChatDirectory = (directory) => {
+  if (typeof directory !== 'string' || !directory.trim()) return false;
+  const resolved = path.resolve(directory);
+  return [path.join(OPENCHAMBER_USER_CONFIG_ROOT, 'chats'), OPENCHAMBER_CHATS_DIR]
+    .map((root) => path.resolve(root))
+    .some((root) => {
+      const relative = path.relative(root, resolved);
+      return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+    });
+};
+
+/**
+ * The folder friend learns on its own: when a conversation in a folder ends,
+ * the turns since the last capture are distilled into that folder's project
+ * memory, which every later conversation in the folder is told about.
+ *
+ * Declared here so the runtimes below can use it; every dependency that is
+ * declared further down is passed as a call, never as a value.
+ */
+const sessionMemoryCaptureRuntime = createSessionMemoryCaptureRuntime({
+  buildOpenCodeUrl,
+  getOpenCodeAuthHeaders,
+  getSmallModelService: async () => import('./lib/small-model/index.js'),
+  agentMemoryRuntime,
+  isAgentMemoryEnabled,
+  // The user's switch: capture is the default, and turning it off stops the
+  // store being written without touching the memory the agent keeps itself.
+  isCaptureEnabled: async () => {
+    const settings = await readSettingsFromDiskMigrated().catch(() => null);
+    return settings?.folderMemoryAutoCapture !== false;
+  },
+  // Declared further down; only ever called after startup.
+  resolveProjectId: (directory) => resolveMemoryProjectId(directory),
+  // Declared further down; only ever called after startup.
+  onMemoryChanged: (event) => emitAgentMemoryChangedEvent(event),
+  isSessionArchived: (sessionID) => openChamberSessionService.archiveStore.isArchived(sessionID),
+  // A dated chat directory is one shared project, not one of the user's
+  // folders, and what is said there is not about a folder of theirs.
+  isCapturableDirectory: (directory) => !isManagedChatDirectory(directory),
+  lineage: sessionLineage,
+});
+
 const sessionGoalRuntime = createSessionGoalRuntime({
   buildOpenCodeUrl,
   getOpenCodeAuthHeaders,
@@ -1089,6 +1137,7 @@ globalMessageStreamHub.subscribeEvent((event) => {
     }
     sessionLineage.observe(payload);
     sessionAssistRuntime.processPayload(payload, directory || payload.properties?.directory || '');
+    sessionMemoryCaptureRuntime.processPayload(payload, directory || payload.properties?.directory || '');
     sessionWorkRuntime.processPayload(payload, directory || payload.properties?.directory || '');
     sessionGoalRuntime.processPayload(payload, directory || payload.properties?.directory || '');
     contextObligatoryRuntime.processPayload(payload, directory || payload.properties?.directory || '');
@@ -1516,7 +1565,10 @@ const emitAgentMemoryChangedEvent = (event) => {
   for (const client of uiOpenChamberEventClients) {
     try {
       writeSseEvent(client, {
-        type: 'openchamber:service-memory-changed',
+        // The name the panels listen for. It used to be
+        // `openchamber:service-memory-changed`, which nothing heard, so a
+        // memory written mid-turn did not appear until the panel was reopened.
+        type: 'openchamber:agent-memory-changed',
         properties: {
           scope: event.scope,
           ...(event.projectId ? { projectId: event.projectId } : {}),
@@ -1721,6 +1773,7 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   syncToHmrState,
   openCodeWatcherRuntime,
   sessionAssistRuntime,
+  sessionMemoryCaptureRuntime,
   sessionWorkRuntime,
   sessionGoalRuntime,
   contextObligatoryRuntime,

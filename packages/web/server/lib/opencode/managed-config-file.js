@@ -1,4 +1,5 @@
 import { appendManagedPlugin } from './managed-plugin-config.js';
+import { isMemoryToolEnabledBySettings } from '../agent-memory/feature-flag.js';
 
 export const MANAGED_CONFIG_FILE_NAME = 'opencode.managed.json';
 
@@ -80,7 +81,7 @@ export const createManagedConfigRuntime = ({
     const settings = await Promise.resolve(readSettings()).catch(() => null);
     const includeControl = settings?.agentControlToolEnabled !== false;
     const includeWeb = settings?.agentWebToolEnabled !== false;
-    const includeMemory = isAgentMemoryAvailable() && settings?.agentMemoryToolEnabled === true;
+    const includeMemory = isAgentMemoryAvailable() && isMemoryToolEnabledBySettings(settings);
     const includeNotify = settings?.agentNotifyToolEnabled === true;
     const codeMode = settings?.agentToolsCodeMode === true;
 

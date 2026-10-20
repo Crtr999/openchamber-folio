@@ -1008,6 +1008,8 @@ interface UIStore {
   /** Who answers the agent's browser actions: `builtin` (the in-app view) or an extension id. */
   browserProvider: string;
   agentMemoryToolEnabled: boolean;
+  /** Whether a finished conversation is distilled into its folder's memory on its own. */
+  folderMemoryAutoCapture: boolean;
   agentNotifyToolEnabled: boolean;
   /** Whether OpenChamber's agent tools sit behind OpenCode's Code Mode instead of being direct tools. */
   agentToolsCodeMode: boolean;
@@ -1240,6 +1242,7 @@ interface UIStore {
   setAgentWebToolEnabled: (value: boolean) => void;
   setBrowserProvider: (value: string) => void;
   setAgentMemoryToolEnabled: (value: boolean) => void;
+  setFolderMemoryAutoCapture: (value: boolean) => void;
   setAgentNotifyToolEnabled: (value: boolean) => void;
   setAgentToolsCodeMode: (value: boolean) => void;
   setIsolatedSpacesEnabled: (value: boolean) => void;
@@ -1437,7 +1440,8 @@ export const useUIStore = create<UIStore>()(
         agentControlToolEnabled: true,
         agentWebToolEnabled: true,
         browserProvider: 'builtin',
-        agentMemoryToolEnabled: false,
+        agentMemoryToolEnabled: true,
+        folderMemoryAutoCapture: true,
         agentNotifyToolEnabled: false,
         agentToolsCodeMode: false,
         isolatedSpacesEnabled: false,
@@ -2832,6 +2836,9 @@ export const useUIStore = create<UIStore>()(
         setAgentMemoryToolEnabled: (value) => {
           set({ agentMemoryToolEnabled: value });
         },
+        setFolderMemoryAutoCapture: (value) => {
+          set({ folderMemoryAutoCapture: value });
+        },
         setIsolatedSpacesEnabled: (value) => {
           set({ isolatedSpacesEnabled: value });
         },
@@ -3336,6 +3343,7 @@ export const useUIStore = create<UIStore>()(
           agentWebToolEnabled: state.agentWebToolEnabled,
           browserProvider: state.browserProvider,
           agentMemoryToolEnabled: state.agentMemoryToolEnabled,
+          folderMemoryAutoCapture: state.folderMemoryAutoCapture,
           agentNotifyToolEnabled: state.agentNotifyToolEnabled,
           agentToolsCodeMode: state.agentToolsCodeMode,
           isolatedSpacesEnabled: state.isolatedSpacesEnabled,

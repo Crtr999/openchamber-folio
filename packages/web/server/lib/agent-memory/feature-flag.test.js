@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import { isAgentMemoryFeatureAvailable } from './feature-flag.js';
+import { isAgentMemoryFeatureAvailable, isMemoryToolEnabledBySettings } from './feature-flag.js';
 
 const original = process.env.OPENCHAMBER_MEMORY_ENABLE;
 
@@ -9,10 +9,10 @@ afterEach(() => {
   else process.env.OPENCHAMBER_MEMORY_ENABLE = original;
 });
 
-describe('the unreleased feature gate', () => {
-  test('is closed when the variable is unset', () => {
+describe('the feature gate', () => {
+  test('is open when the variable is unset, because this build ships it on', () => {
     delete process.env.OPENCHAMBER_MEMORY_ENABLE;
-    expect(isAgentMemoryFeatureAvailable()).toBe(false);
+    expect(isAgentMemoryFeatureAvailable()).toBe(true);
   });
 
   test('opens for the usual truthy spellings', () => {
@@ -22,8 +22,8 @@ describe('the unreleased feature gate', () => {
     }
   });
 
-  test('stays closed for anything else, including "false"', () => {
-    for (const value of ['', '0', 'false', 'no', 'off', 'maybe']) {
+  test('closes for the usual falsy spellings', () => {
+    for (const value of ['0', 'false', 'no', 'off', ' FALSE ']) {
       process.env.OPENCHAMBER_MEMORY_ENABLE = value;
       expect(isAgentMemoryFeatureAvailable()).toBe(false);
     }
@@ -31,8 +31,24 @@ describe('the unreleased feature gate', () => {
 
   test('is read per call, so a process started with it set is what decides', () => {
     delete process.env.OPENCHAMBER_MEMORY_ENABLE;
-    expect(isAgentMemoryFeatureAvailable()).toBe(false);
-    process.env.OPENCHAMBER_MEMORY_ENABLE = '1';
     expect(isAgentMemoryFeatureAvailable()).toBe(true);
+    process.env.OPENCHAMBER_MEMORY_ENABLE = '0';
+    expect(isAgentMemoryFeatureAvailable()).toBe(false);
+  });
+});
+
+describe('the stored setting', () => {
+  test('is on when the setting is absent', () => {
+    expect(isMemoryToolEnabledBySettings(undefined)).toBe(true);
+    expect(isMemoryToolEnabledBySettings(null)).toBe(true);
+    expect(isMemoryToolEnabledBySettings({})).toBe(true);
+  });
+
+  test('is on when the setting says true', () => {
+    expect(isMemoryToolEnabledBySettings({ agentMemoryToolEnabled: true })).toBe(true);
+  });
+
+  test('is off only when the setting explicitly says false', () => {
+    expect(isMemoryToolEnabledBySettings({ agentMemoryToolEnabled: false })).toBe(false);
   });
 });

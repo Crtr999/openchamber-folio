@@ -93,6 +93,7 @@ export function HomeFriendCards({ friends, busyAgent, onOpen, onNew, onCustomize
     return <ul className="oc-friend-grid" aria-label={t('friends.title')}>{friends.map(friend => {
         const busy = Boolean(busyAgent);
         return <li key={friend.agent} className="oc-friend-card" data-friend={friend.agent} data-busy={busyAgent === friend.agent ? 'true' : undefined}
+            data-working={friend.status.kind === 'working' || friend.status.kind === 'retrying' ? 'true' : undefined}
             ref={element => { if (element) cards.current.set(friend.agent, element); else cards.current.delete(friend.agent); }}>
             <Button type="button" variant="ghost" className="oc-friend-card-main" disabled={busy}
                 aria-label={friend.specialist ? t('friends.openDetails', { name: friend.name }) : t('friends.openChat', { name: friend.name })}

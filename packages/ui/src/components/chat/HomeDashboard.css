@@ -317,6 +317,14 @@
 .oc-friend-card-main:disabled { opacity: 1; }
 .oc-friend-card-avatar { width: 40px; height: 40px; flex-shrink: 0; transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1); }
 .oc-friend-card:hover .oc-friend-card-avatar, .oc-friend-card:focus-within .oc-friend-card-avatar { transform: translate3d(0, -1px, 0) rotate(-5deg); }
+/* The friend is alive while its folder works. */
+.oc-friend-card[data-working="true"] .oc-friend-card-avatar { animation: oc-friend-card-working 1.9s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+@keyframes oc-friend-card-working {
+    0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+    25% { transform: translate3d(0, -2px, 0) rotate(-4deg); }
+    50% { transform: translate3d(0, 0, 0) rotate(0deg); }
+    75% { transform: translate3d(0, -2px, 0) rotate(4deg); }
+}
 .oc-friend-card-text { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 1px; }
 /* Leave room for the corner actions so they never cover the name. */
 .oc-friend-card-name, .oc-friend-card-role { padding-inline-end: 52px; }
@@ -356,6 +364,7 @@
 @keyframes oc-friends-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
     .oc-friend-card, .oc-friend-status-dot, .oc-friend-preview > svg, .oc-friends-spin { animation: none; }
+    .oc-friend-card[data-working="true"] .oc-friend-card-avatar { animation: none; }
     .oc-friend-card, .oc-friend-card-avatar, .oc-friend-card-actions { transition: none; }
     .oc-friend-card:hover .oc-friend-card-avatar, .oc-friend-card:focus-within .oc-friend-card-avatar, .oc-friend-card:active { transform: none; }
 }

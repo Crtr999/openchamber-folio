@@ -85,7 +85,7 @@ describe('managed OpenCode config file', () => {
     });
     await runtime.buildManagedChildEnv();
 
-    current.settings = { agentControlToolEnabled: false, agentWebToolEnabled: false };
+    current.settings = { agentControlToolEnabled: false, agentWebToolEnabled: false, agentMemoryToolEnabled: false };
     expect(await runtime.refreshManagedConfigFile()).toEqual({ updated: true });
 
     const { plugins } = await readConfigFile();
@@ -106,7 +106,8 @@ describe('managed OpenCode config file', () => {
     expect(agentToolRuntime.materializePlugin).toHaveBeenCalledWith({
       includeControl: false,
       includeWeb: true,
-      includeMemory: false,
+      // Memory is on unless the user turns it off.
+      includeMemory: true,
       includeNotify: false,
       codeMode: false,
     });
@@ -122,7 +123,7 @@ describe('managed OpenCode config file', () => {
     expect(agentToolRuntime.materializePlugin).toHaveBeenCalledWith({
       includeControl: false,
       includeWeb: false,
-      includeMemory: false,
+      includeMemory: true,
       includeNotify: true,
       codeMode: false,
     });
@@ -138,9 +139,25 @@ describe('managed OpenCode config file', () => {
     expect(agentToolRuntime.materializePlugin).toHaveBeenCalledWith({
       includeControl: true,
       includeWeb: true,
-      includeMemory: false,
+      includeMemory: true,
       includeNotify: false,
       codeMode: true,
+    });
+  });
+
+  it('leaves the memory tool out only when the user turns it off', async () => {
+    const { runtime, agentToolRuntime } = await createHarness({
+      settings: { agentMemoryToolEnabled: false },
+    });
+
+    await runtime.buildManagedChildEnv();
+
+    expect(agentToolRuntime.materializePlugin).toHaveBeenCalledWith({
+      includeControl: true,
+      includeWeb: true,
+      includeMemory: false,
+      includeNotify: false,
+      codeMode: false,
     });
   });
 

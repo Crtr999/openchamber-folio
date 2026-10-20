@@ -1,3 +1,4 @@
+import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
 import { claudeI18n } from './claude.i18n';
 import { meetingsI18n } from './meetings.i18n';
@@ -23,6 +24,7 @@ import { personalWorkspaceI18n } from './personal-workspace.i18n';
 export const dict = {
   ...personalWorkspaceI18n.nl,
   'workspace.officePreview': 'Alleen tekst en ingesloten afbeeldingen. Oorspronkelijke opmaak, grafieken, animaties en liveberekeningen worden niet weergegeven.',
+  ...friendsI18n['nl'],
   ...chatgptI18n['nl'],
   ...claudeI18n.nl,
   ...meetingsI18n.nl,

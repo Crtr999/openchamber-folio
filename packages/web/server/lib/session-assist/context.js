@@ -162,9 +162,9 @@ function collectTurns(messages, limit = TURN_LIMIT) {
   return turns.slice(-limit);
 }
 
-const settledTurns = (messages) => collectTurns(messages, Infinity)
+const settledTurns = (messages, limit = TURN_LIMIT) => collectTurns(messages, Infinity)
   .filter((turn) => turn.complete)
-  .slice(-TURN_LIMIT);
+  .slice(-limit);
 
 /**
  * The settled turns before a message that was just sent, oldest first: what a
@@ -173,7 +173,7 @@ const settledTurns = (messages) => collectTurns(messages, Infinity)
  * is not settled and is left out. Failure is thrown; an empty list means the
  * session has no settled turn yet.
  */
-export async function loadSettledTurns({ readPage, signal }) {
+export async function loadSettledTurns({ readPage, signal, limit = TURN_LIMIT }) {
   let messages = [];
   let cursor;
   const cursors = new Set();
@@ -191,14 +191,14 @@ export async function loadSettledTurns({ readPage, signal }) {
     }
     older.reverse();
     messages = older.concat(messages);
-    const settled = settledTurns(messages);
+    const settled = settledTurns(messages, limit);
     const next = typeof page.cursor?.next === 'string' ? page.cursor.next : null;
-    if (settled.length === TURN_LIMIT || !next) return settled;
+    if (settled.length === limit || !next) return settled;
     if (cursors.has(next)) throw new Error('Session message pagination made no progress');
     cursors.add(next);
     cursor = next;
   }
-  return settledTurns(messages);
+  return settledTurns(messages, limit);
 }
 
 /** Failure is thrown; null means no eligible final answer within bounded history. */
