@@ -2,6 +2,10 @@ import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
+import { folderFriendAppearance } from '@/lib/friends';
+import { useFriendProfiles } from '@/hooks/useFriendProfiles';
+import { useChatsRoot } from '@/hooks/useChatsRoot';
+import { HomeFriendAvatar } from '@/components/chat/HomeFriendAvatar';
 import type { SessionSidebarActivityKey } from './sessionSidebarRowModel';
 
 const ACTIVITY_ICON = { pinned: 'pushpin', work: 'eye', chats: 'chat-4', 'active-now': 'history', timeline: 'folder' } as const;
@@ -29,6 +33,10 @@ export const SessionSidebarActivityHeader: React.FC<{
   const { t } = useI18n();
   const chats = activityKey === 'chats';
   const title = titleOverride?.trim() || t(ACTIVITY_TITLE_KEY[activityKey]);
+  // All Chats is a friend: the section heading carries its face.
+  const friendProfiles = useFriendProfiles();
+  const chatsRoot = useChatsRoot();
+  const friendLook = chats && chatsRoot ? folderFriendAppearance(friendProfiles, chatsRoot) : null;
   if (timelineView) {
     // Timeline zone header: no icon, text flush with the rows' left edge, and
     // an always-visible chevron right after the title showing collapse state.
@@ -61,6 +69,9 @@ export const SessionSidebarActivityHeader: React.FC<{
           <Icon name={collapsed ? 'arrow-right-s' : 'arrow-down-s'} className="h-3.5 w-3.5" />
         </span> : null}
       </span>
+      {chats && friendLook ? (
+        <HomeFriendAvatar body={friendLook.body} color={friendLook.color} className="size-3.5 shrink-0" />
+      ) : null}
       <span className="typography-ui-label font-semibold text-foreground">
         {title}
       </span>

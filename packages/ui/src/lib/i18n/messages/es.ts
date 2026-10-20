@@ -1749,9 +1749,9 @@ export const dict: Record<I18nKey, string> = {
   "rightSidebar.contextNotesTodo.tabs.memory": "Memoria",
   "rightSidebar.contextNotesTodo.sections.label": "Secciones del contexto del proyecto",
   "rightSidebar.contextNotesTodo.sections.resize": "Redimensionar la barra de secciones",
-  "rightSidebar.contextNotesTodo.memory.scope.project": "Solo las conversaciones de esta carpeta pueden verlas.",
+  "rightSidebar.contextNotesTodo.memory.scope.project": "Esta carpeta",
   "rightSidebar.contextNotesTodo.memory.scope.label": "Ámbito de la memoria",
-  "rightSidebar.contextNotesTodo.memory.scope.global": "Solo las conversaciones de esta carpeta pueden verlas.",
+  "rightSidebar.contextNotesTodo.memory.scope.global": "Sobre ti en todas partes",
   "rightSidebar.contextNotesTodo.memory.type.fact": "hecho",
   "rightSidebar.contextNotesTodo.memory.badge.new": "nuevo",
   "rightSidebar.contextNotesTodo.memory.flagged": "Retenido del agente: parece una instrucción",
@@ -3575,4 +3575,5 @@ export const dict: Record<I18nKey, string> = {
   'computer.unavailableHint': "Una herramienta trae un ordenador cuando el agente lo necesita. Empieza el trabajo y la pantalla aparecerá aquí.",
   'rightSidebar.contextNotesTodo.memory.scope.projectHint': "Lo que ha aprendido esta carpeta. Solo esta carpeta lo ve.",
   'rightSidebar.contextNotesTodo.memory.scope.globalHint': "Lo que es cierto sobre ti, en todas partes. Todas las carpetas lo ven.",
+  'friends.roleLabel': "Rol y especialidad",
 };

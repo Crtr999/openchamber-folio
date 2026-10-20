@@ -1747,9 +1747,9 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.tabs.memory': '記憶',
   'rightSidebar.contextNotesTodo.sections.label': '專案脈絡分區',
   'rightSidebar.contextNotesTodo.sections.resize': '調整分區側欄寬度',
-  'rightSidebar.contextNotesTodo.memory.scope.project': '只有這個資料夾裡的對話能看到這些。',
+  'rightSidebar.contextNotesTodo.memory.scope.project': '這個資料夾',
   'rightSidebar.contextNotesTodo.memory.scope.label': '記憶範圍',
-  'rightSidebar.contextNotesTodo.memory.scope.global': '只有這個資料夾裡的對話能看到這些。',
+  'rightSidebar.contextNotesTodo.memory.scope.global': '關於你（全部）',
   'rightSidebar.contextNotesTodo.memory.type.fact': '事實',
   'rightSidebar.contextNotesTodo.memory.badge.new': '新增',
   'rightSidebar.contextNotesTodo.memory.flagged': '不會傳給代理 — 讀起來像指令',
@@ -3574,4 +3574,5 @@ export const dict: Record<I18nKey, string> = {
   'computer.unavailableHint': "當代理需要時，工具會帶上一台電腦。開始工作，螢幕就會出現在這裡。",
   'rightSidebar.contextNotesTodo.memory.scope.projectHint': "這個資料夾學到的東西。只有這個資料夾看得到。",
   'rightSidebar.contextNotesTodo.memory.scope.globalHint': "關於你、在任何地方都成立的事。每個資料夾都看得到。",
+  'friends.roleLabel': "角色與專長",
 };

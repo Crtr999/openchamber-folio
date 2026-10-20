@@ -11,10 +11,14 @@ import type { ProjectEntry } from '@/lib/api/types';
 import {
     buildGuardrailPoliciesAndPermissions,
     summarizeFolderGuardrails,
+    FriendRevisionConflict,
     type FolderGuardrailEffect,
     type FolderGuardrailState,
     type FriendAppearance,
 } from '@/lib/friends';
+import { folderFriendKey } from '@/lib/friends';
+import { useAgentMemoryStore } from '@/stores/useAgentMemoryStore';
+import { MemorySection } from '@/components/session/project-context/MemorySection';
 import { useI18n } from '@/lib/i18n';
 import type { opencodeClient } from '@/lib/opencode/client';
 import type { Agent, Session } from '@/lib/opencode/model';
@@ -23,8 +27,8 @@ import { morphFrom } from '@/lib/motion';
 import { isAllChatsProject } from '@/lib/allChatsFriend';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { HomeFriendAvatar } from './HomeFriendAvatar';
+import { FriendAppearanceEditor } from './FriendAppearanceEditor';
 import { HomeFriendsWork } from './HomeFriendsWork';
-import { FriendMemorySection } from './FriendMemorySection';
 
 type RulesConfiguration = Awaited<ReturnType<typeof opencodeClient.getRulesConfiguration>>;
 export type FriendDetailsTarget = {
@@ -386,9 +390,9 @@ export function HomeFriendDetails({
     onClose,
     onTalk,
     onSelectSession,
-    onCustomize,
     onManage,
     onRefreshFolder,
+    onSaveAppearance,
     children,
 }: {
     target: FriendDetailsTarget | null;
@@ -400,9 +404,10 @@ export function HomeFriendDetails({
     onClose: () => void;
     onTalk: (agent: string, fresh: boolean) => void;
     onSelectSession?: (sessionId: string, directory: string) => void;
-    onCustomize: (agent: string, origin: DOMRect | null) => void;
     onManage: (agent: string) => void;
     onRefreshFolder?: () => void;
+    /** Saves the friend's name, role, shape and colour. */
+    onSaveAppearance?: (key: string, draft: { name: string; role?: string } & FriendAppearance) => void;
     /** Dialogs opened from this panel, rendered inside it so they stack as nested dialogs. */
     children?: React.ReactNode;
 }) {
@@ -423,6 +428,21 @@ export function HomeFriendDetails({
     // All Chats lives in the app's own managed directory, so it has no rules
     // file and no guardrail file to edit; it has conversations and a memory.
     const allChats = isAllChatsProject(project);
+
+    /**
+     * The memory store holds one project at a time, and the panel may be
+     * showing a folder that is not the one the user is working in. It is
+     * pointed at this friend while the panel is open and put back on the way
+     * out, so the Memory tab beside it still shows the active project.
+     */
+    const loadMemory = useAgentMemoryStore((state) => state.load);
+    const activeProjectPath = useProjectsStore((state) => state.getActiveProject()?.path ?? null);
+    const memoryProjectPath = project?.path ?? null;
+    React.useEffect(() => {
+        if (!memoryProjectPath) return;
+        void loadMemory(memoryProjectPath);
+        return () => { void loadMemory(activeProjectPath); };
+    }, [loadMemory, memoryProjectPath, activeProjectPath]);
     const folderSessions = target?.sessions ?? [];
     const specialists = target?.specialists ?? [];
 
@@ -455,14 +475,19 @@ export function HomeFriendDetails({
                     <Button size="sm" variant="outline" disabled={busy || specialist} onClick={() => onTalk(agent.name, true)}>
                         <Icon name="chat-new" className="size-3.5" />{t('friends.newChat')}
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={event => onCustomize(agent.name, event.currentTarget.getBoundingClientRect())}>
-                        <Icon name="palette" className="size-3.5" />{t('friends.customize')}
-                    </Button>
                     <Button size="sm" variant="ghost" onClick={() => onManage(agent.name)}>
                         <Icon name="settings-3" className="size-3.5" />{t('friends.manage')}
                     </Button>
                 </div>
                 {error && <p role="alert" className="break-words text-sm text-[var(--status-error-text)]">{error}</p>}
+                {onSaveAppearance && (
+                    <details className="oc-friend-section" open>
+                        <summary>{t('friends.customize')}</summary>
+                        <div className="pt-1">
+                            <FriendAppearanceEditor target={{ agent: project ? folderFriendKey(project.path) : '', name: target.name, role: target.role, appearance: target.appearance }} busy={busy} onSave={onSaveAppearance} />
+                        </div>
+                    </details>
+                )}
                 <section className="space-y-1.5 text-sm">
                     <h3 className="oc-home-card-heading">{t('friends.about')}</h3>
                     <p className="whitespace-pre-wrap text-xs text-muted-foreground">
@@ -515,10 +540,10 @@ export function HomeFriendDetails({
                 )}
 
                 {project && (
-                    <details className="oc-friend-section">
+                    <details className="oc-friend-section" open>
                         <summary>{t('friends.memory')}</summary>
                         <div className="pt-1">
-                            <FriendMemorySection projectPath={project.path} />
+                            <MemorySection projectPath={project.path} query="" />
                         </div>
                     </details>
                 )}

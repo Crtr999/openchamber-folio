@@ -1749,9 +1749,9 @@ export const dict: Record<I18nKey, string> = {
   "rightSidebar.contextNotesTodo.tabs.memory": "Memória",
   "rightSidebar.contextNotesTodo.sections.label": "Seções do contexto do projeto",
   "rightSidebar.contextNotesTodo.sections.resize": "Redimensionar a barra de seções",
-  "rightSidebar.contextNotesTodo.memory.scope.project": "Só as conversas desta pasta podem ver estes.",
+  "rightSidebar.contextNotesTodo.memory.scope.project": "Esta pasta",
   "rightSidebar.contextNotesTodo.memory.scope.label": "Escopo da memória",
-  "rightSidebar.contextNotesTodo.memory.scope.global": "Só as conversas desta pasta podem ver estes.",
+  "rightSidebar.contextNotesTodo.memory.scope.global": "Sobre você, em tudo",
   "rightSidebar.contextNotesTodo.memory.type.fact": "fato",
   "rightSidebar.contextNotesTodo.memory.badge.new": "novo",
   "rightSidebar.contextNotesTodo.memory.flagged": "Retido do agente — parece uma instrução",
@@ -3575,4 +3575,5 @@ export const dict: Record<I18nKey, string> = {
   'computer.unavailableHint': "Uma ferramenta traz um computador quando o agente precisa de um. Comece o trabalho e a tela aparece aqui.",
   'rightSidebar.contextNotesTodo.memory.scope.projectHint': "O que esta pasta aprendeu. Só esta pasta vê.",
   'rightSidebar.contextNotesTodo.memory.scope.globalHint': "O que é verdade sobre você, em todo lugar. Toda pasta vê.",
+  'friends.roleLabel': "Função e especialidade",
 };

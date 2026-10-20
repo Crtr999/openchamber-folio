@@ -19,10 +19,10 @@ globalThis.fetch = Object.assign(async () => new Promise<Response>(() => {}), pr
 const { createRoot } = await import('react-dom/client');
 const { I18nProvider } = await import('@/lib/i18n');
 const { HomeFriendCards, HomeFriendsHeader } = await import('./HomeFriends');
-const { HomeFriendCustomize } = await import('./HomeFriendCustomize');
+const { FriendAppearanceEditor } = await import('./FriendAppearanceEditor');
 const { readFriendProfiles, saveFriendProfile, defaultFriendAppearance, FRIEND_BODIES, FRIEND_COLORS } = await import('@/lib/friends');
 type Cards = React.ComponentProps<typeof HomeFriendCards>['friends'];
-type Target = NonNullable<React.ComponentProps<typeof HomeFriendCustomize>['target']>;
+type Target = NonNullable<React.ComponentProps<typeof FriendAppearanceEditor>['target']>;
 
 afterAll(async () => {
     globalThis.fetch = previousFetch;
@@ -59,7 +59,7 @@ test('friend cards show face, name, role and status and route clicks to the righ
     const calls: string[] = [];
     const view = await mount(<HomeFriendCards friends={cards} busyAgent=""
         onOpen={agent => calls.push(`open:${agent}`)} onNew={agent => calls.push(`new:${agent}`)}
-        onCustomize={agent => calls.push(`customize:${agent}`)} onDetails={agent => calls.push(`details:${agent}`)} />);
+        onDetails={agent => calls.push(`details:${agent}`)} />);
     try {
         const items = [...view.host.querySelectorAll('li[data-friend]')];
         expect(items.map(item => item.getAttribute('data-friend'))).toEqual(['build', 'explore']);
@@ -78,7 +78,7 @@ test('friend cards show face, name, role and status and route clicks to the righ
         expect(button('Sage: New conversation')).toBeNull();
         expect(button('More for Sage')).not.toBeNull();
         expect(calls).toEqual(['open:build', 'new:build', 'details:explore']);
-        await view.rerender(<HomeFriendCards friends={cards} busyAgent="build" onOpen={() => {}} onNew={() => {}} onCustomize={() => {}} onDetails={() => {}} />);
+        await view.rerender(<HomeFriendCards friends={cards} busyAgent="build" onOpen={() => {}} onNew={() => {}} onDetails={() => {}} />);
         expect(button('Continue conversation with Pip')?.hasAttribute('disabled')).toBe(true);
         expect(view.host.querySelector('li[data-friend="build"]')?.getAttribute('data-busy')).toBe('true');
         expect(view.host.querySelector('li[data-friend="build"] .oc-friend-card-status')?.textContent).toContain('Opening');
@@ -105,68 +105,53 @@ function storage() {
     const values = new Map<string, string>();
     return { values, getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); } };
 }
-const target: Target = { agent: 'plan', role: 'Plan', name: 'Plan', appearance: defaultFriendAppearance('plan'), origin: null };
+const target: Target = { agent: 'plan', role: 'Plan', name: 'Plan', appearance: defaultFriendAppearance('plan') };
 
-test('customize saves the chosen look and trimmed name through the revision-checked store', async () => {
+test('the appearance editor saves the chosen look and trimmed name through the revision-checked store', async () => {
     const store = storage();
     let profiles = readFriendProfiles(store, 'local');
-    let closed = 0;
     const save = (agent: string, draft: Parameters<typeof saveFriendProfile>[3]) => { profiles = saveFriendProfile(store, 'local', agent, draft, profiles.revision); };
-    const view = await mount(<HomeFriendCustomize target={target} onClose={() => { closed++; }} onSave={save} />);
+    const view = await mount(<FriendAppearanceEditor target={target} busy={false} onSave={save} />);
     try {
-        const dialog = browser.document.querySelector('[data-testid="friend-customize"]');
-        if (!dialog) throw new Error('Customize dialog did not open');
-        expect(dialog.querySelectorAll('button[aria-label^="Shape "]')).toHaveLength(FRIEND_BODIES.length);
-        expect(dialog.querySelectorAll('button[aria-label^="Color "]')).toHaveLength(FRIEND_COLORS.length);
+        const editor = browser.document.querySelector('[data-testid="friend-customize"]');
+        if (!editor) throw new Error('The appearance editor did not open');
+        expect(editor.querySelectorAll('button[aria-label^="Shape "]')).toHaveLength(FRIEND_BODIES.length);
+        expect(editor.querySelectorAll('button[aria-label^="Color "]')).toHaveLength(FRIEND_COLORS.length);
         const body = FRIEND_BODIES.indexOf('flower') + 1;
         const color = FRIEND_COLORS.indexOf('string') + 1;
         await click(button(`Shape ${body}`));
         await click(button(`Color ${color}`));
         expect(button(`Shape ${body}`)?.getAttribute('aria-pressed')).toBe('true');
         expect(button(`Color ${color}`)?.getAttribute('aria-pressed')).toBe('true');
-        const preview = dialog.querySelector('svg[role="img"]');
+        const preview = editor.querySelector('svg[role="img"]');
         expect(preview?.getAttribute('data-body')).toBe('flower');
         expect(preview?.getAttribute('data-color')).toBe('string');
-        const input = dialog.querySelector('input');
+        const input = editor.querySelector('input');
         if (!(input instanceof browser.HTMLInputElement)) throw new Error('Missing name field');
         await act(async () => {
             const setter = Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, 'value')?.set;
             setter?.call(input, '  Atlas  ');
             input.dispatchEvent(new browser.Event('input', { bubbles: true }));
         });
-        expect(dialog.querySelector('svg[role="img"]')?.getAttribute('aria-label')).toBe('Avatar for Atlas');
-        await click([...dialog.querySelectorAll('button[type="submit"]')].at(0));
-        expect(closed).toBe(1);
+        expect(editor.querySelector('svg[role="img"]')?.getAttribute('aria-label')).toBe('Avatar for Atlas');
+        await click(editor.querySelector('[data-testid="friend-appearance-save"]'));
         expect(readFriendProfiles(store, 'local').friends).toEqual([{ agent: 'plan', name: 'Atlas', body: 'flower', color: 'string' }]);
     } finally { await view.cleanup(); }
 });
 
-test('a save conflict keeps the dialog and the draft and tells the user why', async () => {
+test('a save conflict keeps the draft and tells the user why', async () => {
     const store = storage();
     const stale = readFriendProfiles(store, 'local');
-    // Another window saves first, moving the revision past the one this dialog read.
+    // Another window saves first, moving the revision past the one this editor read.
     saveFriendProfile(store, 'local', 'build', { name: 'Bolt', body: 'blob', color: 'primary' }, 0);
-    let closed = 0;
-    const view = await mount(<HomeFriendCustomize target={target} onClose={() => { closed++; }}
-        onSave={(agent, draft) => { saveFriendProfile(store, 'local', agent, draft, stale.revision); }} />);
+    const view = await mount(<FriendAppearanceEditor target={target} busy={false}
+        onSave={(agent: string, draft: Parameters<typeof saveFriendProfile>[3]) => { saveFriendProfile(store, 'local', agent, draft, stale.revision); }} />);
     try {
+        const editor = browser.document.querySelector('[data-testid="friend-customize"]');
         await click(button('Shape 1'));
-        await click([...browser.document.querySelectorAll('[data-testid="friend-customize"] button[type="submit"]')].at(0));
-        expect(closed).toBe(0);
-        expect(browser.document.querySelector('[data-testid="friend-customize"] [role="alert"]')?.textContent).toContain('another window');
+        await click(browser.document.querySelector('[data-testid="friend-appearance-save"]'));
+        expect(editor?.querySelector('[role="alert"]')?.textContent).toContain('another window');
         expect(button('Shape 1')?.getAttribute('aria-pressed')).toBe('true');
         expect(readFriendProfiles(store, 'local').friends.map(item => item.agent)).toEqual(['build']);
-    } finally { await view.cleanup(); }
-});
-
-test('Escape closes the customize panel without saving', async () => {
-    const store = storage();
-    let closed = 0;
-    const view = await mount(<HomeFriendCustomize target={target} onClose={() => { closed++; }} onSave={() => { throw new Error('must not save'); }} />);
-    try {
-        const input = browser.document.querySelector('[data-testid="friend-customize"] input');
-        await act(async () => { input?.dispatchEvent(new browser.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); });
-        expect(closed).toBe(1);
-        expect(store.values.size).toBe(0);
     } finally { await view.cleanup(); }
 });

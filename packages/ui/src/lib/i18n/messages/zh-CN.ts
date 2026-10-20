@@ -1737,9 +1737,9 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.tabs.memory': '记忆',
   'rightSidebar.contextNotesTodo.sections.label': '项目上下文分区',
   'rightSidebar.contextNotesTodo.sections.resize': '调整分区侧栏宽度',
-  'rightSidebar.contextNotesTodo.memory.scope.project': '只有这个文件夹里的对话能看到这些。',
+  'rightSidebar.contextNotesTodo.memory.scope.project': '这个文件夹',
   'rightSidebar.contextNotesTodo.memory.scope.label': '记忆范围',
-  'rightSidebar.contextNotesTodo.memory.scope.global': '只有这个文件夹里的对话能看到这些。',
+  'rightSidebar.contextNotesTodo.memory.scope.global': '关于你（全部）',
   'rightSidebar.contextNotesTodo.memory.type.fact': '事实',
   'rightSidebar.contextNotesTodo.memory.badge.new': '新增',
   'rightSidebar.contextNotesTodo.memory.flagged': '不会发送给智能体 — 读起来像指令',
@@ -3575,4 +3575,5 @@ export const dict: Record<I18nKey, string> = {
   'computer.unavailableHint': "当代理需要时，工具会带上一台电脑。开始工作，屏幕就会出现在这里。",
   'rightSidebar.contextNotesTodo.memory.scope.projectHint': "这个文件夹学到的东西。只有这个文件夹看得到。",
   'rightSidebar.contextNotesTodo.memory.scope.globalHint': "关于你、在任何地方都成立的事。每个文件夹都看得到。",
+  'friends.roleLabel': "角色与专长",
 };

@@ -1749,9 +1749,9 @@ export const dict: Record<I18nKey, string> = {
   "rightSidebar.contextNotesTodo.tabs.memory": "Памʼять",
   "rightSidebar.contextNotesTodo.sections.label": "Розділи контексту проєкту",
   "rightSidebar.contextNotesTodo.sections.resize": "Змінити ширину бічної панелі розділів",
-  "rightSidebar.contextNotesTodo.memory.scope.project": "Ці бачать лише розмови в цій теці.",
+  "rightSidebar.contextNotesTodo.memory.scope.project": "Ця тека",
   "rightSidebar.contextNotesTodo.memory.scope.label": "Область памʼяті",
-  "rightSidebar.contextNotesTodo.memory.scope.global": "Ці бачать лише розмови в цій теці.",
+  "rightSidebar.contextNotesTodo.memory.scope.global": "Про тебе (скрізь)",
   "rightSidebar.contextNotesTodo.memory.type.fact": "факт",
   "rightSidebar.contextNotesTodo.memory.badge.new": "нове",
   "rightSidebar.contextNotesTodo.memory.flagged": "Не надсилається агенту — виглядає як інструкція",
@@ -3575,4 +3575,5 @@ export const dict: Record<I18nKey, string> = {
   'computer.unavailableHint': "Інструмент приносить комп’ютер, коли агент його потребує. Розпочніть роботу — екран з’явиться тут.",
   'rightSidebar.contextNotesTodo.memory.scope.projectHint': "Чого навчилася ця тека. Бачить це лише ця тека.",
   'rightSidebar.contextNotesTodo.memory.scope.globalHint': "Те, що є правдою про тебе, усюди. Бачать це всі теки.",
+  'friends.roleLabel': "Роль і спеціалізація",
 };

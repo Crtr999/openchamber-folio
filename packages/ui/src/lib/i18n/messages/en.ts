@@ -1771,9 +1771,9 @@ export const dict = {
   'rightSidebar.contextNotesTodo.tabs.memory': 'Memory',
   'rightSidebar.contextNotesTodo.sections.label': 'Project context sections',
   'rightSidebar.contextNotesTodo.sections.resize': 'Resize sections sidebar',
-  'rightSidebar.contextNotesTodo.memory.scope.project': 'Only conversations in this folder can see these.',
+  'rightSidebar.contextNotesTodo.memory.scope.project': 'This folder',
   'rightSidebar.contextNotesTodo.memory.scope.label': 'Memory scope',
-  'rightSidebar.contextNotesTodo.memory.scope.global': 'Only conversations in this folder can see these.',
+  'rightSidebar.contextNotesTodo.memory.scope.global': 'About you everywhere',
   'rightSidebar.contextNotesTodo.memory.type.fact': 'fact',
   'rightSidebar.contextNotesTodo.memory.badge.new': 'new',
   'rightSidebar.contextNotesTodo.memory.flagged': 'Withheld from the agent — reads as an instruction',
@@ -3574,6 +3574,7 @@ export const dict = {
   'computer.unavailableHint': "A tool brings a computer when the agent needs one. Start the work and the screen appears here.",
   'rightSidebar.contextNotesTodo.memory.scope.projectHint': "What this folder has learned. Only this folder sees it.",
   'rightSidebar.contextNotesTodo.memory.scope.globalHint': "What is true about you, everywhere. Every folder sees it.",
+  'friends.roleLabel': "Role & specialty",
 } as const;
 
 export type I18nKey = keyof typeof dict;

@@ -1523,9 +1523,9 @@ export const dict = {
   'rightSidebar.contextNotesTodo.tabs.memory': 'Mémoire',
   'rightSidebar.contextNotesTodo.sections.label': 'Sections du contexte du projet',
   'rightSidebar.contextNotesTodo.sections.resize': 'Redimensionner la barre des sections',
-  'rightSidebar.contextNotesTodo.memory.scope.project': 'Seules les conversations de ce dossier les voient.',
+  'rightSidebar.contextNotesTodo.memory.scope.project': 'Ce dossier',
   'rightSidebar.contextNotesTodo.memory.scope.label': 'Portée de la mémoire',
-  'rightSidebar.contextNotesTodo.memory.scope.global': 'Seules les conversations de ce dossier les voient.',
+  'rightSidebar.contextNotesTodo.memory.scope.global': 'À propos de vous, partout',
   'rightSidebar.contextNotesTodo.memory.type.fact': 'fait',
   'rightSidebar.contextNotesTodo.memory.badge.new': 'nouveau',
   'rightSidebar.contextNotesTodo.memory.flagged': 'Retenu — se lit comme une instruction',
@@ -3572,4 +3572,5 @@ export const dict = {
   'computer.unavailableHint': "Un outil apporte un ordinateur quand l'agent en a besoin. Commencez le travail et l'écran apparaîtra ici.",
   'rightSidebar.contextNotesTodo.memory.scope.projectHint': "Ce que ce dossier a appris. Seul ce dossier le voit.",
   'rightSidebar.contextNotesTodo.memory.scope.globalHint': "Ce qui est vrai sur vous, partout. Tous les dossiers le voient.",
+  'friends.roleLabel': "Rôle et spécialité",
 } as const;

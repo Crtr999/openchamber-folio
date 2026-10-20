@@ -2858,9 +2858,9 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.tabs.memory': 'Pamięć',
   'rightSidebar.contextNotesTodo.sections.label': 'Sekcje kontekstu projektu',
   'rightSidebar.contextNotesTodo.sections.resize': 'Zmień szerokość paska sekcji',
-  'rightSidebar.contextNotesTodo.memory.scope.project': 'Widzą je tylko rozmowy w tym folderze.',
+  'rightSidebar.contextNotesTodo.memory.scope.project': 'Ten folder',
   'rightSidebar.contextNotesTodo.memory.scope.label': 'Zakres pamięci',
-  'rightSidebar.contextNotesTodo.memory.scope.global': 'Widzą je tylko rozmowy w tym folderze.',
+  'rightSidebar.contextNotesTodo.memory.scope.global': 'O tobie, wszędzie',
   'rightSidebar.contextNotesTodo.memory.type.fact': 'fakt',
   'rightSidebar.contextNotesTodo.memory.badge.new': 'nowe',
   'rightSidebar.contextNotesTodo.memory.flagged': 'Wstrzymane — czyta się jak instrukcja',
@@ -3579,4 +3579,5 @@ export const dict: Record<I18nKey, string> = {
   'computer.unavailableHint': "Narzędzie przynosi komputer, gdy agent go potrzebuje. Rozpocznij pracę, a ekran pojawi się tutaj.",
   'rightSidebar.contextNotesTodo.memory.scope.projectHint': "Czego nauczył się ten folder. Widzi to tylko ten folder.",
   'rightSidebar.contextNotesTodo.memory.scope.globalHint': "Co jest prawdą o tobie, wszędzie. Widzi to każdy folder.",
+  'friends.roleLabel': "Rola i specjalizacja",
 } as const;

@@ -4,7 +4,9 @@ import { Icon } from '@/components/icon/Icon';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
-import { fetchScheduledTasks, runScheduledTaskNow } from '@/lib/scheduledTasksApi';
+import { fetchScheduledTasks, runScheduledTaskNow, upsertScheduledTask } from '@/lib/scheduledTasksApi';
+import { ScheduledTaskEditorDialog } from '@/components/session/ScheduledTaskEditorDialog';
+import type { ScheduledTask } from '@/lib/scheduledTasksApi';
 import { formatTimeForPreference } from '@/lib/timeFormat';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -32,6 +34,8 @@ export const SidebarScheduledSection: React.FC<{ mobileVariant: boolean; onNavig
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const [items, setItems] = React.useState<SidebarScheduledTask[]>([]);
+  const [editorTask, setEditorTask] = React.useState<ScheduledTask | null>(null);
+  const [editorProjectId, setEditorProjectId] = React.useState<string | null>(null);
   const [collapsed, setCollapsed] = React.useState(readCollapsed);
   const [runningId, setRunningId] = React.useState<string | null>(null);
   const [now, setNow] = React.useState(() => Date.now());
@@ -71,13 +75,24 @@ export const SidebarScheduledSection: React.FC<{ mobileVariant: boolean; onNavig
 
   const toggle = () => { const next = !collapsed; setCollapsed(next); writeCollapsed(next); };
   const openManager = () => { onNavigate?.(); setScheduledOpen(true); };
+  /**
+   * A scheduled task is its own thing: clicking one opens it, so the
+   * instructions it will run can be read and changed there. Jumping to the
+   * last run showed what happened, not what will happen.
+   */
   const openTask = ({ task, project }: SidebarScheduledTask) => {
-    const sessionId = task.state?.lastSessionId;
-    if (!sessionId) { openManager(); return; }
-    onNavigate?.();
-    useUIStore.getState().closeMainSurfaces();
-    useSessionUIStore.getState().setCurrentSession(sessionId, project.path ?? null);
+    setEditorProjectId(project.id);
+    setEditorTask(task);
   };
+
+  const saveTask = async (draft: Partial<ScheduledTask>) => {
+    const projectId = editorProjectId;
+    if (!projectId) return;
+    await upsertScheduledTask(projectId, draft);
+    toast.success(t('sessions.scheduledTasks.dialog.toast.saved'));
+    await reload();
+  };
+
   const runNow = async ({ task, project }: SidebarScheduledTask) => {
     setRunningId(task.id);
     try {
@@ -109,6 +124,15 @@ export const SidebarScheduledSection: React.FC<{ mobileVariant: boolean; onNavig
     lines.push(t(task.state?.lastSessionId ? 'sessions.sidebar.scheduled.openLastRun' : 'sessions.sidebar.scheduled.openManager'));
     return lines.join('\n');
   };
+
+  const editor = (
+    <ScheduledTaskEditorDialog
+      open={Boolean(editorTask)}
+      task={editorTask}
+      onOpenChange={(open) => { if (!open) { setEditorTask(null); setEditorProjectId(null); } }}
+      onSave={saveTask}
+    />
+  );
 
   return (
     <div className="flex-shrink-0 select-none px-2.5 pb-1" data-sidebar-scheduled>
@@ -191,6 +215,7 @@ export const SidebarScheduledSection: React.FC<{ mobileVariant: boolean; onNavig
           })}
         </ul>
       )}
+      {editor}
     </div>
   );
 };

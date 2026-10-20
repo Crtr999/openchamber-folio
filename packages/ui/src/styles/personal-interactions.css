@@ -3,13 +3,17 @@
 [data-oc-personal-interactions] .session-tab-slot[data-active="true"] {
     box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--interactive-selection-foreground) 35%, transparent);
 }
+/* The sidebar is part of the same app as the panels beside it, so it speaks
+   their type: the app's own label size, the app's own leading, and no
+   tracking of its own. A sidebar that is a little tighter than the rest of
+   the app reads as a different application sitting next to it. */
 [data-oc-personal-interactions] [data-session-row] {
     min-height: 29px;
     border-radius: 6px;
-    font-size: 13.5px;
-    line-height: 1.35;
+    font-size: var(--text-ui-label);
+    line-height: round(1.45em, 1px);
     font-weight: 500;
-    letter-spacing: -0.008em;
+    letter-spacing: 0;
     color: color-mix(in srgb, var(--surface-foreground) 90%, var(--surface-muted-foreground));
     transition: background-color 85ms cubic-bezier(0.16, 1, 0.3, 1), color 85ms cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -28,14 +32,16 @@
 [data-oc-personal-interactions] :is([data-sidebar-sticky-header] button, [data-sidebar-scheduled] button, .group\/chats > button, .group\/website > button) {
     min-height: 29px;
     border-radius: 6px;
-    font-size: 13.5px;
-    line-height: 1.35;
-    letter-spacing: -0.01em;
+    font-size: var(--text-ui-label);
+    line-height: round(1.45em, 1px);
+    letter-spacing: 0;
 }
+/* A section heading is a label, and a label carries a hair of tracking so it
+   reads as a label rather than as a word. */
 [data-oc-personal-interactions] :is([data-sidebar-sticky-header] .typography-ui-label, [data-sidebar-scheduled] .typography-ui-label, .group\/chats .typography-ui-label, .group\/website span.truncate) {
-    font-size: 13.5px;
+    font-size: var(--text-ui-label);
     font-weight: 550;
-    letter-spacing: -0.01em;
+    letter-spacing: 0.01em;
     color: color-mix(in srgb, var(--surface-foreground) 92%, var(--surface-muted-foreground));
 }
 [data-oc-personal-interactions] :is(.session-tab-slot [role="tab"], [data-oc-header-action="home"]) {

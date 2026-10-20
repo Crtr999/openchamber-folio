@@ -92,15 +92,18 @@ export const closeSessionTabAndActivateNeighbour = (sessionId: string): void => 
 };
 
 /**
- * Notion-style "+": the next thing opened lands in a fresh tab. The tab starts
- * as a new chat draft and the new-tab palette opens over it.
+ * Notion-style "+": the next thing opened lands in a fresh tab, which starts
+ * as a new chat draft.
+ *
+ * No palette over it. The "+" means "a new chat", and a menu that asks what
+ * to put in the new tab is a question the user did not ask — the palette is
+ * what the search button is for.
  */
 export const NEW_TAB_PALETTE_EVENT = 'open-carter:new-tab-palette';
 export const openNewHeaderTab = (): void => {
   useSessionTabsStore.getState().requestNewTab();
   useUIStore.getState().closeMainSurfaces();
   useSessionUIStore.getState().openNewSessionDraft();
-  window.dispatchEvent(new CustomEvent(NEW_TAB_PALETTE_EVENT));
 };
 
 /** Abandon a pending new tab and return to the tab the user was in. */

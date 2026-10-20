@@ -1732,9 +1732,9 @@ export const dict = {
   'rightSidebar.contextNotesTodo.tabs.memory': 'Hafıza',
   'rightSidebar.contextNotesTodo.sections.label': 'Proje bağlamı bölümleri',
   'rightSidebar.contextNotesTodo.sections.resize': 'Bölüm kenar çubuğunu yeniden boyutlandır',
-  'rightSidebar.contextNotesTodo.memory.scope.project': 'Bunları yalnızca bu klasördeki sohbetler görür.',
+  'rightSidebar.contextNotesTodo.memory.scope.project': 'Bu klasör',
   'rightSidebar.contextNotesTodo.memory.scope.label': 'Hafıza kapsamı',
-  'rightSidebar.contextNotesTodo.memory.scope.global': 'Bunları yalnızca bu klasördeki sohbetler görür.',
+  'rightSidebar.contextNotesTodo.memory.scope.global': 'Senin hakkında (her yerde)',
   'rightSidebar.contextNotesTodo.memory.type.fact': 'olgu',
   'rightSidebar.contextNotesTodo.memory.badge.new': 'yeni',
   'rightSidebar.contextNotesTodo.memory.flagged': 'Agent\'tan gizleniyor — talimat gibi okunuyor',
@@ -3572,4 +3572,5 @@ export const dict = {
   'computer.unavailableHint': "Ajan bir bilgisayara ihtiyaç duyduğunda araç onu getirir. İşe başlayın, ekran burada görünür.",
   'rightSidebar.contextNotesTodo.memory.scope.projectHint': "Bu klasörün öğrendikleri. Bunu yalnızca bu klasör görür.",
   'rightSidebar.contextNotesTodo.memory.scope.globalHint': "Senin hakkında her yerde geçerli olan. Her klasör görür.",
+  'friends.roleLabel': "Rol ve uzmanlık",
 };

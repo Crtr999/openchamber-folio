@@ -40,7 +40,6 @@ import { createChatDirectory } from '@/lib/chatDirectories';
 import { useChatsRoot } from '@/hooks/useChatsRoot';
 import { cn } from '@/lib/utils';
 import { HomeFriendAvatar } from './HomeFriendAvatar';
-import { HomeFriendCustomize, type FriendCustomizeTarget } from './HomeFriendCustomize';
 import { HomeFriendDetails } from './HomeFriendDetails';
 
 type FolderCatalog = {
@@ -83,12 +82,11 @@ const SYNTHETIC_ZDR: Agent = {
 };
 
 /** The card row itself; all data and actions come from the caller. */
-export function HomeFriendCards({ friends, busyAgent, onOpen, onNew, onCustomize, onDetails }: {
+export function HomeFriendCards({ friends, busyAgent, onOpen, onNew, onDetails }: {
     friends: FriendCard[];
     busyAgent: string;
     onOpen: (agent: string, origin: Origin) => void;
     onNew: (agent: string) => void;
-    onCustomize: (agent: string, origin: Origin) => void;
     onDetails: (agent: string, origin: Origin) => void;
 }) {
     const { t } = useI18n();
@@ -130,13 +128,16 @@ export function HomeFriendCards({ friends, busyAgent, onOpen, onNew, onCustomize
                     aria-label={`${friend.name}: ${t('friends.newChat')}`} title={t('friends.newChat')} onClick={() => onNew(friend.agent)}>
                     <Icon name="chat-new" className="size-3.5" />
                 </Button>}
+                <Button type="button" variant="ghost" size="icon" className="size-7" disabled={busy}
+                    aria-label={`${friend.name}: ${t('friends.details')}`} title={t('friends.details')} onClick={() => onDetails(friend.agent, originOf(friend.agent))}>
+                    <Icon name="palette" className="size-3.5" />
+                </Button>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" className="size-7" aria-label={t('friends.actions', { name: friend.name })} title={t('friends.actions', { name: friend.name })}>
                         <Icon name="more-2" className="size-3.5" />
                     </Button></DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={() => onDetails(friend.agent, originOf(friend.agent))}><Icon name="shield" className="size-3.5" />{t('friends.details')} &amp; Guardrails</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => onCustomize(friend.agent, originOf(friend.agent))}><Icon name="palette" className="size-3.5" />{t('friends.customize')}</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => onDetails(friend.agent, originOf(friend.agent))}><Icon name="shield" className="size-3.5" />{t('friends.details')}</DropdownMenuItem>
                         {!friend.specialist && <DropdownMenuItem disabled={busy} onSelect={() => onNew(friend.agent)}><Icon name="chat-new" className="size-3.5" />{t('friends.newChat')}</DropdownMenuItem>}
                     </DropdownMenuContent>
                 </DropdownMenu>
@@ -215,7 +216,6 @@ export function HomeFriends() {
     const [busyFolderId, setBusyFolderId] = React.useState('');
     const [refresh, setRefresh] = React.useState(0);
     const [loading, setLoading] = React.useState(false);
-    const [customize, setCustomize] = React.useState<FriendCustomizeTarget | null>(null);
     const [details, setDetails] = React.useState<{ projectId: string; origin: Origin } | null>(null);
     const [links, setLinks] = React.useState(new Map<string, FriendLink | null>());
     const sequence = React.useRef(0);
@@ -230,7 +230,7 @@ export function HomeFriends() {
         sequence.current += 1;
         const next = getRuntimeKey();
         setRuntime(next); setCatalogsByPath({}); setProfiles(null); setProfileError(false); setError(''); setBusyFolderId('');
-        setCustomize(null); setDetails(null);
+        setDetails(null);
     }), []);
 
     React.useEffect(() => {
@@ -475,22 +475,7 @@ export function HomeFriends() {
         }
     };
 
-    const openCustomizeForFolder = (projectId: string, origin: Origin) => {
-        const project = friendProjects.find(item => item.id === projectId);
-        if (!project || !profiles) return;
-        const { role, name, appearance } = resolveProjectFriend(project);
-        setCustomize({
-            agent: folderFriendKey(project.path),
-            role,
-            name,
-            appearance,
-            origin,
-            folderLabel: project.label || project.path,
-            folderPath: project.path,
-        });
-    };
-
-    const saveCustomize = (key: string, draft: { name: string; role?: string } & FriendAppearance) => {
+    const saveAppearance = (key: string, draft: { name: string; role?: string } & FriendAppearance) => {
         if (!profiles) throw new Error(t('friends.storageError'));
         const next = saveFriendProfile(localStorage, runtime, key, draft, profiles.revision);
         setProfiles(next);
@@ -504,7 +489,6 @@ export function HomeFriends() {
 
     const detailProject = details ? friendProjects.find(item => item.id === details.projectId) : undefined;
     const detailFriend = detailProject ? resolveProjectFriend(detailProject) : null;
-    const customizeDialog = <HomeFriendCustomize target={customize} onClose={() => setCustomize(null)} onSave={saveCustomize} />;
 
     return <section className="oc-friends" aria-busy={loading || undefined}>
         <HomeFriendsHeader
@@ -523,7 +507,6 @@ export function HomeFriends() {
                     busyAgent={busyFolderId}
                     onOpen={projectId => void talkInFolder(projectId, false)}
                     onNew={projectId => void talkInFolder(projectId, true)}
-                    onCustomize={openCustomizeForFolder}
                     onDetails={(projectId, origin) => setDetails({ projectId, origin })}
                 /> : <p className="oc-home-empty" role="status">{t('common.loading')}</p>}
             </>}
@@ -549,12 +532,9 @@ export function HomeFriends() {
                 if (detailProject && !isAllChatsProject(detailProject)) useProjectsStore.getState().setActiveProject(detailProject.id);
                 useSessionUIStore.getState().setCurrentSession(sessionId, directory);
             }}
-            onCustomize={(_agent, origin) => { if (detailProject) openCustomizeForFolder(detailProject.id, origin); }}
             onManage={agentName => manage(agentName, detailProject)}
             onRefreshFolder={() => setRefresh(value => value + 1)}
-        >
-            {detailProject && customizeDialog}
-        </HomeFriendDetails>
-        {!detailProject && customizeDialog}
+            onSaveAppearance={saveAppearance}
+        />
     </section>;
 }

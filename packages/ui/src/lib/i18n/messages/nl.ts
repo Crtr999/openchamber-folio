@@ -1771,9 +1771,9 @@ export const dict = {
   'rightSidebar.contextNotesTodo.tabs.memory': 'Geheugen',
   'rightSidebar.contextNotesTodo.sections.label': 'Secties met projectcontext',
   'rightSidebar.contextNotesTodo.sections.resize': 'Grootte van de sectiezijbalk aanpassen',
-  'rightSidebar.contextNotesTodo.memory.scope.project': 'Alleen gesprekken in deze map zien deze.',
+  'rightSidebar.contextNotesTodo.memory.scope.project': 'Deze map',
   'rightSidebar.contextNotesTodo.memory.scope.label': 'Geheugenbereik',
-  'rightSidebar.contextNotesTodo.memory.scope.global': 'Alleen gesprekken in deze map zien deze.',
+  'rightSidebar.contextNotesTodo.memory.scope.global': 'Over jou, overal',
   'rightSidebar.contextNotesTodo.memory.type.fact': 'feit',
   'rightSidebar.contextNotesTodo.memory.badge.new': 'nieuw',
   'rightSidebar.contextNotesTodo.memory.flagged': 'Achtergehouden voor de agent — leest als een instructie',
@@ -3574,4 +3574,5 @@ export const dict = {
   'computer.unavailableHint': "Een tool brengt een computer mee wanneer de agent er een nodig heeft. Begin het werk en het scherm verschijnt hier.",
   'rightSidebar.contextNotesTodo.memory.scope.projectHint': "Wat deze map heeft geleerd. Alleen deze map ziet het.",
   'rightSidebar.contextNotesTodo.memory.scope.globalHint': "Wat over jou waar geldt, overal. Elke map ziet het.",
+  'friends.roleLabel': "Rol en specialiteit",
 } as const;

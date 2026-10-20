@@ -23,7 +23,7 @@ export const ALL_CHATS_PROJECT_ID = 'openchamber:chats';
 export const allChatsProject = (chatsRoot: string | null | undefined): ProjectEntry | null => {
   const path = typeof chatsRoot === 'string' ? chatsRoot.trim() : '';
   if (!path) return null;
-  return { id: ALL_CHATS_PROJECT_ID, path, label: 'General' } as ProjectEntry;
+  return { id: ALL_CHATS_PROJECT_ID, path, label: 'All Chats' } as ProjectEntry;
 };
 
 export const isAllChatsProject = (project: { id: string } | null | undefined): boolean =>

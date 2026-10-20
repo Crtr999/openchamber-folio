@@ -1773,9 +1773,9 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.tabs.memory': '메모리',
   'rightSidebar.contextNotesTodo.sections.label': '프로젝트 컨텍스트 섹션',
   'rightSidebar.contextNotesTodo.sections.resize': '섹션 사이드바 너비 조절',
-  'rightSidebar.contextNotesTodo.memory.scope.project': '이 폴더의 대화만 이것을 봅니다.',
+  'rightSidebar.contextNotesTodo.memory.scope.project': '이 폴더',
   'rightSidebar.contextNotesTodo.memory.scope.label': '메모리 범위',
-  'rightSidebar.contextNotesTodo.memory.scope.global': '이 폴더의 대화만 이것을 봅니다.',
+  'rightSidebar.contextNotesTodo.memory.scope.global': '당신에 대해 (전체)',
   'rightSidebar.contextNotesTodo.memory.type.fact': '사실',
   'rightSidebar.contextNotesTodo.memory.badge.new': '신규',
   'rightSidebar.contextNotesTodo.memory.flagged': '에이전트에 전달되지 않음 — 지시문처럼 읽힘',
@@ -3574,4 +3574,5 @@ export const dict: Record<I18nKey, string> = {
   'computer.unavailableHint': "에이전트가 필요로 할 때 도구가 컴퓨터를 가져옵니다. 작업을 시작하면 여기에 화면이 나타납니다.",
   'rightSidebar.contextNotesTodo.memory.scope.projectHint': "이 폴더가 배운 것. 이 폴더만 봅니다.",
   'rightSidebar.contextNotesTodo.memory.scope.globalHint': "당신에 대해 어디에서나 맞는 것. 모든 폴더가 봅니다.",
+  'friends.roleLabel': "역할과 전문성",
 };

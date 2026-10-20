@@ -1767,9 +1767,9 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.tabs.memory': 'メモリ',
   'rightSidebar.contextNotesTodo.sections.label': 'プロジェクトコンテキストのセクション',
   'rightSidebar.contextNotesTodo.sections.resize': 'セクションサイドバーの幅を変更',
-  'rightSidebar.contextNotesTodo.memory.scope.project': 'このフォルダの会話だけがこれらを見ます。',
+  'rightSidebar.contextNotesTodo.memory.scope.project': 'このフォルダ',
   'rightSidebar.contextNotesTodo.memory.scope.label': 'メモリの範囲',
-  'rightSidebar.contextNotesTodo.memory.scope.global': 'このフォルダの会話だけがこれらを見ます。',
+  'rightSidebar.contextNotesTodo.memory.scope.global': 'あなたのこと（すべて）',
   'rightSidebar.contextNotesTodo.memory.type.fact': '事実',
   'rightSidebar.contextNotesTodo.memory.badge.new': '新規',
   'rightSidebar.contextNotesTodo.memory.flagged': 'エージェントには渡されません — 指示のように読めます',
@@ -3574,4 +3574,5 @@ export const dict: Record<I18nKey, string> = {
   'computer.unavailableHint': "エージェントが必要としたとき、ツールがコンピューターを持ち込みます。作業を始めるとここに画面が現れます。",
   'rightSidebar.contextNotesTodo.memory.scope.projectHint': "このフォルダが学んだこと。このフォルダだけが知っています。",
   'rightSidebar.contextNotesTodo.memory.scope.globalHint': "あなたについて全国どこでも通用すること。すべてのフォルダが知っています。",
+  'friends.roleLabel': "役割と専門性",
 };
