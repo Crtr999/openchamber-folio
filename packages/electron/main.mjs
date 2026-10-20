@@ -1085,6 +1085,36 @@ const injectRuntimeConfigIntoHtml = (html) => {
 const BROWSER_PANEL_PARTITION = 'persist:openchamber-browser';
 
 /**
+ * Lets the browser panel show the agent's computer.
+ *
+ * The computer belongs to a tool, and that tool's configuration carries the
+ * key that opens it. The key is set as a cookie on the panel's own session
+ * and never leaves this process: the panel loads the computer's control
+ * centre the way it loads any other page, and the page authenticates itself
+ * with the cookie rather than with a token in the address bar.
+ *
+ * A computer that is not configured, or not running, is not an error: the
+ * panel simply shows nothing signed in, which is the truth.
+ */
+const grantComputerAccess = async () => {
+  try {
+    const { resolveComputerEndpoint } = await import('@openchamber/web/server/lib/computer/endpoint.js');
+    const endpoint = resolveComputerEndpoint();
+    if (!endpoint) return;
+    const browserSession = session.fromPartition(BROWSER_PANEL_PARTITION);
+    await browserSession.cookies.set({
+      url: endpoint.baseUrl,
+      name: 'cb_key',
+      value: endpoint.token,
+      path: '/',
+    });
+    log.info('[electron] computer access granted', { baseUrl: endpoint.baseUrl, source: endpoint.name });
+  } catch (error) {
+    log.warn('[electron] computer access was not granted', { error: error?.message });
+  }
+};
+
+/**
  * Denies device and location access to pages shown in the browser panel.
  *
  * Electron grants permission requests by default when no handler is set. The
@@ -5591,6 +5621,7 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = readThemeSource();
   registerPackagedUiProtocol();
   hardenBrowserPanelSession();
+  void grantComputerAccess();
   hardenWebsiteSessions(partition => session.fromPartition(partition));
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     void meetingBoundary.displayMedia(request, callback);

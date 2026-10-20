@@ -5,6 +5,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useI18n } from '@/lib/i18n';
 import { FRIEND_COLORS, FRIEND_BODIES, FriendRevisionConflict, friendColorVariable, type FriendAppearance } from '@/lib/friends';
 import { morphFrom } from '@/lib/motion';
+import { useAgentMemoryStore } from '@/stores/useAgentMemoryStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { MemorySection } from '@/components/session/project-context/MemorySection';
 import { HomeFriendAvatar } from './HomeFriendAvatar';
 
 export type FriendCustomizeTarget = {
@@ -14,6 +17,8 @@ export type FriendCustomizeTarget = {
     appearance: FriendAppearance;
     origin: DOMRect | null;
     folderLabel?: string;
+    /** The friend's folder, when it has one: this is where its memory lives. */
+    folderPath?: string;
 };
 type Draft = { name: string; role?: string } & FriendAppearance;
 
@@ -36,6 +41,25 @@ export function HomeFriendCustomize({ target, onClose, onSave }: { target: Frien
         return () => cancelAnimationFrame(frame);
     }, [origin]);
     const name = draft?.name.trim() ?? '';
+
+    /**
+     * The memory of this friend, in the same editor the Memory tab uses.
+     *
+     * The store holds one project at a time, so it is pointed at this friend
+     * while the dialog is open and put back on the way out. The store is only
+     * what the panel reads — what the agent is told is read on the server — so
+     * this never changes what a conversation carries.
+     */
+    const loadMemory = useAgentMemoryStore((state) => state.load);
+    const activeProjectPath = useProjectsStore((state) => state.getActiveProject()?.path ?? null);
+    const memoryPath = target?.folderPath ?? null;
+    React.useEffect(() => {
+        if (!memoryPath) return;
+        void loadMemory(memoryPath);
+        // Put the store back on the project the user is working in, so the
+        // Memory tab beside this dialog still shows that project.
+        return () => { void loadMemory(activeProjectPath); };
+    }, [loadMemory, memoryPath, activeProjectPath]);
     const save = (event: React.FormEvent) => {
         event.preventDefault();
         if (!target || !draft || !name) return;
@@ -50,7 +74,7 @@ export function HomeFriendCustomize({ target, onClose, onSave }: { target: Frien
         catch (failure) { setError(failure instanceof FriendRevisionConflict ? t('friends.saveConflict') : t('friends.saveFailed')); }
     };
     return <Dialog open={Boolean(target)} onOpenChange={open => { if (!open) onClose(); }}>
-        <DialogContent ref={popup} className="oc-friend-customize max-w-md gap-5" data-testid="friend-customize">
+        <DialogContent ref={popup} className="oc-friend-customize max-h-[85vh] max-w-md gap-5 overflow-y-auto" data-testid="friend-customize">
             <DialogHeader><DialogTitle>{t('friends.customizeTitle')}</DialogTitle><DialogDescription>{t('friends.customizeDescription')}</DialogDescription></DialogHeader>
             {draft && target && <form className="flex flex-col gap-4" onSubmit={save}>
                 <div className="oc-friend-preview">
@@ -73,6 +97,15 @@ export function HomeFriendCustomize({ target, onClose, onSave }: { target: Frien
                         className="oc-friend-swatch size-8 rounded-full" aria-pressed={draft.color === color} aria-label={t('friends.colorOption', { number: index + 1 })}
                         onClick={() => setDraft({ ...draft, color })}><span aria-hidden="true" className="size-5 rounded-full" style={{ background: friendColorVariable(color) }} /></Button>)}</div>
                 </fieldset>
+                {memoryPath && (
+                    <section className="flex flex-col gap-2">
+                        <h4 className="text-sm font-medium">{t('friends.customizeMemory')}</h4>
+                        <p className="text-[11px] text-muted-foreground">{t('friends.customizeMemoryHint')}</p>
+                        <div className="max-h-72 overflow-y-auto rounded-lg border border-border/60 p-2">
+                            <MemorySection projectPath={memoryPath} query="" />
+                        </div>
+                    </section>
+                )}
                 {error && <p role="alert" className="text-sm text-[var(--status-error-text)]">{error}</p>}
                 <DialogFooter className="gap-2">
                     <Button type="button" variant="ghost" onClick={onClose}>{t('personalTools.cancel')}</Button>

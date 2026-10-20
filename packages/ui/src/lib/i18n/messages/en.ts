@@ -1245,6 +1245,7 @@ export const dict = {
   'contextPanel.mode.diff': 'Changes',
   'contextPanel.mode.stagedDiff': 'Staged Diff',
   'contextPanel.mode.workingDiff': 'Working Diff',
+  'contextPanel.mode.computer': "Computer",
   'contextPanel.mode.plan': 'Plan',
   'contextPanel.mode.pr': 'Pull Request',
   'contextPanel.mode.context': 'Context',
@@ -1329,6 +1330,7 @@ export const dict = {
   'contextRail.surface.pr.description': 'Create, review, and merge the pull request for the current branch',
   'contextRail.surface.notes.description': 'Notes, todos, plans, and agent memory for the project',
   'contextRail.surface.context.description': 'Session context and token usage',
+  'contextRail.surface.computer.description': "The computer the agent is working on, opened inside the app.",
   'contextRail.surface.browser.description': 'Built-in web browser',
   'contextRail.surface.preview.description': 'Dev server preview',
   'contextRail.surface.chat.description': 'Session opened side by side',
@@ -3563,6 +3565,11 @@ export const dict = {
   'multirun.overview.bar.waiting': 'Runs waiting for you: {count}. The run can\'t finish until you answer them.',
   'multirun.overview.prompt.expand': 'Show all',
   'multirun.overview.prompt.collapse': 'Show less',
+  'computer.title': "The agent's computer",
+  'computer.hint': "Pick a screen to watch it work.",
+  'computer.noScreens': "No screen is open on the computer.",
+  'computer.unavailable': "No computer is connected",
+  'computer.unavailableHint': "A tool brings a computer when the agent needs one. Start the work and the screen appears here.",
 } as const;
 
 export type I18nKey = keyof typeof dict;

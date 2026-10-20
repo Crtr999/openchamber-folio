@@ -94,6 +94,7 @@ import { guestHasSharedSurface, guestSurfaceDocking, type GuestSurfaceDocking } 
 import { FALLBACK_GUEST_ICON } from '@/lib/guests/icon';
 import { GUEST_SURFACE_DOCK_SIZE_MIN } from '@openchamber/sdk';
 import { isPluginContextPanelMode, pluginIdFromMode, type PluginContextPanelMode } from '@/lib/surfaces/modes';
+import { ComputerPane } from '@/components/computer/ComputerPane';
 import { getContextSurfaceWidthFraction } from '@/lib/surfaces/registry';
 import { isVimEditorEventTarget } from '@/lib/editorFocus';
 import { isTerminalEventTarget } from '@/lib/terminalFocus';
@@ -175,6 +176,7 @@ const getModeLabel = (
   if (mode === 'file') return t('contextPanel.mode.files');
   if (mode === 'diff') return t('contextPanel.mode.diff');
   if (mode === 'walkthrough') return t('contextPanel.mode.walkthrough');
+  if (mode === 'computer') return t('contextPanel.mode.computer');
   if (mode === 'plan') return t('contextPanel.mode.plan');
   if (mode === 'browser') return t('contextPanel.mode.browser');
   if (mode === 'git') return t('layout.rightSidebar.git');
@@ -310,6 +312,10 @@ const getTabIcon = (
 
   if (isPluginContextPanelMode(tab.mode)) {
     return <ContextGuestIcon mode={tab.mode} />;
+  }
+
+  if (tab.mode === 'computer') {
+    return <Icon name="window" className="h-3.5 w-3.5" />;
   }
 
   if (tab.mode === 'browser') {
@@ -1076,6 +1082,8 @@ export const ContextPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
                 ? <React.Suspense fallback={null}><LinearIssuesView /></React.Suspense>
             : activeTab?.mode === 'notes'
                 ? <ProjectContextPanel />
+            : activeTab?.mode === 'computer'
+                ? <ComputerPane directory={directoryKey} />
         : activeTab?.mode === 'plan'
             ? <React.Suspense fallback={null}><PlanView
                 targetPath={activeTab.targetPath}

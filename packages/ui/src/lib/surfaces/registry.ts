@@ -17,6 +17,7 @@ export type BuiltInContextSurfaceId =
   | 'notes'
   | 'context'
   | 'browser'
+  | 'computer'
   | 'chat';
 
 export type ContextSurfaceId = BuiltInContextSurfaceId | `plugin:${string}`;
@@ -148,6 +149,15 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     mode: 'browser',
     icon: 'global',
     labelKey: 'contextPanel.mode.browser',
+    availability: 'always',
+  },
+  {
+    id: 'computer',
+    descriptionKey: 'contextRail.surface.computer.description',
+    defaultWidthFraction: 0.45,
+    mode: 'computer',
+    icon: 'window',
+    labelKey: 'contextPanel.mode.computer',
     availability: 'always',
   },
   {

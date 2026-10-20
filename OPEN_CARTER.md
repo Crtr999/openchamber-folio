@@ -12,6 +12,10 @@ A friend also learns on its own. The memory feature is on by default in this bui
 
 All Chats is a friend as well. The conversations that belong to no folder live under the app's own chats root, one dated directory each, and they are one friend named General until the user renames it. Its memory is its own project scope, so what is settled in All Chats is not carried into any folder; the only memory every project shares is the global one, about the user rather than the work. When the user renames it, the sidebar's All Chats heading says that name. See `packages/ui/src/components/chat/FRIENDS.md`.
 
+The agent's computer is a surface in the app. A tool brings a computer — the CarterBot computer is the one this build ships with — and that tool's configuration says where it is and how to open it. The Computer surface lists the screens the computer has open and opens the one the user picks in the app's own browser panel, with the key set as a cookie on that panel's session so nothing secret is ever in an address bar. The key never reaches the renderer. See `packages/web/server/lib/computer/DOCUMENTATION.md`.
+
+The friend's face in the sidebar is large enough to read, and the Customize dialog shows the folder's whole memory — every entry, editable and removable, the same editor the Memory tab uses — next to the name, the role and the face. The store is pointed at that friend while the dialog is open and put back on the way out.
+
 While a folder is working, its icon in the left sidebar moves and the friend's face on the Home card moves with it. Both read the shared live status index, and both stop for anyone who has asked for reduced motion.
 
 Daily habits can be checked off through the existing Notion integration. Weekday habit scheduling and an in-app habit-list editor were deferred by Carter. Inspect the current implementation rather than promising those features.

@@ -486,6 +486,7 @@ export function HomeFriends() {
             appearance,
             origin,
             folderLabel: project.label || project.path,
+            folderPath: project.path,
         });
     };
 

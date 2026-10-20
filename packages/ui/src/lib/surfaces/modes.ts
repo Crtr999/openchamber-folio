@@ -6,6 +6,7 @@ const BUILT_IN_CONTEXT_PANEL_MODES = [
   'plan',
   'chat',
   'browser',
+  'computer',
   'git',
   'pr',
   'linear',

@@ -40,6 +40,10 @@ earlier conversations worked out.
 - Customize (`HomeFriendCustomize.tsx`): edits Friend name, role/specialty, body
   shape, and theme color, persisted under `open-carter:friends:v1:<runtime>` and
   synced with the left sidebar folder header.
+  The dialog also shows what this friend remembers: the folder's whole memory,
+  editable and removable, in the same editor the Memory tab uses. The store is
+  pointed at that friend while the dialog is open and put back on the way out,
+  so the Memory tab beside it still shows the project the user is working in.
 
 ## What a friend remembers
 
