@@ -5,7 +5,20 @@ import { providerBindingFromFolderName } from './projectProviderBinding';
 /** Avatar shapes drawn by `HomeFriendAvatar`; ids are persisted, so only append. */
 export const FRIEND_BODIES = ['blob', 'pebble', 'cloud', 'drop', 'squircle', 'hex', 'star', 'flower', 'ghost', 'peak', 'capsule', 'bean', 'crystal', 'crown', 'crescent', 'bolt', 'shield', 'heart'] as const;
 /** Theme color roles an avatar may use; ids are persisted, so only append. */
-export const FRIEND_COLORS = ['primary', 'keyword', 'type', 'function', 'number', 'string', 'operator', 'variable', 'success', 'comment'] as const;
+/**
+ * Theme colour roles a friend may wear.
+ *
+ * The first ten are the app's own syntax palette: quiet, and they follow the
+ * theme. The last five are the loud ones — the colours a person actually
+ * picks for a character, and the ones a sketch in a notebook is drawn with.
+ */
+export const FRIEND_COLORS = [
+  'primary', 'keyword', 'type', 'function', 'number', 'string', 'operator', 'variable', 'success', 'comment',
+  'crimson', 'amber', 'azure', 'violet',
+] as const;
+
+/** The loud end of the palette, drawn after the quiet ones. */
+export const BOLD_FRIEND_COLORS = ['crimson', 'amber', 'success', 'azure', 'violet'] as const;
 export type FriendBody = (typeof FRIEND_BODIES)[number];
 export type FriendColor = (typeof FRIEND_COLORS)[number];
 export type FriendAppearance = { body: FriendBody; color: FriendColor };
@@ -32,6 +45,9 @@ const colorVariables = {
   primary: 'var(--primary-base)', keyword: 'var(--syntax-keyword)', type: 'var(--syntax-type)', function: 'var(--syntax-function)',
   number: 'var(--syntax-number)', string: 'var(--syntax-string)', operator: 'var(--syntax-operator)', variable: 'var(--syntax-variable)',
   success: 'var(--status-success)', comment: 'var(--syntax-comment)',
+  // The bold end: the status colours the app already has, and the violet the
+  // syntax palette keeps for keywords.
+  crimson: 'var(--status-error)', amber: 'var(--status-warning)', azure: 'var(--status-info)', violet: 'var(--syntax-keyword)',
 } satisfies Record<FriendColor, string>;
 /** CSS value for an avatar color role. */
 export const friendColorVariable = (color: FriendColor): string => colorVariables[color];

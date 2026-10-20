@@ -63,15 +63,19 @@ export const SessionSidebarActivityHeader: React.FC<{
       className={cn('group flex w-full items-center gap-1.5 rounded-md py-0.5 pl-4 text-left enabled:hover:bg-interactive-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50', chats ? 'pr-10' : 'pr-3.5')}
       aria-expanded={!collapsed}
     >
-      <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
-        <Icon name={ACTIVITY_ICON[activityKey]} className={cn('h-3.5 w-3.5 text-muted-foreground/80', !forceExpanded && 'group-hover:hidden')} />
-        {!forceExpanded ? <span className="hidden h-3.5 w-3.5 items-center justify-center text-muted-foreground group-hover:inline-flex">
-          <Icon name={collapsed ? 'arrow-right-s' : 'arrow-down-s'} className="h-3.5 w-3.5" />
-        </span> : null}
-      </span>
-      {chats && friendLook ? (
-        <HomeFriendAvatar body={friendLook.body} color={friendLook.color} className="size-3.5 shrink-0" />
-      ) : null}
+      {/* A friend replaces the area's own mark: the face is the mark. */}
+      {friendLook ? (
+        <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
+          <HomeFriendAvatar body={friendLook.body} color={friendLook.color} className="size-3.5" />
+        </span>
+      ) : (
+        <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
+          <Icon name={ACTIVITY_ICON[activityKey]} className={cn('h-3.5 w-3.5 text-muted-foreground/80', !forceExpanded && 'group-hover:hidden')} />
+          {!forceExpanded ? <span className="hidden h-3.5 w-3.5 items-center justify-center text-muted-foreground group-hover:inline-flex">
+            <Icon name={collapsed ? 'arrow-right-s' : 'arrow-down-s'} className="h-3.5 w-3.5" />
+          </span> : null}
+        </span>
+      )}
       <span className="typography-ui-label font-semibold text-foreground">
         {title}
       </span>

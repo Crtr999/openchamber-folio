@@ -1,6 +1,7 @@
 import React from 'react';
 
-import { folderFriendKey, readFriendProfiles, type FriendProfiles } from '@/lib/friends';
+import { readFriendProfiles, type FriendProfiles } from '@/lib/friends';
+import { allChatsFriendName } from '@/lib/allChatsFriend';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useChatsRoot } from '@/hooks/useChatsRoot';
 
@@ -33,6 +34,5 @@ export const useAllChatsFriendName = (): string | null => {
         };
     }, [runtime]);
 
-    if (!chatsRoot || !profiles) return null;
-    return profiles.friends.find(item => item.agent === folderFriendKey(chatsRoot))?.name ?? null;
+    return allChatsFriendName(profiles, chatsRoot);
 };

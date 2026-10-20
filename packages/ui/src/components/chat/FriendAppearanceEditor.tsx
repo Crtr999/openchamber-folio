@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useI18n } from '@/lib/i18n';
 import {
+    BOLD_FRIEND_COLORS,
     FRIEND_BODIES,
     FRIEND_COLORS,
     FriendRevisionConflict,
@@ -41,6 +42,10 @@ export function FriendAppearanceEditor({
     }, [target]);
 
     const name = draft.name.trim();
+    // The quiet colours and the loud ones are two groups, not one long row.
+    const boldSet = new Set<string>(BOLD_FRIEND_COLORS);
+    const quietColors = FRIEND_COLORS.filter((color) => !boldSet.has(color));
+    const boldColors = FRIEND_COLORS.filter((color) => boldSet.has(color));
     const dirty = name !== target.name
         || (draft.role?.trim() ?? '') !== (target.role?.trim() ?? '')
         || draft.body !== target.appearance.body
@@ -82,8 +87,11 @@ export function FriendAppearanceEditor({
                     onClick={() => { setDraft({ ...draft, body }); setStatus('idle'); }}><HomeFriendAvatar body={body} color={draft.color} className="size-8" /></Button>)}</div>
             </fieldset>
             <fieldset className="flex flex-col gap-2"><legend className="mb-2 text-[13px] font-medium">{t('friends.color')}</legend>
-                <div className="flex flex-wrap gap-2">{FRIEND_COLORS.map((color, index) => <Button key={color} type="button" variant="chip" size="icon"
-                    className="oc-friend-swatch size-9 rounded-full" aria-pressed={draft.color === color} aria-label={t('friends.colorOption', { number: index + 1 })}
+                <div className="flex flex-wrap gap-2">{quietColors.map((color) => <Button key={color} type="button" variant="chip" size="icon"
+                    className="oc-friend-swatch size-9 rounded-full" aria-pressed={draft.color === color} aria-label={t('friends.colorOption', { number: FRIEND_COLORS.indexOf(color) + 1 })}
+                    onClick={() => { setDraft({ ...draft, color }); setStatus('idle'); }}><span aria-hidden="true" className="size-6 rounded-full" style={{ background: friendColorVariable(color) }} /></Button>)}</div>
+                <div className="mt-1 flex flex-wrap gap-2 border-t border-border/50 pt-3">{boldColors.map((color) => <Button key={color} type="button" variant="chip" size="icon"
+                    className="oc-friend-swatch size-9 rounded-full" aria-pressed={draft.color === color} aria-label={t('friends.colorOption', { number: FRIEND_COLORS.indexOf(color) + 1 })}
                     onClick={() => { setDraft({ ...draft, color }); setStatus('idle'); }}><span aria-hidden="true" className="size-6 rounded-full" style={{ background: friendColorVariable(color) }} /></Button>)}</div>
             </fieldset>
             <div className="flex items-center gap-2">

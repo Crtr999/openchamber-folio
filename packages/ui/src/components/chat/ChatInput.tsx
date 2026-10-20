@@ -35,7 +35,7 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 import { PersonalWorkspaceDialog } from '@/components/personal/PersonalWorkspaceDialog';
 import { Button } from '@/components/ui/button';
 import type { PersonalTool } from '@/lib/personal-workspace/model';
-import { PERSONAL_TOOL_ICONS, personalToolIconClass } from '@/lib/personal-workspace/toolIcons';
+import { PERSONAL_TOOL_ICONS, personalToolIconClass, personalToolIconStyle } from '@/lib/personal-workspace/toolIcons';
 import { resolveReference, type PersonalReference } from '@/lib/personal-workspace/references';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import {
@@ -4342,7 +4342,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 onClose={() => setMobileAttachMenuOpen(false)}
             >
                 <div className="flex flex-col px-3 pb-4 pt-1">
-                    {(['sketch', 'document', 'spreadsheet', 'presentation', 'pdf', 'templates', 'library', 'teach', 'sites', 'references', 'notion'] as const).map((tool) => <Button key={tool} variant="ghost" className="justify-start gap-2.5 px-2" onClick={() => { mobileShell.skipNextOverlayCloseRestore(); setMobileAttachMenuOpen(false); setPersonalTool(tool); }}><Icon name={PERSONAL_TOOL_ICONS[tool]} className={personalToolIconClass(tool)} />{t(`workspace.${tool}`)}</Button>)}
+                    {(['sketch', 'document', 'spreadsheet', 'presentation', 'pdf', 'templates', 'library', 'teach', 'sites', 'references', 'notion'] as const).map((tool) => <Button key={tool} variant="ghost" className="justify-start gap-2.5 px-2" onClick={() => { mobileShell.skipNextOverlayCloseRestore(); setMobileAttachMenuOpen(false); setPersonalTool(tool); }}><Icon name={PERSONAL_TOOL_ICONS[tool]} className={personalToolIconClass(tool)} style={personalToolIconStyle(tool)} />{t(`workspace.${tool}`)}</Button>)}
                     <button
                         type="button"
                         className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-3 text-left typography-ui-label hover:bg-[var(--interactive-hover)]"

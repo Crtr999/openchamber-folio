@@ -21,7 +21,7 @@ import type { GuestAttachItem } from '@/hooks/useGuestSurfaces';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { PersonalTool } from '@/lib/personal-workspace/model';
-import { MENU_ICON_CLASS as menuIconClass, PERSONAL_TOOL_ICONS, personalToolIconClass } from '@/lib/personal-workspace/toolIcons';
+import { MENU_ICON_CLASS as menuIconClass, PERSONAL_TOOL_ICONS, personalToolIconClass, personalToolIconStyle } from '@/lib/personal-workspace/toolIcons';
 
 type ComposerAttachmentControlsProps = {
     isVSCode: boolean;
@@ -119,7 +119,7 @@ export const ComposerAttachmentControls = React.memo(function ComposerAttachment
                             </DropdownMenuItem>
                             {props.onOpenPersonalTool ? (['sketch', 'document', 'spreadsheet', 'presentation', 'pdf', 'templates', 'library', 'teach', 'sites', 'references', 'notion'] as const).map((tool) => (
                                 <DropdownMenuItem key={tool} onSelect={() => requestAnimationFrame(() => props.onOpenPersonalTool?.(tool))}>
-                                    <Icon name={PERSONAL_TOOL_ICONS[tool]} className={personalToolIconClass(tool)} />
+                                    <Icon name={PERSONAL_TOOL_ICONS[tool]} className={personalToolIconClass(tool)} style={personalToolIconStyle(tool)} />
                                     {t(`workspace.${tool}`)}
                                 </DropdownMenuItem>
                             )) : null}

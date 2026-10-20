@@ -61,6 +61,15 @@ export function SketchEditor({ value, onChange, readOnly = false }: { value: Dra
     if (previewRef.current) previewRef.current.innerHTML = current && current.kind !== 'erase' ? sketchElementSvg(current.element) : '';
   };
   const reset = () => { gesture.current = null; preview(); setErasedIds(noIds); setHoveredId(null); setMovingId(null); };
+  // A native drag is what takes the pointer away in the middle of a stroke:
+  // the browser starts dragging the page and cancels the pointer stream. The
+  // canvas is a drawing surface, not something to drag, so it never starts.
+  React.useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    svg.setAttribute('draggable', 'false');
+  }, []);
+
   const capture = (pointerId: number) => {
     // Capture is an enhancement, not a requirement: a synthetic event or a
     // host that refuses capture must never stop the stroke from drawing.
@@ -179,11 +188,13 @@ export function SketchEditor({ value, onChange, readOnly = false }: { value: Dra
         onPointerUp={(event) => finish(event.pointerId)}
         onPointerCancel={(event) => finish(event.pointerId)}
         onLostPointerCapture={(event) => {
-          // Capture can die without a pointerup. Only then is the gesture
-          // abandoned: a regular finish releases capture after clearing it, so
-          // its lost-capture event lands here as a no-op.
-          const current = gesture.current;
-          if (current && current.pointerId === event.pointerId) reset();
+          // Capture can die without a pointerup — most often because the
+          // browser started a native drag while the button was down, which
+          // releases the capture and cancels the pointer stream. The stroke the
+          // user just drew is finished work, not garbage: commit it. A regular
+          // finish releases capture after clearing the gesture, so its
+          // lost-capture event lands here as a no-op.
+          finish(event.pointerId);
         }}
         onPointerLeave={() => { if (!gesture.current) setHoveredId(null); }}>
         <rect width="1000" height="650" fill={SKETCH_PAPER} />

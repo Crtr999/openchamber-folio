@@ -186,9 +186,34 @@ const notionSearchResultSchema = z.object({ connected: z.boolean(), pages: z.arr
  * Read-only page lookup for the composer's @ picker. Metadata only: the page
  * body is fetched live by the agent through the Notion MCP tools. A
  * disconnected Notion is reported as such, never as an empty result set.
+ *
+ * The lookup is a round trip to a remote service, and the picker asks for one
+ * on every keystroke and every time it opens. A short-lived cache and a shared
+ * in-flight request mean the same question is only asked once: reopening the
+ * picker is instant, and a query that has been typed before is instant too.
  */
-export const searchNotionPages = async (query: string): Promise<z.infer<typeof notionSearchResultSchema>> =>
-  notionSearchResultSchema.parse(await invoke({ action: 'search', query }));
+const NOTION_SEARCH_TTL_MS = 90_000;
+const notionSearchCache = new Map<string, { at: number; result: z.infer<typeof notionSearchResultSchema> }>();
+const notionSearchInFlight = new Map<string, Promise<z.infer<typeof notionSearchResultSchema>>>();
+
+export const searchNotionPages = async (query: string): Promise<z.infer<typeof notionSearchResultSchema>> => {
+  const key = query.trim().toLowerCase();
+  const cached = notionSearchCache.get(key);
+  if (cached && Date.now() - cached.at < NOTION_SEARCH_TTL_MS) return cached.result;
+  const inFlight = notionSearchInFlight.get(key);
+  if (inFlight) return inFlight;
+  const request = invoke({ action: 'search', query })
+    .then((raw) => {
+      const result = notionSearchResultSchema.parse(raw);
+      notionSearchCache.set(key, { at: Date.now(), result });
+      return result;
+    })
+    .finally(() => {
+      notionSearchInFlight.delete(key);
+    });
+  notionSearchInFlight.set(key, request);
+  return request;
+};
 
 const habitsSchema = z.object({ day: z.string(), page: z.string().nullable(), items: z.array(z.object({ name: z.string(), checked: z.boolean() })) });
 export type HomeHabits = z.infer<typeof habitsSchema>;

@@ -155,12 +155,15 @@ describe('sketch canvas interaction', () => {
     expect(changes[0].elements[0].points).toEqual([[100, 100], [160, 100]]);
   });
 
-  test('lost capture abandons the gesture without committing', async () => {
+  test('a lost pointer capture commits the stroke instead of losing it', async () => {
+    // The browser took the pointer away mid-stroke — a native drag does this —
+    // and the line the user drew must survive it.
     await render();
     await pointer('pointerdown', 100, 100);
     await pointer('pointermove', 140, 120);
     await act(async () => canvas().dispatchEvent(new PointerEvent('lostpointercapture', { bubbles: true, pointerId: 1 })));
-    expect(changes.length).toBe(0);
+    expect(changes.length).toBe(1);
+    expect(changes[0].elements[0].points).toEqual([[100, 100], [140, 120]]);
     expect(previewMarkup()).toBe('');
   });
 

@@ -45,8 +45,33 @@ export const PERSONAL_TOOL_ICONS: Record<PersonalTool, IconName> = {
 export const MENU_ICON_CLASS = 'size-[18px] shrink-0 text-muted-foreground';
 
 /**
- * Sketch is the creation option readers look for first, so its scribble keeps
- * the reference mark's teal (`#169682`) instead of the muted row tone. Every
- * other row shares `MENU_ICON_CLASS` unchanged.
+ * The colour each creation option wears.
+ *
+ * A menu of grey glyphs is a menu nobody wants to click: the colour is the
+ * fastest way to say what a row is, and a person reaching for a sketch or a
+ * slide deck reaches for the colour they remember. These are the ink colours
+ * the rest of the app already uses, so the menu and the panels it opens look
+ * like the same product.
  */
-export const personalToolIconClass = (tool: PersonalTool): string => tool === 'sketch' ? 'size-[18px] shrink-0 text-[#169682]' : MENU_ICON_CLASS;
+export const PERSONAL_TOOL_ICON_COLORS: Record<PersonalTool, string> = {
+  // The reference mark's teal: the scribble keeps the colour it always had.
+  sketch: '#169682',
+  document: '#2f6feb',
+  spreadsheet: '#1f8a4c',
+  presentation: '#d97706',
+  pdf: '#dc2626',
+  templates: '#7c3aed',
+  library: '#0891b2',
+  teach: '#db2777',
+  sites: '#2563eb',
+  references: '#0f766e',
+  notion: '#64748b',
+};
+
+/**
+ * The glyph, in its own colour, at the size the menu rows use.
+ */
+export const personalToolIconClass = (tool: PersonalTool): string =>
+  `size-[18px] shrink-0`;
+export const personalToolIconStyle = (tool: PersonalTool): { color: string } =>
+  ({ color: PERSONAL_TOOL_ICON_COLORS[tool] });

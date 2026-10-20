@@ -96,7 +96,7 @@ export function useNotionReferences(query: string, options: { enabled: boolean }
     const trimmed = query.trim();
     // A bare @ opens the picker for any file mention, so recent pages are
     // worth a request only once the caret has paused there.
-    const delay = trimmed ? 320 : 600;
+    const delay = trimmed ? 250 : 400;
     const id = requestId.current + 1;
     requestId.current = id;
     setState((previous) => ({ ...previous, loading: true, error: null }));

@@ -1,5 +1,5 @@
 import type { ProjectEntry } from '@/lib/api/types';
-import { normalizeFolderKeyPath } from '@/lib/friends';
+import { folderFriendKey, normalizeFolderKeyPath } from '@/lib/friends';
 
 /**
  * All Chats is a friend too.
@@ -28,6 +28,21 @@ export const allChatsProject = (chatsRoot: string | null | undefined): ProjectEn
 
 export const isAllChatsProject = (project: { id: string } | null | undefined): boolean =>
   project?.id === ALL_CHATS_PROJECT_ID;
+
+/**
+ * The name the All Chats friend goes by, or null when it has none of its own.
+ *
+ * The friend is stored under its folder, so the sidebar heading, the project
+ * picker and the card all read the same record and cannot drift apart.
+ */
+export const allChatsFriendName = (
+  profiles: { friends: Array<{ agent: string; name?: string }> } | null,
+  chatsRoot: string | null | undefined,
+): string | null => {
+  if (!chatsRoot || !profiles) return null;
+  const key = folderFriendKey(chatsRoot);
+  return profiles.friends.find((item) => item.agent === key)?.name ?? null;
+};
 
 /** True when a directory sits inside the chats root rather than being it. */
 export const isWithinChatsRoot = (directory: string | null | undefined, chatsRoot: string | null | undefined): boolean => {
