@@ -2375,4 +2375,7 @@ export const settingsDict = {
   'settings.mcp.page.advanced.oauthMetadataUrlPlaceholder': 'https://example.com/.well-known/oauth-authorization-server',
   'settings.mcp.page.advanced.oauthMetadataUrlInvalid': '请输入完整的 http:// 或 https:// 地址。',
   'settings.magicPrompts.page.block.codeFusionInstructions': '代码融合说明',
+  'settings.openchamber.tools.field.browserMcpServers': '浏览器 MCP 服务器',
+  'settings.openchamber.tools.field.browserMcpServersSummary': '应用使用自己的浏览器，这些服务器不会在应用内启动。',
+  'settings.openchamber.tools.field.browserMcpServersInfo': 'OpenCode 会为每个智能体启动每个 MCP 服务器的一份副本，于是三个浏览器服务器变成了 59 份副本，占用约 2GB 内存。应用自带浏览器面板和 openchamber_web 工具，所以这里不启动它们。你自己的配置不变：在其他客户端里它们照常运行。',
 } as const;

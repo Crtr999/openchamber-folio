@@ -677,6 +677,14 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => !ctx.isVSCode && useUIStore.getState().agentMemoryFeatureAvailable,
   },
   {
+    id: 'sessions.browser-mcp-servers',
+    page: 'general',
+    titleKey: 'settings.openchamber.tools.field.browserMcpServers',
+    descriptionKey: 'settings.openchamber.tools.field.browserMcpServersInfo',
+    keywords: ['mcp', 'browser', 'memory', 'playwright', 'devtools', 'openchamber'],
+    isAvailable: (ctx) => !ctx.isVSCode,
+  },
+  {
     id: 'sessions.folder-memory-capture',
     page: 'general',
     titleKey: 'settings.openchamber.tools.field.folderMemoryAutoCapture',

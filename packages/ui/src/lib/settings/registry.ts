@@ -266,6 +266,9 @@ export const SETTINGS_REGISTRY = {
   // its own. The agent can still save memory itself; this is the capture that
   // happens without being asked for.
   folderMemoryAutoCapture: field({ scope: 'instance', parse: parseBoolean, ui: uiStore('folderMemoryAutoCapture', (v) => useUIStore.getState().setFolderMemoryAutoCapture(v)) }),
+  // The app has its own browser; OpenCode starts a copy of every MCP server
+  // for every agent, so the duplicate browser servers are off unless asked for.
+  appRunsBrowserMcpServers: field({ scope: 'instance', parse: parseBoolean, ui: uiStore('appRunsBrowserMcpServers', (v) => useUIStore.getState().setAppRunsBrowserMcpServers(v)) }),
   // The isolated-spaces switch. The server reads it once at start; a change takes effect at the
   // next start, which the settings row says. Never shown in VS Code (decision 16 of the design).
   isolatedSpacesEnabled: field({ scope: 'instance', parse: parseBoolean, ui: uiStore('isolatedSpacesEnabled', (v) => useUIStore.getState().setIsolatedSpacesEnabled(v)) }),

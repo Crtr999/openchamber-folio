@@ -2375,4 +2375,7 @@ export const settingsDict = {
   'settings.mcp.page.advanced.oauthMetadataUrlPlaceholder': 'https://example.com/.well-known/oauth-authorization-server',
   'settings.mcp.page.advanced.oauthMetadataUrlInvalid': 'Saisissez une adresse http:// ou https:// complète.',
   'settings.magicPrompts.page.block.codeFusionInstructions': 'Instructions de fusion de code',
+  "settings.openchamber.tools.field.browserMcpServers": "Serveurs MCP de navigateur",
+  "settings.openchamber.tools.field.browserMcpServersSummary": "L'app utilise son propre navigateur ; ces serveurs ne sont pas démarrés dans l'app.",
+  "settings.openchamber.tools.field.browserMcpServersInfo": "OpenCode démarre une copie de chaque serveur MCP pour chaque agent : trois serveurs de navigateur sont devenus cinquante-neuf copies et environ deux gigaoctets de mémoire. L'app a son propre panneau de navigateur et l'outil openchamber_web, ils restent donc éteints ici. Ta configuration est inchangée : ils fonctionnent pour tout autre client.",
 } as const;

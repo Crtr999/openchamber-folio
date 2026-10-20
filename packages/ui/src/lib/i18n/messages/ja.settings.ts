@@ -2375,4 +2375,7 @@ export const settingsDict = {
   'settings.mcp.page.advanced.oauthMetadataUrlPlaceholder': 'https://example.com/.well-known/oauth-authorization-server',
   'settings.mcp.page.advanced.oauthMetadataUrlInvalid': 'http:// または https:// で始まる完全なアドレスを入力してください。',
   'settings.magicPrompts.page.block.codeFusionInstructions': 'コードフュージョンの指示',
+  "settings.openchamber.tools.field.browserMcpServers": "ブラウザー MCP サーバー",
+  "settings.openchamber.tools.field.browserMcpServersSummary": "アプリは独自のブラウザーを使うため、これらのサーバーはアプリ内では起動しません。",
+  "settings.openchamber.tools.field.browserMcpServersInfo": "OpenCode はエージェントごとに MCP サーバーのコピーを起動するため、ブラウザー系 3 台が 59 個のコピーになり約 2GB のメモリを消費していました。アプリには独自のブラウザーパネルと openchamber_web ツールがあるため、ここでは起動しません。設定自体は変更しておらず、他のクライアントでは従来どおり動きます。",
 } as const;

@@ -15,6 +15,24 @@ export const MANAGED_CONFIG_FILE_NAME = 'opencode.managed.json';
 const DISABLED_BUILTIN_PLUGINS = ['-opencode.browser'];
 
 /**
+ * Browser MCP servers the app does not start.
+ *
+ * OpenCode starts a copy of every MCP server for every agent that can use it,
+ * and the app's runtime knows every agent in every folder — so three browser
+ * servers became fifty-nine copies, a hundred and fifteen processes, and about
+ * two gigabytes of memory the machine was spending on duplicate browsers.
+ *
+ * The app already has a browser: its own panel, its own Chromium, which the
+ * user can watch while the agent works, and the `openchamber_web` tool that
+ * drives it. A second browser behind a second protocol buys nothing and costs
+ * the machine its memory, so the app does not start these.
+ *
+ * The user's own configuration is untouched: these servers still run for any
+ * other client, and the setting below turns them back on inside the app.
+ */
+const APP_OWNED_BROWSER_MCP_SERVERS = ['playwright', 'chrome-devtools'];
+
+/**
  * The managed OpenCode config layer.
  *
  * OpenCode 2 watches every config source it reads, including the file named by
@@ -59,7 +77,17 @@ export const createManagedConfigRuntime = ({
 
   const writeConfigFile = async (pluginDirectories) => {
     await fsPromises.mkdir(dataDir, { recursive: true });
-    const text = `${JSON.stringify({ plugins: [...DISABLED_BUILTIN_PLUGINS, ...pluginDirectories] }, null, 2)}\n`;
+    const settings = await Promise.resolve(readSettings()).catch(() => null);
+    // The browser servers the app already provides are not started unless the
+    // user asks for them inside the app.
+    const disabledServers = settings?.appRunsBrowserMcpServers === true
+      ? {}
+      : Object.fromEntries(APP_OWNED_BROWSER_MCP_SERVERS.map((name) => [name, { disabled: true }]));
+    const managed = {
+      plugins: [...DISABLED_BUILTIN_PLUGINS, ...pluginDirectories],
+      ...(Object.keys(disabledServers).length > 0 ? { mcp: { servers: disabledServers } } : {}),
+    };
+    const text = `${JSON.stringify(managed, null, 2)}\n`;
     // Temp + rename: OpenCode reacts to the write immediately, and a partial
     // read would make it drop every managed plugin until the next change.
     const tmp = `${filePath}.tmp-${process.pid}-${Date.now()}`;

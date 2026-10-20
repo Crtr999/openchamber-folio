@@ -105,7 +105,6 @@ const CONTEXT_PANEL_DEFAULT_WIDTH = 600;
 // want it nearly full-width (side-by-side diffs with the chat open). The
 // only limit during a drag is leaving the chat column this much width.
 const CONTEXT_CHAT_MIN_WIDTH = 400;
-const RESIZE_FOLLOW_INTERVAL_MS = 100;
 const CONTEXT_TAB_LABEL_MAX_CHARS = 24;
 type TranslateFn = ReturnType<typeof useI18n>['t'];
 const EMPTY_SESSION_TITLE_MAP = new Map<string, string>();
@@ -661,25 +660,17 @@ export const ContextPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
   // so during the drag only a ghost guide line follows the pointer and the
   // real width is applied once on release (riding the width transition).
   const resizeAvailableWidthRef = React.useRef<number | null>(null);
-  // The panel content follows the guide line lazily: the real width is
-  // re-applied at most every RESIZE_FOLLOW_INTERVAL_MS and the standing
-  // 200ms width transition smooths each step, VS Code-style.
-  const resizeFollowTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
+  // The panel content follows the guide line: the width is written to the DOM
+  // on every pointer move, so the panel tracks the pointer exactly. The
+  // reflowing it costs is the chat column and the active surface, which is
+  // why the width is written as a custom property rather than through state.
   const applyFollowWidth = React.useCallback(() => {
-    resizeFollowTimerRef.current = null;
     const panel = panelRef.current;
     const next = resizingWidthRef.current;
     if (!panel || next === null) {
       return;
     }
     panel.style.setProperty('--oc-context-panel-width', `${next}px`);
-  }, []);
-
-  React.useEffect(() => () => {
-    if (resizeFollowTimerRef.current !== null) {
-      clearTimeout(resizeFollowTimerRef.current);
-    }
   }, []);
 
   const clampWidthForDrag = React.useCallback((nextWidth: number) => {
@@ -711,10 +702,6 @@ export const ContextPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
     const availableWidth = resizeAvailableWidthRef.current;
     resizingWidthRef.current = null;
     resizeAvailableWidthRef.current = null;
-    if (resizeFollowTimerRef.current !== null) {
-      clearTimeout(resizeFollowTimerRef.current);
-      resizeFollowTimerRef.current = null;
-    }
     document.documentElement.style.cursor = '';
     if (isTreeOnly) {
       setContextEditorTreeWidth(finalWidth);
@@ -744,9 +731,11 @@ export const ContextPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
         return;
       }
       resizingWidthRef.current = nextWidth;
-      if (resizeFollowTimerRef.current === null) {
-        resizeFollowTimerRef.current = setTimeout(applyFollowWidth, RESIZE_FOLLOW_INTERVAL_MS);
-      }
+      // The width is written straight to the DOM on every move, so the panel
+      // tracks the pointer exactly, the way a native resizer does. It used to
+      // be applied on a timer, and a drag that moves in ten-steps-a-second
+      // feels stepped and slow however good the easing is.
+      applyFollowWidth();
     };
 
     const handleUp = (event: PointerEvent) => {

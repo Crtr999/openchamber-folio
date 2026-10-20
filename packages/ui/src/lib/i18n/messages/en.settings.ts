@@ -2365,4 +2365,7 @@ export const settingsDict = {
   'settings.mcp.page.advanced.oauthMetadataUrlPlaceholder': 'https://example.com/.well-known/oauth-authorization-server',
   'settings.mcp.page.advanced.oauthMetadataUrlInvalid': 'Enter a full http:// or https:// address.',
   'settings.magicPrompts.page.block.codeFusionInstructions': 'Code Fusion Instructions',
+  'settings.openchamber.tools.field.browserMcpServers': 'Browser MCP servers',
+  'settings.openchamber.tools.field.browserMcpServersSummary': 'The app uses its own browser; these servers are not started inside the app.',
+  'settings.openchamber.tools.field.browserMcpServersInfo': 'OpenCode starts a copy of every MCP server for every agent, so three browser servers became fifty-nine copies and about two gigabytes of memory. The app has its own browser panel and the openchamber_web tool, so these are left off here. Your own configuration is unchanged: they still run for any other client.',
 } as const;

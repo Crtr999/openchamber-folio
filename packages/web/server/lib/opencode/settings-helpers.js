@@ -630,6 +630,9 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.folderMemoryAutoCapture === 'boolean') {
       result.folderMemoryAutoCapture = candidate.folderMemoryAutoCapture;
     }
+    if (typeof candidate.appRunsBrowserMcpServers === 'boolean') {
+      result.appRunsBrowserMcpServers = candidate.appRunsBrowserMcpServers;
+    }
     if (typeof candidate.agentNotifyToolEnabled === 'boolean') {
       result.agentNotifyToolEnabled = candidate.agentNotifyToolEnabled;
     }

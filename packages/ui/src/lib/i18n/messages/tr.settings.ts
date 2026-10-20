@@ -2365,4 +2365,7 @@ export const settingsDict = {
   ...guestIntegrationsI18n.tr,
   ...extensionsSettingsI18n.tr,
   'settings.magicPrompts.page.block.codeFusionInstructions': 'Kod fusion talimatları',
+  'settings.openchamber.tools.field.browserMcpServers': 'Tarayıcı MCP sunucuları',
+  'settings.openchamber.tools.field.browserMcpServersSummary': 'Uygulama kendi tarayıcısını kullanır; bu sunucular uygulama içinde başlatılmaz.',
+  'settings.openchamber.tools.field.browserMcpServersInfo': 'OpenCode her ajan için her MCP sunucusunun bir kopyasını başlatıyor, bu yüzden üç tarayıcı sunucusu elli dokuz kopyaya ve yaklaşık iki gigabayt belleğe dönüştü. Uygulamanın kendi tarayıcı paneli ve openchamber_web aracı var, bu yüzden burada açık kalmıyorlar. Kendi ayarların değişmiyor: başka istemcilerde eskisi gibi çalışırlar.',
 };

@@ -2375,4 +2375,7 @@ export const settingsDict = {
   'settings.mcp.page.advanced.oauthMetadataUrlPlaceholder': 'https://example.com/.well-known/oauth-authorization-server',
   'settings.mcp.page.advanced.oauthMetadataUrlInvalid': 'http:// 또는 https://로 시작하는 전체 주소를 입력하세요.',
   'settings.magicPrompts.page.block.codeFusionInstructions': '코드 fusion 지침',
+  'settings.openchamber.tools.field.browserMcpServers': '브라우저 MCP 서버',
+  'settings.openchamber.tools.field.browserMcpServersSummary': '앱은 자체 브라우저를 사용하므로 이 서버들은 앱 안에서 시작되지 않습니다.',
+  'settings.openchamber.tools.field.browserMcpServersInfo': 'OpenCode는 에이전트마다 MCP 서버 복사본을 시작해서 브라우저 서버 3개가 59개 복사본이 되고 약 2GB 메모리를 사용했습니다. 앱에는 자체 브라우저 패널과 openchamber_web 도구가 있으니 여기서는 시작하지 않습니다. 설정은 그대로이며 다른 클라이언트에서는 이전과 같이 동작합니다.',
 } as const;

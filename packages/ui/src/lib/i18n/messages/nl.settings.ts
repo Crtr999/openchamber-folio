@@ -2365,4 +2365,7 @@ export const settingsDict = {
   'settings.mcp.page.advanced.oauthMetadataUrlPlaceholder': 'https://example.com/.well-known/oauth-authorization-server',
   'settings.mcp.page.advanced.oauthMetadataUrlInvalid': 'Voer een volledig http://- of https://-adres in.',
   'settings.magicPrompts.page.block.codeFusionInstructions': 'Codefusie-instructies',
+  'settings.openchamber.tools.field.browserMcpServers': 'Browser-MCP-servers',
+  'settings.openchamber.tools.field.browserMcpServersSummary': 'De app gebruikt zijn eigen browser; deze servers starten niet binnen de app.',
+  'settings.openchamber.tools.field.browserMcpServersInfo': 'OpenCode start voor elke agent een kopie van elke MCP-server, waardoor drie browserservers negenenvijftig kopieën werden en ongeveer twee gigabyte geheugen. De app heeft een eigen browserpaneel en de openchamber_web-tool, dus hier blijven ze uit. Je eigen configuratie verandert niet: ze draaien nog voor elke andere client.',
 } as const;

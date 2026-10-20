@@ -2375,4 +2375,7 @@ export const settingsDict = {
   'settings.mcp.page.advanced.oauthMetadataUrlPlaceholder': 'https://example.com/.well-known/oauth-authorization-server',
   'settings.mcp.page.advanced.oauthMetadataUrlInvalid': '請輸入完整的 http:// 或 https:// 位址。',
   'settings.magicPrompts.page.block.codeFusionInstructions': '程式碼融合說明',
+  'settings.openchamber.tools.field.browserMcpServers': '瀏覽器 MCP 伺服器',
+  'settings.openchamber.tools.field.browserMcpServersSummary': '應用使用自己的瀏覽器，這些伺服器不會在應用內啟動。',
+  'settings.openchamber.tools.field.browserMcpServersInfo': 'OpenCode 會為每個代理啟動每個 MCP 伺服器的一份副本，於是三個瀏覽器伺服器變成了 59 份副本，佔用約 2GB 記憶體。應用自帶瀏覽器面板和 openchamber_web 工具，所以這裡不啟動它們。你自己的設定不變：在其他用戶端裡它們照常運作。',
 } as const;

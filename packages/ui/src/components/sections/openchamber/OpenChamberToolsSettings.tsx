@@ -93,6 +93,8 @@ export const OpenChamberToolsSettings: React.FC = () => {
   const setAgentMemoryToolEnabled = useUIStore((state) => state.setAgentMemoryToolEnabled);
   const folderMemoryAutoCapture = useUIStore((state) => state.folderMemoryAutoCapture);
   const setFolderMemoryAutoCapture = useUIStore((state) => state.setFolderMemoryAutoCapture);
+  const appRunsBrowserMcpServers = useUIStore((state) => state.appRunsBrowserMcpServers);
+  const setAppRunsBrowserMcpServers = useUIStore((state) => state.setAppRunsBrowserMcpServers);
   const agentNotifyToolEnabled = useUIStore((state) => state.agentNotifyToolEnabled);
   const setAgentNotifyToolEnabled = useUIStore((state) => state.setAgentNotifyToolEnabled);
   const agentToolsCodeMode = useUIStore((state) => state.agentToolsCodeMode);
@@ -159,6 +161,13 @@ export const OpenChamberToolsSettings: React.FC = () => {
     setFolderMemoryAutoCapture(enabled);
     void updateDesktopSettings({ folderMemoryAutoCapture: enabled });
   }, [setFolderMemoryAutoCapture]);
+
+  // The browser MCP servers are started again by the running OpenCode after
+  // the managed config is rewritten, so the config is refreshed as well.
+  const handleAppRunsBrowserMcpServersChange = React.useCallback((enabled: boolean) => {
+    setAppRunsBrowserMcpServers(enabled);
+    void updateDesktopSettings({ appRunsBrowserMcpServers: enabled });
+  }, [setAppRunsBrowserMcpServers]);
 
   return (
     <SettingsSection title={t('settings.openchamber.tools.title')}>
@@ -250,6 +259,17 @@ export const OpenChamberToolsSettings: React.FC = () => {
             ariaLabel={t('settings.openchamber.tools.field.agentMemoryToolAria')}
           />
         ) : null}
+
+        <ToolRow
+          icon="global"
+          settingsItem="sessions.browser-mcp-servers"
+          checked={appRunsBrowserMcpServers}
+          onChange={handleAppRunsBrowserMcpServersChange}
+          title={t('settings.openchamber.tools.field.browserMcpServers')}
+          summary={t('settings.openchamber.tools.field.browserMcpServersSummary')}
+          info={t('settings.openchamber.tools.field.browserMcpServersInfo')}
+          ariaLabel={t('settings.openchamber.tools.field.browserMcpServers')}
+        />
 
         {agentMemoryAvailable ? (
           <ToolRow

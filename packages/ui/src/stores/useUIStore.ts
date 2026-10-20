@@ -1010,6 +1010,12 @@ interface UIStore {
   agentMemoryToolEnabled: boolean;
   /** Whether a finished conversation is distilled into its folder's memory on its own. */
   folderMemoryAutoCapture: boolean;
+  /**
+   * Whether the app also starts the browser MCP servers the user has
+   * configured. Off by default: the app has its own browser, and OpenCode
+   * starts a copy of every MCP server for every agent.
+   */
+  appRunsBrowserMcpServers: boolean;
   agentNotifyToolEnabled: boolean;
   /** Whether OpenChamber's agent tools sit behind OpenCode's Code Mode instead of being direct tools. */
   agentToolsCodeMode: boolean;
@@ -1243,6 +1249,7 @@ interface UIStore {
   setBrowserProvider: (value: string) => void;
   setAgentMemoryToolEnabled: (value: boolean) => void;
   setFolderMemoryAutoCapture: (value: boolean) => void;
+  setAppRunsBrowserMcpServers: (value: boolean) => void;
   setAgentNotifyToolEnabled: (value: boolean) => void;
   setAgentToolsCodeMode: (value: boolean) => void;
   setIsolatedSpacesEnabled: (value: boolean) => void;
@@ -1442,6 +1449,7 @@ export const useUIStore = create<UIStore>()(
         browserProvider: 'builtin',
         agentMemoryToolEnabled: true,
         folderMemoryAutoCapture: true,
+        appRunsBrowserMcpServers: false,
         agentNotifyToolEnabled: false,
         agentToolsCodeMode: false,
         isolatedSpacesEnabled: false,
@@ -2839,6 +2847,9 @@ export const useUIStore = create<UIStore>()(
         setFolderMemoryAutoCapture: (value) => {
           set({ folderMemoryAutoCapture: value });
         },
+        setAppRunsBrowserMcpServers: (value) => {
+          set({ appRunsBrowserMcpServers: value });
+        },
         setIsolatedSpacesEnabled: (value) => {
           set({ isolatedSpacesEnabled: value });
         },
@@ -3344,6 +3355,7 @@ export const useUIStore = create<UIStore>()(
           browserProvider: state.browserProvider,
           agentMemoryToolEnabled: state.agentMemoryToolEnabled,
           folderMemoryAutoCapture: state.folderMemoryAutoCapture,
+          appRunsBrowserMcpServers: state.appRunsBrowserMcpServers,
           agentNotifyToolEnabled: state.agentNotifyToolEnabled,
           agentToolsCodeMode: state.agentToolsCodeMode,
           isolatedSpacesEnabled: state.isolatedSpacesEnabled,
