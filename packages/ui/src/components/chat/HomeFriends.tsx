@@ -35,6 +35,9 @@ import {
     type OpenFriendStudioDetail,
 } from '@/lib/friends';
 import { parseModelSelection } from '@/lib/modelIdentifier';
+import { allChatsProject, isAllChatsProject, sessionBelongsToFriend } from '@/lib/allChatsFriend';
+import { createChatDirectory } from '@/lib/chatDirectories';
+import { useChatsRoot } from '@/hooks/useChatsRoot';
 import { cn } from '@/lib/utils';
 import { HomeFriendAvatar } from './HomeFriendAvatar';
 import { HomeFriendCustomize, type FriendCustomizeTarget } from './HomeFriendCustomize';
@@ -42,7 +45,8 @@ import { HomeFriendDetails } from './HomeFriendDetails';
 
 type FolderCatalog = {
     agents: Agent[];
-    configuration: Awaited<ReturnType<typeof opencodeClient.getRulesConfiguration>>;
+    /** Undefined when the folder's configuration could not be read. */
+    configuration?: Awaited<ReturnType<typeof opencodeClient.getRulesConfiguration>>;
 };
 type FriendStatus = { kind: 'working' | 'retrying' | 'active' | 'unconfirmed' | 'about'; text: string };
 export type FriendCard = {
@@ -193,6 +197,13 @@ export function HomeFriends() {
     const { t, locale } = useI18n();
     const projects = useProjectsStore(s => s.projects);
     const updateProjectMeta = useProjectsStore(s => s.updateProjectMeta);
+    const chatsRoot = useChatsRoot();
+    // All Chats is a friend as well: the conversations that belong to no
+    // folder are one relationship, with a name, a face and a memory of their own.
+    const friendProjects = React.useMemo<ProjectEntry[]>(() => {
+        const allChats = allChatsProject(chatsRoot);
+        return allChats ? [...projects, allChats] : projects;
+    }, [projects, chatsRoot]);
     const statuses = useAllSessionStatuses();
     const liveSessions = useAllLiveSessions();
     const cachedSessions = useGlobalSessionsStore(s => s.activeSessions);
@@ -244,17 +255,23 @@ export function HomeFriends() {
     }, [supported, readProfiles]);
 
     React.useEffect(() => {
-        if (!projects.length || !supported) return;
+        if (!friendProjects.length || !supported) return;
         const token = ++sequence.current;
         const owner = getRuntimeKey();
         setLoading(true);
         void Promise.all(
-            projects.map(async project => {
-                const [items, configuration] = await Promise.all([
-                    opencodeClient.listAgents(project.path),
-                    opencodeClient.getRulesConfiguration(project.path),
-                ]);
-                return [project.path, { agents: items.filter(item => !item.hidden), configuration }] as const;
+            friendProjects.map(async project => {
+                // One folder that cannot be read must not blank the rest of the
+                // widget: the friend still shows, with what is known of it.
+                try {
+                    const [items, configuration] = await Promise.all([
+                        opencodeClient.listAgents(project.path),
+                        opencodeClient.getRulesConfiguration(project.path),
+                    ]);
+                    return [project.path, { agents: items.filter(item => !item.hidden), configuration }] as const;
+                } catch {
+                    return [project.path, { agents: [], configuration: undefined }] as const;
+                }
             }),
         ).then(entries => {
             if (token !== sequence.current || getRuntimeKey() !== owner) return;
@@ -268,7 +285,7 @@ export function HomeFriends() {
             if (token === sequence.current) setLoading(false);
         });
         return () => { sequence.current += 1; setLoading(false); };
-    }, [projects, supported, refresh, t]);
+    }, [friendProjects, supported, refresh, t]);
 
     const resolveProjectFriend = React.useCallback((project: ProjectEntry) => {
         const catalog = catalogsByPath[project.path];
@@ -277,14 +294,18 @@ export function HomeFriends() {
         const guardrails = summarizeFolderGuardrails(catalog?.configuration, primaryAgent, project.path);
         const specialists = resolveFolderSpecialists(catalog?.agents ?? [], primaryAgent.name, guardrails.zdrLocked);
         const name = folderFriendName(profiles, project, primaryAgent);
-        const role = folderFriendRole(profiles, project, primaryAgent, guardrails);
+        // All Chats is not a folder, so its role says what it is instead of
+        // naming the agent that runs it.
+        const role = isAllChatsProject(project)
+            ? (profiles?.friends.find(item => item.agent === folderFriendKey(project.path))?.role || t('friends.allChatsRole'))
+            : folderFriendRole(profiles, project, primaryAgent, guardrails);
         const appearance = folderFriendAppearance(profiles, project.path, project.color, primaryAgent.name);
         return { catalog, primaryAgent, specialists, guardrails, name, role, appearance };
-    }, [catalogsByPath, profiles]);
+    }, [catalogsByPath, profiles, t]);
 
     const reloadLinks = React.useCallback(() => {
         const next = new Map<string, FriendLink | null>();
-        for (const project of projects) {
+        for (const project of friendProjects) {
             const { primaryAgent } = resolveProjectFriend(project);
             try {
                 next.set(
@@ -297,7 +318,7 @@ export function HomeFriends() {
             }
         }
         setLinks(next);
-    }, [projects, resolveProjectFriend, runtime]);
+    }, [friendProjects, resolveProjectFriend, runtime]);
 
     React.useEffect(() => {
         reloadLinks();
@@ -309,23 +330,21 @@ export function HomeFriends() {
         const byId = new Map<string, Session>(cachedSessions.map(session => [session.id, session]));
         for (const session of liveSessions) byId.set(session.id, session);
         const byFolder = new Map<string, Session[]>();
-        for (const project of projects) {
-            const normRoot = normalizeFolderKeyPath(project.path);
+        for (const project of friendProjects) {
             const matching = [...byId.values()]
                 .filter(session => {
                     if (session.parentID || session.time?.archived || !session.directory) return false;
-                    const normDir = normalizeFolderKeyPath(session.directory);
-                    return normDir === normRoot;
+                    return sessionBelongsToFriend(project, session);
                 })
                 .sort((a, b) => (b.time?.updated ?? 0) - (a.time?.updated ?? 0));
             byFolder.set(project.id, matching);
         }
         return { byId, byFolder };
-    }, [cachedSessions, liveSessions, projects]);
+    }, [cachedSessions, liveSessions, friendProjects]);
 
     const cards = React.useMemo<FriendCard[]>(() => {
         const now = Date.now();
-        return projects.map(project => {
+        return friendProjects.map(project => {
             const { primaryAgent, guardrails, name, role, appearance } = resolveProjectFriend(project);
             const link = links.get(project.id);
             const folderSessions = sessionsByFolder.byFolder.get(project.id) ?? [];
@@ -355,10 +374,10 @@ export function HomeFriends() {
                 badges: guardrails.badges,
             };
         });
-    }, [projects, resolveProjectFriend, links, sessionsByFolder, statuses, locale, t]);
+    }, [friendProjects, resolveProjectFriend, links, sessionsByFolder, statuses, locale, t]);
 
     const manage = (agentName: string, project?: ProjectEntry) => {
-        const targetProject = project ?? (details ? projects.find(p => p.id === details.projectId) : projects[0]);
+        const targetProject = project ?? (details ? friendProjects.find(p => p.id === details.projectId) : friendProjects[0]);
         if (!targetProject) return;
         const ui = useUIStore.getState();
         ui.setSettingsProjectPath(targetProject.path);
@@ -370,11 +389,14 @@ export function HomeFriends() {
 
     /** Continue reopens the folder's latest or linked conversation; `fresh` starts a new sub-conversation in that folder. */
     const talkInFolder = async (projectId: string, fresh: boolean) => {
-        const project = projects.find(item => item.id === projectId);
+        const project = friendProjects.find(item => item.id === projectId);
         if (!project || mutation.current) return;
         const { name: display } = resolveProjectFriend(project);
         const owner = runtime;
         const directory = project.path;
+        // All Chats is the one friend whose conversations do not live in its
+        // own path: each one gets a dated directory of its own under the root.
+        const allChats = isAllChatsProject(project);
         mutation.current = true;
         setBusyFolderId(projectId);
         setError('');
@@ -397,8 +419,9 @@ export function HomeFriends() {
             if (!fresh) {
                 if (link?.state === 'ready') {
                     try {
-                        const candidate = await opencodeClient.getSession(link.sessionId, directory);
-                        if (!candidate.time.archived && normalizeFolderKeyPath(candidate.directory) === normalizeFolderKeyPath(directory) && candidate.agent === agentId) session = candidate;
+                        const known = sessionsByFolder.byId.get(link.sessionId);
+                        const candidate = await opencodeClient.getSession(link.sessionId, known?.directory ?? directory);
+                        if (!candidate.time.archived && sessionBelongsToFriend(project, candidate) && candidate.agent === agentId) session = candidate;
                     } catch {
                         // Fall back to the most recent active conversation in this folder.
                     }
@@ -406,8 +429,8 @@ export function HomeFriends() {
                 if (!session && folderSessions.length > 0) {
                     const recent = folderSessions.find(item => item.agent === agentId);
                     if (recent) {
-                        const candidate = await opencodeClient.getSession(recent.id, directory);
-                        if (!candidate.time.archived && normalizeFolderKeyPath(candidate.directory) === normalizeFolderKeyPath(directory) && candidate.agent === agentId) session = candidate;
+                        const candidate = await opencodeClient.getSession(recent.id, recent.directory ?? directory);
+                        if (!candidate.time.archived && sessionBelongsToFriend(project, candidate) && candidate.agent === agentId) session = candidate;
                     }
                 }
             }
@@ -423,19 +446,25 @@ export function HomeFriends() {
                 writeFriendLink(localStorage, owner, directory, folderFriendKey(directory), { state: 'creating' });
                 reloadLinks();
                 const chatNumber = folderSessions.length + 1;
-                const title = fresh && chatNumber > 1
-                    ? `${display} · #${chatNumber}`
-                    : `${display} · ${project.label || project.path.split('/').pop()}`;
-                session = await opencodeClient.createSession({ agent: agentId, model, title }, directory);
+                const title = allChats
+                    ? (chatNumber > 1 ? `${display} · #${chatNumber}` : display)
+                    : (fresh && chatNumber > 1
+                        ? `${display} · #${chatNumber}`
+                        : `${display} · ${project.label || project.path.split('/').pop()}`);
+                // All Chats conversations each get a dated directory of their own.
+                const sessionDirectory = allChats ? await createChatDirectory() : directory;
+                session = await opencodeClient.createSession({ agent: agentId, model, title }, sessionDirectory);
             }
 
             if (getRuntimeKey() !== owner || token !== sequence.current) return;
-            if (normalizeFolderKeyPath(session.directory) !== normalizeFolderKeyPath(directory) || session.agent !== agentId || session.time.archived) throw new Error(t('friends.changedChat'));
+            if (!sessionBelongsToFriend(project, session) || session.agent !== agentId || session.time.archived) throw new Error(t('friends.changedChat'));
             writeFriendLink(localStorage, owner, directory, folderFriendKey(directory), { state: 'ready', sessionId: session.id });
             reloadLinks();
             setDetails(null);
-            useProjectsStore.getState().setActiveProject(project.id);
-            useSessionUIStore.getState().setCurrentSession(session.id, directory);
+            // All Chats is not a project the user added, so there is nothing to
+            // activate in the project store; the session is what matters.
+            if (!allChats) useProjectsStore.getState().setActiveProject(project.id);
+            useSessionUIStore.getState().setCurrentSession(session.id, session.directory);
         } catch (failure) {
             if (owner === getRuntimeKey() && token === sequence.current) {
                 setError(failure instanceof Error ? failure.message : t('personalTools.error'));
@@ -447,7 +476,7 @@ export function HomeFriends() {
     };
 
     const openCustomizeForFolder = (projectId: string, origin: Origin) => {
-        const project = projects.find(item => item.id === projectId);
+        const project = friendProjects.find(item => item.id === projectId);
         if (!project || !profiles) return;
         const { role, name, appearance } = resolveProjectFriend(project);
         setCustomize({
@@ -464,26 +493,27 @@ export function HomeFriends() {
         if (!profiles) throw new Error(t('friends.storageError'));
         const next = saveFriendProfile(localStorage, runtime, key, draft, profiles.revision);
         setProfiles(next);
-        const matchingProject = projects.find(p => folderFriendKey(p.path) === key);
-        if (matchingProject) {
+        const matchingProject = friendProjects.find(p => folderFriendKey(p.path) === key);
+        // All Chats is not a project in the store, so it has no colour to keep.
+        if (matchingProject && projects.some(p => p.id === matchingProject.id)) {
             updateProjectMeta(matchingProject.id, { color: draft.color });
         }
         window.dispatchEvent(new Event('open-carter:friends-updated'));
     };
 
-    const detailProject = details ? projects.find(item => item.id === details.projectId) : undefined;
+    const detailProject = details ? friendProjects.find(item => item.id === details.projectId) : undefined;
     const detailFriend = detailProject ? resolveProjectFriend(detailProject) : null;
     const customizeDialog = <HomeFriendCustomize target={customize} onClose={() => setCustomize(null)} onSave={saveCustomize} />;
 
     return <section className="oc-friends" aria-busy={loading || undefined}>
         <HomeFriendsHeader
-            projects={supported ? projects : []}
+            projects={supported ? friendProjects : []}
             loading={loading}
             busy={Boolean(busyFolderId)}
             onRefresh={() => setRefresh(value => value + 1)}
         />
         {!supported ? <p className="oc-home-empty">{t('home.desktopOnly')}</p>
-            : !projects.length ? <p className="oc-home-empty">{t('friends.noFolders')}</p>
+            : !friendProjects.length ? <p className="oc-home-empty">{t('friends.noFolders')}</p>
             : <>
                 {profileError && <p role="alert" className="oc-home-empty text-[var(--status-error-text)]">{t('friends.storageError')}</p>}
                 {error && !details && <p role="alert" className="oc-home-empty break-words text-[var(--status-error-text)]">{error}</p>}
@@ -515,7 +545,7 @@ export function HomeFriends() {
             onClose={() => setDetails(null)}
             onTalk={(_agent, fresh) => { if (detailProject) void talkInFolder(detailProject.id, fresh); }}
             onSelectSession={(sessionId, directory) => {
-                if (detailProject) useProjectsStore.getState().setActiveProject(detailProject.id);
+                if (detailProject && !isAllChatsProject(detailProject)) useProjectsStore.getState().setActiveProject(detailProject.id);
                 useSessionUIStore.getState().setCurrentSession(sessionId, directory);
             }}
             onCustomize={(_agent, origin) => { if (detailProject) openCustomizeForFolder(detailProject.id, origin); }}

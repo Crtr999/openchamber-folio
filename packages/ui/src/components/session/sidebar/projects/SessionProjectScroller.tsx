@@ -31,6 +31,7 @@ import { SessionTreeItem } from '../sessions/SessionTreeItem';
 import { RunSidebarRow } from '../sessions/RunSidebarRow';
 import { computeNodeStructureKey, nodeContainsSessionId } from '../sessions/sessionNodeItemUtils';
 import { DroppableFolderWrapper } from '../folders/sessionFolderDnd';
+import { useAllChatsFriendName } from '@/hooks/useAllChatsFriendName';
 import { FolderDeleteConfirmDialog, type DeleteFolderConfirmState } from '../shell/ConfirmDialogs';
 import type { SessionGroup } from '../types';
 import { SessionSidebarRows } from '../SessionSidebarRows';
@@ -127,6 +128,8 @@ function SessionProjectScrollerComponent({ model, view, actions }: Props): React
   const deleteFolder = useSessionFoldersStore((state) => state.deleteFolder);
   const addSessionToFolder = useSessionFoldersStore((state) => state.addSessionToFolder);
   const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
+  // The All Chats friend answers to the name the user gave it.
+  const allChatsFriendName = useAllChatsFriendName();
   const [folderDeleteConfirm, setFolderDeleteConfirm] = React.useState<DeleteFolderConfirmState>(null);
   const [stickyIdentity, setStickyIdentity] = React.useState<string | null>(null);
   const [focusedRowKey, setFocusedRowKey] = React.useState<string | null>(null);
@@ -241,6 +244,7 @@ function SessionProjectScrollerComponent({ model, view, actions }: Props): React
           forceExpanded={row.forceExpanded}
           alwaysShowActions={view.alwaysShowActions}
           timelineView={view.timelineView}
+          titleOverride={row.activityKey === 'chats' ? allChatsFriendName : null}
           onToggle={() => {
             // Collapsing a zone forgets its Show more state: reopening it
             // starts from the default reveal, like a group or project.

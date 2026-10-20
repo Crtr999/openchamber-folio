@@ -923,19 +923,15 @@ const sessionAssistRuntime = createSessionAssistRuntime({
 });
 
 /**
- * The managed chat directories: dated folders under the app's own config root.
- * They are one shared project, not a folder of the user's, so nothing said
- * there is filed as a folder memory.
+ * The team runtime keeps its own home under the chats root. Those are machine
+ * conversations — assignments the folder managers give their specialists — and
+ * what is settled in them is not the user's to remember.
  */
-const isManagedChatDirectory = (directory) => {
+const isTeamRuntimeDirectory = (directory) => {
   if (typeof directory !== 'string' || !directory.trim()) return false;
+  const teamRoot = path.resolve(OPENCHAMBER_CHATS_DIR, 'ai-team');
   const resolved = path.resolve(directory);
-  return [path.join(OPENCHAMBER_USER_CONFIG_ROOT, 'chats'), OPENCHAMBER_CHATS_DIR]
-    .map((root) => path.resolve(root))
-    .some((root) => {
-      const relative = path.relative(root, resolved);
-      return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-    });
+  return resolved === teamRoot || resolved.startsWith(`${teamRoot}/`);
 };
 
 /**
@@ -963,9 +959,11 @@ const sessionMemoryCaptureRuntime = createSessionMemoryCaptureRuntime({
   // Declared further down; only ever called after startup.
   onMemoryChanged: (event) => emitAgentMemoryChangedEvent(event),
   isSessionArchived: (sessionID) => openChamberSessionService.archiveStore.isArchived(sessionID),
-  // A dated chat directory is one shared project, not one of the user's
-  // folders, and what is said there is not about a folder of theirs.
-  isCapturableDirectory: (directory) => !isManagedChatDirectory(directory),
+  // A conversation that belongs to no folder is still the user's, and the
+  // chats root is a project of its own, so it keeps a memory of its own.
+  // Only the team runtime's own home is left out: those are machine
+  // conversations, not the user's.
+  isCapturableDirectory: (directory) => !isTeamRuntimeDirectory(directory),
   lineage: sessionLineage,
 });
 

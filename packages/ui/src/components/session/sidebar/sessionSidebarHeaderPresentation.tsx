@@ -20,12 +20,15 @@ export const SessionSidebarActivityHeader: React.FC<{
   alwaysShowActions: boolean;
   onToggle: () => void;
   onNewChat: () => void;
+  /** The user's own name for this area, when they have given it one. */
+  titleOverride?: string | null;
   /** Timeline zones drop the leading icon and take a taller band; the
       collapse chevron still appears on hover in the icon slot. */
   timelineView?: boolean;
-}> = ({ activityKey, collapsed, forceExpanded, alwaysShowActions, onToggle, onNewChat, timelineView = false }) => {
+}> = ({ activityKey, collapsed, forceExpanded, alwaysShowActions, onToggle, onNewChat, titleOverride, timelineView = false }) => {
   const { t } = useI18n();
   const chats = activityKey === 'chats';
+  const title = titleOverride?.trim() || t(ACTIVITY_TITLE_KEY[activityKey]);
   if (timelineView) {
     // Timeline zone header: no icon, text flush with the rows' left edge, and
     // an always-visible chevron right after the title showing collapse state.
@@ -38,7 +41,7 @@ export const SessionSidebarActivityHeader: React.FC<{
         aria-expanded={!collapsed}
       >
         <span className="typography-ui-label font-semibold text-foreground">
-          {t(ACTIVITY_TITLE_KEY[activityKey])}
+          {title}
         </span>
         {!forceExpanded ? <Icon name={collapsed ? 'arrow-right-s' : 'arrow-down-s'} className="h-3.5 w-3.5 text-muted-foreground" /> : null}
       </button>
@@ -59,7 +62,7 @@ export const SessionSidebarActivityHeader: React.FC<{
         </span> : null}
       </span>
       <span className="typography-ui-label font-semibold text-foreground">
-        {t(ACTIVITY_TITLE_KEY[activityKey])}
+        {title}
       </span>
     </button>
     {chats ? <button

@@ -59,6 +59,30 @@ with the earlier ones. See
 The capture is a setting of its own (`folderMemoryAutoCapture`), and the whole
 memory feature can be taken away with `OPENCHAMBER_MEMORY_ENABLE=0`.
 
+## All Chats is a friend too
+
+A conversation that belongs to no folder still belongs to somebody. Those
+conversations live under the app's own chats root — the server reports it, and
+each conversation gets a dated directory of its own inside it — and they are one
+friend, not a pile of folders.
+
+- The friend is named **General** until the user renames it, and it is renamed
+  the same way as any other friend: Customize, in the Friends widget.
+- Its conversations are the ones under the chats root. A folder friend owns
+  exactly its own path; this one owns everything beneath its root, because its
+  conversations each live in a directory of their own.
+- Its memory is its own. The chats root is a project scope like any other, so
+  what is settled in All Chats is remembered by All Chats and is not carried
+  into any folder. The only memory every project shares is the global one —
+  about the user, not about the work.
+- Starting a conversation there creates a dated chat directory, exactly as the
+  sidebar's *All Chats* does, so the two are the same thing.
+- It has no rules file and no guardrail file of its own: the chats root is the
+  app's managed directory, and the Studio shows its conversations and its
+  memory instead of editors that would write into it.
+- When the user gives it a name, the sidebar's *All Chats* heading says that
+  name, so the area reads as theirs rather than as a system bucket.
+
 ## While a friend works
 
 The folder's icon in the sidebar moves while any conversation in that folder is

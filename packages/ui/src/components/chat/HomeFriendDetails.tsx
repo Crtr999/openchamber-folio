@@ -20,6 +20,7 @@ import type { opencodeClient } from '@/lib/opencode/client';
 import type { Agent, Session } from '@/lib/opencode/model';
 import { clearProviderBindingCache } from '@/lib/projectProviderBinding';
 import { morphFrom } from '@/lib/motion';
+import { isAllChatsProject } from '@/lib/allChatsFriend';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { HomeFriendAvatar } from './HomeFriendAvatar';
 import { HomeFriendsWork } from './HomeFriendsWork';
@@ -419,6 +420,9 @@ export function HomeFriendDetails({
         () => summarizeFolderGuardrails(configuration, agent, project?.path),
         [configuration, agent, project?.path],
     );
+    // All Chats lives in the app's own managed directory, so it has no rules
+    // file and no guardrail file to edit; it has conversations and a memory.
+    const allChats = isAllChatsProject(project);
     const folderSessions = target?.sessions ?? [];
     const specialists = target?.specialists ?? [];
 
@@ -496,7 +500,7 @@ export function HomeFriendDetails({
                     </details>
                 )}
 
-                {project && (
+                {project && !allChats && (
                     <details className="oc-friend-section" open>
                         <summary>Brain, Capabilities &amp; Guardrails</summary>
                         <FolderGuardrailsStudio
@@ -519,7 +523,7 @@ export function HomeFriendDetails({
                     </details>
                 )}
 
-                {project && (
+                {project && !allChats && (
                     <details className="oc-friend-section" open>
                         <summary>{t('friends.rules')} &amp; Memory</summary>
                         <div className="space-y-5 pt-1">

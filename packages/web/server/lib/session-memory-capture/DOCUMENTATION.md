@@ -43,6 +43,11 @@ entry it restates, titles are capped at 60 characters, bodies at 2,000, and the
 project store holds at most 200 entries. A store that is full says so, and
 this runtime stops asking for that project rather than retrying.
 
+The chats root — the app's own directory for conversations that belong to no
+folder — is a project scope like any other, so All Chats keeps a memory of its
+own and shares none of it with any folder. The only store every project reads
+is the global one, which the agent alone writes.
+
 ## What it will not do
 
 - **It never reads a folder through another provider.** The conversation's own
@@ -53,8 +58,9 @@ this runtime stops asking for that project rather than retrying.
   nothing is captured.
 - **It never writes global memory.** Global memory shapes every session in
   every project; only the agent may write there.
-- **It never writes to a dated chat directory.** Those are one shared project,
-  not a folder of the user's.
+- **It never writes to the team runtime's home.** The `ai-team` directory
+  under the chats root holds the folder managers' own assignments; those are
+  machine conversations, not the user's.
 - **It never touches the user's own files.** `AGENTS.md` and `MEMORY.md` are
   the user's; the capture writes to the store, which is the agent's.
 
