@@ -161,10 +161,13 @@ describe('the folder friend learning on its own', () => {
     expect(memoryRuntime.create).not.toHaveBeenCalled();
   });
 
-  it('refuses to read a folder through a provider the folder did not use', async () => {
-    const { runtime, memoryRuntime, describeSmallModel } = makeRuntime();
+  it('refuses to read a folder bound to one provider through another', async () => {
+    const { runtime, memoryRuntime, describeSmallModel } = makeRuntime({
+      // A ZDR-style folder: the policy allows exactly one provider.
+      resolveAllowedProviders: async () => ['openrouter-zdr'],
+    });
     // The small model service falls back to the default model, which is not
-    // the provider the conversation ran on.
+    // the provider the folder is bound to.
     describeSmallModel.mockResolvedValue({
       providerID: 'openai',
       modelID: 'gpt-nano',
@@ -180,6 +183,48 @@ describe('the folder friend learning on its own', () => {
     runtime.processPayload(idle());
     await settle();
     expect(memoryRuntime.create).not.toHaveBeenCalled();
+  });
+
+  it('captures an unbound folder through the cheap default model', async () => {
+    // A folder that is not bound to one provider may be summarised by the
+    // default small model, which is where the cheap one usually is.
+    const { runtime, memoryRuntime, describeSmallModel } = makeRuntime();
+    describeSmallModel.mockResolvedValue({
+      providerID: 'openrouter',
+      modelID: 'minimax/minimax-m3.1-flash:free',
+      source: 'default',
+      hasLogin: true,
+      inputCharBudget: 20_000,
+      contextTokens: 8_000,
+      contextKnown: true,
+      outputTokens: 512,
+      structuredOutput: null,
+      outputTokenLimit: 512,
+    });
+    runtime.processPayload(idle());
+    await settle();
+    expect(memoryRuntime.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('captures a bound folder through the provider it is bound to', async () => {
+    const { runtime, memoryRuntime, describeSmallModel } = makeRuntime({
+      resolveAllowedProviders: async () => ['openrouter-zdr'],
+    });
+    describeSmallModel.mockResolvedValue({
+      providerID: 'openrouter-zdr',
+      modelID: 'small',
+      source: 'session-provider-small',
+      hasLogin: true,
+      inputCharBudget: 20_000,
+      contextTokens: 8_000,
+      contextKnown: true,
+      outputTokens: 512,
+      structuredOutput: null,
+      outputTokenLimit: 512,
+    });
+    runtime.processPayload(idle());
+    await settle();
+    expect(memoryRuntime.create).toHaveBeenCalledTimes(1);
   });
 
   it('does not read the same turns twice', async () => {

@@ -84,6 +84,7 @@ import { configureOpenCodeRuntimeProviders, resetOpenCodeRuntimeProviders } from
 import { createOpenCodeWatcherRuntime } from './lib/opencode/watcher.js';
 import { createSessionAssistRuntime } from './lib/session-assist/runtime.js';
 import { createSessionMemoryCaptureRuntime } from './lib/session-memory-capture/runtime.js';
+import { resolveDirectoryAllowedProviders } from './lib/session-memory-capture/providers.js';
 import { createSessionGoalRuntime } from './lib/session-goal/runtime.js';
 import { createContextObligatoryRuntime } from './lib/context-obligatory/runtime.js';
 import { createLinearSessionStatusRuntime } from './lib/linear/status-runtime.js';
@@ -956,6 +957,9 @@ const sessionMemoryCaptureRuntime = createSessionMemoryCaptureRuntime({
   },
   // Declared further down; only ever called after startup.
   resolveProjectId: (directory) => resolveMemoryProjectId(directory),
+  // The folder's own provider policy: a folder bound to one provider must not
+  // be summarised through another.
+  resolveAllowedProviders: (directory) => resolveDirectoryAllowedProviders(directory),
   // Declared further down; only ever called after startup.
   onMemoryChanged: (event) => emitAgentMemoryChangedEvent(event),
   isSessionArchived: (sessionID) => openChamberSessionService.archiveStore.isArchived(sessionID),

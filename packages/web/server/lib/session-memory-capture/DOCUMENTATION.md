@@ -50,12 +50,17 @@ is the global one, which the agent alone writes.
 
 ## What it will not do
 
-- **It never reads a folder through another provider.** The conversation's own
-  provider is the only one allowed to distil it. A folder bound to one provider
-  — a ZDR folder is the case that matters — must not be summarised through a
+- **It never reads a folder through a provider the folder is bound away from.**
+  A folder's own `provider.use` policy says which providers it may use, and
+  that policy is what the capture honours: a folder bound to one provider — a
+  ZDR folder is the case that matters — must not be summarised through a
   different one, which is what a default model would do when the bound
-  provider has no small model. If the resolved model is in another provider,
-  nothing is captured.
+  provider has no small model. If the resolved model is outside the folder's
+  binding, nothing is captured.
+  A folder that is *not* bound to one provider may be summarised through the
+  cheap default model, which is where the small model usually is. The first
+  version of this refused anything but the conversation's own provider, and
+  that meant ordinary folders never learned anything at all.
 - **It never writes global memory.** Global memory shapes every session in
   every project; only the agent may write there.
 - **It never writes to the team runtime's home.** The `ai-team` directory

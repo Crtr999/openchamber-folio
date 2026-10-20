@@ -56,6 +56,12 @@ export const createSessionMemoryCaptureRuntime = ({
   isAgentMemoryEnabled,
   isCaptureEnabled,
   resolveProjectId,
+  /**
+   * The providers this folder is allowed to use, read from its own
+   * `provider.use` policy. An empty list means the folder is not bound to one
+   * provider and may be summarised through any of them.
+   */
+  resolveAllowedProviders = async () => [],
   onMemoryChanged = null,
   // `../session-lineage.js`: a known subsession is not a conversation with the
   // user, and what it worked out belongs to its parent.
@@ -160,11 +166,18 @@ export const createSessionMemoryCaptureRuntime = ({
       const preferredModelID = last?.assistant?.modelID;
       const described = await describeSmallModel({ directory, preferredProviderID, preferredModelID });
       if (!described) return;
-      // The conversation's own provider is the only one allowed to read it. A
-      // folder bound to one provider must not be summarised through another,
-      // which is what a default model would do when the bound provider has no
-      // small model.
-      if (preferredProviderID && described.providerID !== preferredProviderID) return;
+      /**
+       * The folder's own provider policy decides.
+       *
+       * A folder bound to one provider — a ZDR folder is the case that matters
+       * — must not be summarised through another, which is what a default
+       * model would do when the bound provider has no small model. An unbound
+       * folder may use the cheap default: nothing about it is secret from
+       * that provider, and refusing would mean ordinary folders never learn
+       * anything at all.
+       */
+      const allowedProviders = await resolveAllowedProviders(directory);
+      if (allowedProviders.length > 0 && !allowedProviders.includes(described.providerID)) return;
 
       const system = buildCaptureSystemPrompt();
       const prompt = buildCapturePrompt(pending, described.inputCharBudget - system.length - 512);
