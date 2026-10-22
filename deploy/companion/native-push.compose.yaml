@@ -1,0 +1,15 @@
+# Optional override for a personally signed iPhone app. Requires your own
+# Apple push key and matching App ID. It never uses the upstream app's key.
+services:
+  app:
+    environment:
+      OPENCHAMBER_PUSH_RELAY_DISABLED: 'true'
+      OPENCHAMBER_APNS_KEY_ID: ${CARTER_APNS_KEY_ID:?Set your Apple push key ID}
+      OPENCHAMBER_APNS_TEAM_ID: ${CARTER_APNS_TEAM_ID:?Set your Apple developer team ID}
+      OPENCHAMBER_APNS_BUNDLE_ID: ${CARTER_IOS_BUNDLE_ID:?Set the exact signed iPhone bundle ID}
+      OPENCHAMBER_APNS_P8_PATH: /run/secrets/apple_push_key
+    secrets:
+      - apple_push_key
+secrets:
+  apple_push_key:
+    file: ${CARTER_APNS_KEY_FILE:?Set the absolute path to the private Apple push key on the server}

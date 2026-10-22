@@ -192,3 +192,7 @@ project write lock on every `syncProject` when the project path is known:
 The shared `/api/openchamber/events` stream also carries web notifications.
 Its connection ownership and browser capability flag stay unchanged. Delivery
 and duplicate handling are documented in `../notifications/DOCUMENTATION.md`.
+
+## Companion runs
+
+Tasks with `companion:` IDs use the injected companion preparation callback after session creation and before goal arming or task dispatch. It writes enrollment metadata and provides previous-result context in a synthetic message with `resume: false`. Preparation failure fails the run rather than executing without its delivery contract. Ordinary scheduled tasks do not use the callback. The companion module owns result comparison and notification filtering.

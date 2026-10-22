@@ -1507,6 +1507,9 @@ async function reloadCatalog(kind: CatalogKind, childStores: ChildStoreManager):
   if (kind === "skill" || kind === "plugin" || kind === "websearch") return
 
   await Promise.all([...childStores.children.entries()].map(async ([directory, store]) => {
+    // Sidebar badges create stores without opening their locations. A global
+    // catalog event must not turn those metadata-only stores into MCP fleets.
+    if (childStores.getBootstrapState(directory) === undefined) return
     try {
       if (kind === "agent") {
         store.setState({ agent: await opencodeClient.listAgents(directory) })

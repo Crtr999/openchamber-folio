@@ -1,5 +1,6 @@
 import { OpenCodeCompatibilityGate } from '@/components/update/OpenCodeCompatibilityGate';
 import React from 'react';
+import { z } from 'zod';
 import { AppStartupOverlay } from '@/components/ui/AppStartupOverlay';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ChatView } from '@/components/views/ChatView';
@@ -689,6 +690,20 @@ function App({ apis }: AppProps) {
 
     window.addEventListener('openchamber:open-session', handler as EventListener);
     return () => window.removeEventListener('openchamber:open-session', handler as EventListener);
+  }, []);
+
+  React.useEffect(() => {
+    const onComputer = (event: Event) => {
+      if (!isDesktopLocalOriginActive()) return;
+      // Native notifications still cross a boundary: accept only a screen name.
+      const screen = z.string().regex(/^[a-z0-9-]+$/).safeParse(event instanceof CustomEvent ? event.detail : null);
+      if (!screen.success) return;
+      const directory = useDirectoryStore.getState().currentDirectory;
+      if (!directory) return;
+      useUIStore.getState().openContextPanelTab(directory, { mode: 'computer', targetPath: screen.data });
+    };
+    window.addEventListener('openchamber:open-computer', onComputer);
+    return () => window.removeEventListener('openchamber:open-computer', onComputer);
   }, []);
 
   // Open a draft Mini Chat window from the native File menu / tray. Uses a

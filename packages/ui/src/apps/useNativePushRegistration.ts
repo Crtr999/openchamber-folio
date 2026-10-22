@@ -1,4 +1,5 @@
 import React from 'react';
+import { z } from 'zod';
 
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { getClientPlatform } from '@/lib/platform';
@@ -38,6 +39,8 @@ const isNativePushPlatform = (): boolean => {
   if (typeof window === 'undefined') return false;
   const capacitor = (window as typeof window & { Capacitor?: { getPlatform?: () => string } }).Capacitor;
   const platform = capacitor?.getPlatform?.();
+  const support = z.boolean().optional().safeParse(Reflect.get(window, '__OPENCHAMBER_APNS_SUPPORTED__'));
+  if (platform === 'ios' && support.success && support.data === false) return false;
   return platform === 'ios' || platform === 'android';
 };
 

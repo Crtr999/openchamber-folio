@@ -24,7 +24,7 @@ async function fixture(options = {}) {
     const body = JSON.parse(request.body); calls.push(body);
     if (body.method === 'notifications/initialized') return new Response(null, { status: 202 });
     if (body.method === 'initialize') return Response.json({ result: { protocolVersion: '2025-06-18' } });
-    if (body.method === 'tools/list') { const names = ['get_tool_access', 'fetch', 'query_data_sources', 'update_page', 'create_pages', 'search', 'list_recent_pages', ...(options.deleteTool ? ['delete_page'] : [])]; const wraps = (name) => options.wrappedUpdates && (name === 'update_page' || name === 'query_data_sources' || name === 'delete_page'); return Response.json({ result: { tools: names.map((name) => { const advertised = { properties: name === 'delete_page' ? { page_id: { type: 'string' } } : {} }; return { name, inputSchema: wraps(name) ? { properties: { data: advertised } } : advertised }; }) } }); }
+    if (body.method === 'tools/list') { const names = ['get_tool_access', 'fetch', 'query_data_sources', 'update_page', 'create_pages', 'search', ...(options.noRecentPages ? [] : ['list_recent_pages']), ...(options.deleteTool ? ['delete_page'] : [])]; const wraps = (name) => options.wrappedUpdates && (name === 'update_page' || name === 'query_data_sources' || name === 'delete_page'); return Response.json({ result: { tools: names.map((name) => { const advertised = { properties: name === 'delete_page' ? { page_id: { type: 'string' } } : {} }; return { name, inputSchema: wraps(name) ? { properties: { data: advertised } } : advertised }; }) } }); }
     const name = body.params.name;
     let result;
     if (name === 'get_tool_access') result = { current_tool_access: { query_data_sources: { status: 'available' } } };
@@ -98,6 +98,14 @@ test('An empty Notion query lists recently opened pages', async () => {
     assert.equal(result.pages.length, 1);
     assert.equal(result.pages[0].title, 'Example');
     assert.equal(f.calls.find((call) => call.params?.name === 'list_recent_pages') !== undefined, true);
+  } finally { await f.clean(); }
+});
+test('An empty Notion query falls back to workspace search when recent pages are not exposed', async () => {
+  const f = await fixture({ noRecentPages: true }); try {
+    const result = await f.service.handle({ action: 'search', query: '' });
+    assert.equal(result.pages.length, 1);
+    assert.equal(f.calls.find((call) => call.params?.name === 'list_recent_pages'), undefined);
+    assert.deepEqual(f.calls.find((call) => call.params?.name === 'search').params.arguments, { query_type: 'internal' });
   } finally { await f.clean(); }
 });
 test('A disconnected Notion reports itself instead of an empty result set', async () => {

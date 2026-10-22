@@ -2,6 +2,8 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
+private let carterControlScheme = Bundle.main.object(forInfoDictionaryKey: "CarterURLScheme") as? String ?? "openchamber"
+
 // Control Center control (iOS 18+): tap the OpenChamber logo to start a new session.
 //
 // IMPORTANT: this file is a member of BOTH the app target and the widget extension target.
@@ -33,6 +35,34 @@ struct OpenNewSessionIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & OpensIntent {
-        return .result(opensIntent: OpenURLIntent(URL(string: "openchamber://new")!))
+        return .result(opensIntent: OpenURLIntent(URL(string: "\(carterControlScheme)://new")!))
+    }
+}
+
+
+// Uses the existing deep-link route and normal recording/send controls.
+// Opening the app never starts capture in the background.
+@available(iOS 18.0, *)
+struct OpenCarterDictationControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "OpenCarterDictationControl") {
+            ControlWidgetButton(action: OpenCarterDictationIntent()) {
+                Label("Dictate to Carter", systemImage: "mic")
+            }
+        }
+        .displayName("Dictate to Carter")
+        .description("Open Carter's recording controls.")
+    }
+}
+
+@available(iOS 18.0, *)
+struct OpenCarterDictationIntent: AppIntent {
+    static let title: LocalizedStringResource = "Dictate to Carter"
+    static let openAppWhenRun: Bool = true
+    static let isDiscoverable: Bool = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult & OpensIntent {
+        return .result(opensIntent: OpenURLIntent(URL(string: "\(carterControlScheme)://dictate")!))
     }
 }

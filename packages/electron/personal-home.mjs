@@ -101,6 +101,11 @@ const deleteTaskSchema = z.object({ page: z.string().min(1) });
 const exportSchema = z.object({ title: z.string().min(1).max(500), content: z.string().min(1).max(500000) });
 const deleteToolCandidates = ['delete-page', 'delete-pages', 'archive-page', 'move-to-trash'];
 
+/** The connection does not expose the tool the caller asked for. */
+class NotionToolUnavailableError extends Error {
+  constructor(tool) { super('This Notion connection does not expose the required tool.'); this.tool = tool; }
+}
+
 export const quoteSqlIdentifier = (value) => `"${value.replaceAll('"', '""')}"`;
 
 export function notionPageId(value) {
@@ -295,7 +300,7 @@ export function createPersonalHome({ filePath, safeStorage, openExternal, isBloc
       }
       const canonical = name.replace(/^notion-/, '');
       const actual = resolveTool(canonical);
-      if (!actual) throw new Error('This Notion connection does not expose the required tool.');
+      if (!actual) throw new NotionToolUnavailableError(canonical);
       const permission = access?.current_tool_access?.[canonical.replaceAll('-', '_')];
       // View mode has no tool-specific quota, even when SQL/rows are metered.
       const viewRead = canonical === 'query-data-sources' && args.data?.mode === 'view';
@@ -543,7 +548,12 @@ export function createPersonalHome({ filePath, safeStorage, openExternal, isBloc
     const query = z.object({ query: z.string().max(200).default('') }).parse(raw).query.trim();
     const result = query
       ? await tool('search', { query, query_type: 'internal' })
-      : await tool('list-recent-pages', {});
+      // Recent pages are the better empty-query answer, but a connection that
+      // does not expose them still has to return something.
+      : await tool('list-recent-pages', {}).catch((error) => {
+        if (error instanceof NotionToolUnavailableError) return tool('search', { query_type: 'internal' });
+        throw error;
+      });
     const parsed = notionPageListSchema.safeParse(result);
     if (!parsed.success) throw new Error('Notion did not return readable page results.');
     const pages = [];

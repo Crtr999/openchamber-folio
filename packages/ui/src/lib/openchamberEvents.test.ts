@@ -99,15 +99,16 @@ describe('openchamber events', () => {
       streamController?.enqueue(encoder.encode('data: {"type":"openchamber:browser-control-'));
       // A complete browser request can be split across arbitrary transport chunks.
       streamController?.enqueue(encoder.encode('request","properties":{"requestId":"req-1","action":"browser.open","parameters":{}}}\n\n'));
-      for (let i = 0; i < 20 && events.length < 2; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(events).toEqual(['event-stream-ready', 'browser-control-request']);
+      streamController?.enqueue(encoder.encode('data: {"type":"openchamber:companion-changed","properties":{"projectId":"project-1"}}\n\n'));
+      for (let i = 0; i < 30 && events.length < 3; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(events).toEqual(['event-stream-ready', 'browser-control-request', 'companion-changed']);
       expect(browserRequests).toEqual([{ requestId: 'req-1', action: 'browser.open' }]);
     } finally {
       unsubscribe();
     }
     expect(requests[0].signal?.aborted).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(events).toEqual(['event-stream-ready', 'browser-control-request']);
+    expect(events).toEqual(['event-stream-ready', 'browser-control-request', 'companion-changed']);
   });
 
   test('dispatches externally created session events', async () => {

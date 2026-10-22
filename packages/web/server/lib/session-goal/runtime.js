@@ -437,7 +437,7 @@ export const createSessionGoalRuntime = ({
     console.log(`[session-goal] ${sessionId} settled as ${status}${statusReason ? ` (${statusReason})` : ''}`);
     if (typeof emitGoalNotification === 'function') {
       try {
-        emitGoalNotification({ sessionId, directory, status, goal: written });
+        await emitGoalNotification({ sessionId, directory, status, goal: written });
       } catch (error) {
         console.warn('[session-goal] notification failed:', error?.message || error);
       }

@@ -10,7 +10,7 @@
  * context — including, eventually, a tiny encoder shared with the native widget/extension.
  */
 
-const DEEP_LINK_SCHEME = 'openchamber';
+const DEEP_LINK_SCHEMES = new Set(['openchamber:', 'opencarter:']);
 
 export type SessionsFilter = 'all' | 'attention' | 'recent';
 export type ViewTarget = 'files' | 'mcp' | 'instances' | 'update';
@@ -24,6 +24,7 @@ export type DeepLinkIntent =
   | { type: 'session'; sessionId: string; directory?: string }
   | { type: 'new-session'; directory?: string; projectId?: string; agent?: string; model?: string }
   | { type: 'sessions'; filter?: SessionsFilter }
+  | { type: 'dictation' }
   | { type: 'status' }
   | { type: 'settings'; section?: string }
   | { type: 'changes'; path?: string; staged?: boolean }
@@ -59,7 +60,7 @@ export function parseDeepLink(raw: string | null | undefined): DeepLinkIntent | 
     return null;
   }
 
-  if (url.protocol !== `${DEEP_LINK_SCHEME}:`) {
+  if (!DEEP_LINK_SCHEMES.has(url.protocol)) {
     return null;
   }
 
@@ -94,6 +95,9 @@ export function parseDeepLink(raw: string | null | undefined): DeepLinkIntent | 
         filter: filter === 'attention' || filter === 'recent' || filter === 'all' ? filter : undefined,
       };
     }
+
+    case 'dictate':
+      return { type: 'dictation' };
 
     case 'status':
       return { type: 'status' };

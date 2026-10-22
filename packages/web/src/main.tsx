@@ -1,5 +1,5 @@
 import { createConfiguredWebAPIs, getDesktopRelayRestoreReady } from './runtimeConfig';
-import { registerSW } from 'virtual:pwa-register';
+import { initializePwa } from './pwaRegistration';
 
 import type { RuntimeAPIs } from '@openchamber/ui/lib/api/types';
 import { resolveHostedSurface, watchHostedSurfaceViewport, type HostedSurface } from '@openchamber/ui/lib/runtimeSurface';
@@ -19,71 +19,6 @@ declare global {
 }
 
 const hostedSurface: HostedSurface = resolveHostedSurface();
-
-type PrerenderingDocument = Document & {
-  prerendering?: boolean;
-};
-
-const canUseServiceWorker = (): boolean => {
-  if (!('serviceWorker' in navigator)) return false;
-  if (!window.isSecureContext) return false;
-  if (window.location.protocol !== 'http:' && window.location.protocol !== 'https:') return false;
-
-  const documentState = document as PrerenderingDocument;
-  if (documentState.prerendering || String(document.visibilityState) === 'prerender') {
-    return false;
-  }
-
-  return true;
-};
-
-const runWhenDocumentCanRegisterServiceWorker = (task: () => void): void => {
-  let completed = false;
-  const run = () => {
-    if (completed) return;
-    if (canUseServiceWorker()) {
-      completed = true;
-      task();
-    }
-  };
-
-  const afterLoad = () => {
-    setTimeout(run, 0);
-  };
-
-  if (document.readyState === 'complete') {
-    afterLoad();
-  } else {
-    window.addEventListener('load', afterLoad, { once: true });
-  }
-
-  const documentState = document as PrerenderingDocument;
-  if (documentState.prerendering || String(document.visibilityState) === 'prerender') {
-    document.addEventListener('visibilitychange', run, { once: true });
-  }
-};
-
-const registerPwaServiceWorker = (): void => {
-  runWhenDocumentCanRegisterServiceWorker(() => {
-    try {
-      registerSW({
-        onRegisterError(error: unknown) {
-          console.warn('[PWA] service worker registration skipped:', error);
-        },
-      });
-    } catch (error) {
-      console.warn('[PWA] service worker registration skipped:', error);
-    }
-  });
-};
-
-const unregisterDevelopmentServiceWorkers = (): void => {
-  runWhenDocumentCanRegisterServiceWorker(() => {
-    void navigator.serviceWorker.getRegistrations()
-      .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
-      .catch(() => {});
-  });
-};
 
 const start = async (): Promise<void> => {
   const embeddedBootstrap = isEmbeddedSessionChat()
@@ -114,8 +49,4 @@ if (import.meta.hot) {
   });
 }
 
-if (import.meta.env.PROD) {
-  registerPwaServiceWorker();
-} else {
-  unregisterDevelopmentServiceWorkers();
-}
+initializePwa();

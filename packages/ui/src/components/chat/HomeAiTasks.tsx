@@ -13,6 +13,7 @@ import { useEnterpriseMode, useEnterprisePolicyStore } from '@/stores/useEnterpr
 import { readAiTaskStatus, readAiTaskProjects, assignAiTask, readAiTaskDetails, configureAiTasks, checkAiTasks, readAiTaskBoard, createAiTask, readAiTaskNotes, saveAiTaskNotes, createAiTaskBoard, moveAiTask, deleteAiTask, personalHomeSupported, type HomeNotionBoard, type AiTaskModel } from '@/lib/personal-home';
 import { Icon } from '@/components/icon/Icon';
 import { cn } from '@/lib/utils';
+import { useAllChatsFriendName } from '@/hooks/useAllChatsFriendName';
 import { HomeAiTaskList } from './HomeAiTaskList';
 import { HomeTaskComposer } from './HomeTaskComposer';
 
@@ -38,7 +39,10 @@ const remember = (projectId: string, model: AiTaskModel) => {
 
 export function HomeAiTasks({ active = true }: { active?: boolean }) {
     const { t } = useI18n();
-    const projectLabel = (project: { id: string; label?: string }) => project.id === ALL_CHATS ? t('home.aiNoFolder') : project.label ?? '';
+    // A task with no folder goes to All Chats, so the picker says the friend's
+    // name rather than asking for a folder that was never needed.
+    const allChatsName = useAllChatsFriendName() ?? t('home.aiNoFolder');
+    const projectLabel = (project: { id: string; label?: string }) => project.id === ALL_CHATS ? allChatsName : project.label ?? '';
     const blocked = useEnterpriseMode();
     const networkBlocked = useEnterprisePolicyStore((state) => state.networkAccessBlocked);
     const [status, setStatus] = React.useState<Awaited<ReturnType<typeof readAiTaskStatus>> | null>(null);
@@ -265,7 +269,7 @@ export function HomeAiTasks({ active = true }: { active?: boolean }) {
                         <Select value={project?.id ?? ''} disabled={busy || active || !projects.length} onValueChange={(projectId) => void run(async () => {
                             await saveAssignment(row.url, projectId, chooseModel(projectId, assignment?.model));
                         })}>
-                            <SelectTrigger size="settings" className="oc-ai-task-select" aria-label={t('home.aiProject')}><SelectValue placeholder={t('home.aiChooseProject')}>{project ? projectLabel(project) : t('home.aiChooseProject')}</SelectValue></SelectTrigger>
+                            <SelectTrigger size="settings" className="oc-ai-task-select" aria-label={t('home.aiProject')}><SelectValue placeholder={allChatsName}>{project ? projectLabel(project) : allChatsName}</SelectValue></SelectTrigger>
                             <SelectContent>{projects.map((item) => <SelectItem key={item.id} value={item.id} disabled={!item.models.length}>{item.models.length ? projectLabel(item) : t('home.aiNoTeam', { folder: projectLabel(item) })}</SelectItem>)}</SelectContent>
                         </Select>
                         {project && <Select value={model ? modelKey(model) : ''} disabled={busy || active || !project.models.length} onValueChange={(key) => void run(async () => {

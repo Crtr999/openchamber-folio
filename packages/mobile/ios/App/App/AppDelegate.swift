@@ -79,6 +79,21 @@ let apnsEnvironment: String = {
     return profile.range(of: pattern, options: .regularExpression) != nil ? "development" : "production"
 }()
 
+/// Free Personal Team builds omit APNs. Report the actual provisioned capability before
+/// JavaScript asks for notification permission or attempts device registration.
+let apnsSupported: Bool = {
+    #if targetEnvironment(simulator)
+    return false
+    #else
+    guard let path = Bundle.main.path(forResource: "embedded", ofType: "mobileprovision"),
+          let data = FileManager.default.contents(atPath: path),
+          let profile = String(data: data, encoding: .isoLatin1) else {
+        return true // App Store distributions have no embedded development profile.
+    }
+    return profile.contains("<key>aps-environment</key>")
+    #endif
+}()
+
 /// Bridge subclass (referenced from Main.storyboard) whose job is to expose native-only
 /// facts to the web layer as document-start user scripts. These run before any page JS,
 /// so consumers always see them — injecting later from the scene lifecycle raced the
@@ -105,6 +120,7 @@ class BridgeViewController: CAPBridgeViewController {
         let attached = GCKeyboard.coalesced != nil
         let source = """
         window.__OPENCHAMBER_APNS_ENV__ = '\(apnsEnvironment)';
+        window.__OPENCHAMBER_APNS_SUPPORTED__ = \(apnsSupported ? "true" : "false");
         window.__OPENCHAMBER_HARDWARE_KEYBOARD__ = \(attached ? "true" : "false");
         """
         webView?.configuration.userContentController.addUserScript(
@@ -221,7 +237,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         writeWidgetSnapshot()
     }
 
-    private static let widgetAppGroup = "group.com.openchamber.app"
+    private static let widgetAppGroup = Bundle.main.object(forInfoDictionaryKey: "CarterAppGroup") as? String ?? "group.com.openchamber.app"
     private static let widgetSnapshotKey = "widgetSnapshot"
 
     /// Pulls the session overview JSON from the web layer (window.__OPENCHAMBER_WIDGET_SNAPSHOT__),

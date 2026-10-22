@@ -25,7 +25,7 @@ struct WidgetSnapshot: Codable {
 }
 
 enum WidgetStore {
-    static let appGroup = "group.com.openchamber.app"
+    static let appGroup = Bundle.main.object(forInfoDictionaryKey: "CarterAppGroup") as? String ?? "group.com.openchamber.app"
     static let snapshotKey = "widgetSnapshot"
 
     /// Reads the latest snapshot the app persisted. Returns `.empty` when nothing has been
@@ -44,16 +44,17 @@ enum WidgetStore {
 // MARK: - Deep links (mirror packages/ui/src/apps/deepLinks.ts)
 
 enum WidgetDeepLink {
-    static func newSession() -> URL { URL(string: "openchamber://new")! }
-    static func attention() -> URL { URL(string: "openchamber://sessions?filter=attention")! }
-    static func status() -> URL { URL(string: "openchamber://status")! }
-    static func settings() -> URL { URL(string: "openchamber://settings")! }
-    static func changes() -> URL { URL(string: "openchamber://changes")! }
-    static func files() -> URL { URL(string: "openchamber://view/files")! }
-    static func instances() -> URL { URL(string: "openchamber://view/instances")! }
+    static let scheme = Bundle.main.object(forInfoDictionaryKey: "CarterURLScheme") as? String ?? "openchamber"
+    static func newSession() -> URL { URL(string: "\(scheme)://new")! }
+    static func attention() -> URL { URL(string: "\(scheme)://sessions?filter=attention")! }
+    static func status() -> URL { URL(string: "\(scheme)://status")! }
+    static func settings() -> URL { URL(string: "\(scheme)://settings")! }
+    static func changes() -> URL { URL(string: "\(scheme)://changes")! }
+    static func files() -> URL { URL(string: "\(scheme)://view/files")! }
+    static func instances() -> URL { URL(string: "\(scheme)://view/instances")! }
     static func session(_ id: String) -> URL {
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        return URL(string: "openchamber://session/\(encoded)") ?? newSession()
+        return URL(string: "\(scheme)://session/\(encoded)") ?? newSession()
     }
 }
 

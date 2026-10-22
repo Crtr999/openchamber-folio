@@ -176,3 +176,11 @@ The control stream retains its browser-control capability declaration, runtime
 switch cleanup, stale-source rejection, heartbeat, and reconnect-ready events.
 Electron uses its native notification path; VS Code does not subscribe to this
 server-only stream. Mobile shells retain their existing push behavior.
+
+### Hosted mobile push entry
+
+Both web entrypoints now use `packages/web/src/pwaRegistration.ts` to register the same worker in secure production web contexts. Capacitor and packaged desktop schemes do not register it. Notification navigation retains `/mobile.html` for an existing dedicated mobile window and rejects destinations outside the app origin through `notificationTarget.ts`. Actual APNs/Web Push permission, device delivery and iPhone cold-launch behavior still require device checks; a successful UI build is not delivery evidence.
+
+### Companion completion filtering
+
+The trigger runtime accepts `shouldNotifyCompletion`, defaulting to true for existing consumers. The companion policy checks enrolled result sessions before ready notifications. Goal completion uses the same policy before every delivery channel; blocked/budget/error/question/permission paths retain their existing behavior. The companion module owns enrollment, exact unchanged markers, complete-result comparison and failure semantics.

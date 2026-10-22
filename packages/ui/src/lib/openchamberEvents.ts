@@ -138,6 +138,8 @@ const notificationPropertiesSchema = z.object({
 type OpenChamberEvent =
   | { type: 'notification'; payload: z.infer<typeof notificationPropertiesSchema> }
   | { type: 'event-stream-ready' }
+  | { type: 'companion-changed'; projectId: string }
+  | { type: 'commitments-changed' }
   | RoutingUpdatedEvent
   | RoutingDecisionEvent
   | RoutingPermissionHeldEvent
@@ -428,6 +430,17 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
     for (const listener of listeners) {
       listener(nextEvent);
     }
+    return;
+  }
+
+  if (envelope.type === 'openchamber:commitments-changed') {
+    for (const listener of listeners) listener({ type: 'commitments-changed' });
+    return;
+  }
+
+  if (envelope.type === 'openchamber:companion-changed') {
+    const parsed = z.object({ projectId: z.string().min(1) }).safeParse(envelope.properties);
+    if (parsed.success) for (const listener of listeners) listener({ type: 'companion-changed', projectId: parsed.data.projectId });
     return;
   }
 

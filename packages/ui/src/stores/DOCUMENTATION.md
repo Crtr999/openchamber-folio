@@ -56,6 +56,8 @@ plugin IDs alone are not unique across projects. Catalog requests and their
 TTL caches are scoped by runtime and directory. A response for a superseded
 owner cannot replace the catalog or finish the current owner's loading state.
 
+Provider configuration changes invalidate cached directory snapshots and refresh the active directory. Inactive directories revalidate when selected. Re-reading every persisted snapshot at startup would open each OpenCode location and start its MCP servers.
+
 ### Feature cache / query stores
 
 The Stats page keeps its reports in a feature-local store, `components/views/usage/usageStatsStore.ts`: keyed by runtime, range and project, in memory only, never refetched on its own once a key has a report, cleared on runtime switch. A failed refresh keeps the cached report. The report is requested with `tools: "none"`; tool calls, which make OpenCode scan every tool call in the range, load on request under the same key, over the loaded report's own window. Once the user asks for them, every report shown later in the app session fetches its tool calls after it lands. A failed tool read shows an error with retry and never reads as zero calls.

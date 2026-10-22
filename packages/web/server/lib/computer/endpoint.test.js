@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { fetchComputerState, resolveComputerEndpoint } from './endpoint.js';
+import { fetchComputerState, resolveComputerEndpoint, sendComputerClipboard } from './endpoint.js';
 
 /**
  * The computer is a tool's, and the tool's configuration says where it is and
@@ -91,5 +91,50 @@ describe('what the computer is doing', () => {
     const fetchImpl = vi.fn(async () => ({ ok: false, json: async () => ({}) }));
     const state = await fetchComputerState({ baseUrl: 'http://localhost:7800', token: 'k' }, { fetchImpl });
     expect(state.available).toBe(false);
+  });
+});
+
+describe('syncing clipboard into the computer', () => {
+  it('uses the direct /api/screen/clipboard endpoint when available', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true }));
+    const result = await sendComputerClipboard(
+      { baseUrl: 'http://localhost:7800', token: 'k' },
+      { screen: 'applicant', text: 'Hello world', paste: true },
+      { fetchImpl },
+    );
+    expect(result).toEqual({ ok: true });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://localhost:7800/api/screen/clipboard',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ name: 'applicant', text: 'Hello world', paste: true }),
+      }),
+    );
+  });
+
+  it('falls back to /mcp run when /api/screen/clipboard is not present', async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 404 })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    const result = await sendComputerClipboard(
+      { baseUrl: 'http://localhost:7800', token: 'k' },
+      { screen: 'applicant', text: 'Hello world', paste: true },
+      { fetchImpl },
+    );
+    expect(result).toEqual({ ok: true });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl.mock.calls[1][0]).toBe('http://localhost:7800/mcp');
+  });
+
+  it('rejects invalid screen names', async () => {
+    const fetchImpl = vi.fn();
+    const result = await sendComputerClipboard(
+      { baseUrl: 'http://localhost:7800', token: 'k' },
+      { screen: '../bad', text: 'Hello', paste: true },
+      { fetchImpl },
+    );
+    expect(result).toEqual({ ok: false });
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

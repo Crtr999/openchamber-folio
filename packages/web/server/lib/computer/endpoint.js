@@ -22,6 +22,7 @@ import { readConfigLayers } from '../opencode/shared.js';
 
 const FILE_REFERENCE = /^\{file:(.+)\}$/i;
 const LOCAL_ADDRESS = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i;
+const VALID_SCREEN_NAME = /^[a-z0-9][a-z0-9-]{0,30}$/;
 
 const isRecord = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
@@ -110,11 +111,86 @@ export const fetchComputerState = async (endpoint, { fetchImpl = fetch, timeoutM
     const screens = Array.isArray(payload?.screens)
       ? payload.screens
         .filter((screen) => typeof screen?.name === 'string' && screen.name.trim())
-        .map((screen) => ({ name: screen.name.trim(), since: typeof screen.since === 'string' ? screen.since : '' }))
+        .map((screen) => ({ name: screen.name.trim(), since: typeof screen?.since === 'string' ? screen.since : '' }))
       : [];
     return { available: true, screens };
   } catch {
     return { available: false, screens: [] };
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+/**
+ * Syncs clipboard text to a screen on the computer and optionally pastes it
+ * (`Ctrl+V`) into the currently focused element on that screen.
+ *
+ * Uses `/api/screen/clipboard` when the computer server provides it, and falls
+ * back to the computer's `/mcp` `run` tool (`xclip` + `xdotool`) so existing
+ * running containers work without requiring a container rebuild first.
+ */
+export const sendComputerClipboard = async (
+  endpoint,
+  { screen, text, paste = false } = {},
+  { fetchImpl = fetch, timeoutMs = 5_000 } = {},
+) => {
+  if (!endpoint?.baseUrl || !endpoint?.token) return { ok: false };
+  const screenName = typeof screen === 'string' ? screen.trim() : '';
+  if (!VALID_SCREEN_NAME.test(screenName)) return { ok: false };
+  if (typeof text !== 'string') return { ok: false };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const direct = await fetchImpl(`${endpoint.baseUrl}/api/screen/clipboard`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${endpoint.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name: screenName, text, paste: Boolean(paste) }),
+      signal: controller.signal,
+    }).catch(() => null);
+
+    if (direct && direct.ok) {
+      return { ok: true };
+    }
+
+    const b64 = Buffer.from(text, 'utf8').toString('base64');
+    const pasteFlag = paste ? '1' : '0';
+    const command = [
+      `port=$(awk -F: '$1 == "${screenName}" { gsub(/[^0-9]/, "", $3); print $3 }' /data/vnc-tokens/tokens 2>/dev/null | tail -n 1)`,
+      'if [ -z "$port" ]; then exit 1; fi',
+      'disp=":$((port - 5900))"',
+      `printf '%s' '${b64}' | base64 -d | DISPLAY="$disp" xclip -selection clipboard -i >/dev/null 2>&1`,
+      `printf '%s' '${b64}' | base64 -d | DISPLAY="$disp" xclip -selection primary -i >/dev/null 2>&1`,
+      `if [ "${pasteFlag}" = "1" ]; then`,
+      '  DISPLAY="$disp" xdotool keyup Super_L Super_R Meta_L Meta_R Control_L Control_R Alt_L Alt_R Shift_L Shift_R >/dev/null 2>&1 || true',
+      '  DISPLAY="$disp" xdotool key --clearmodifiers ctrl+v >/dev/null 2>&1',
+      'fi',
+    ].join('\n');
+
+    const mcpResponse = await fetchImpl(`${endpoint.baseUrl}/mcp`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${endpoint.token}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'run',
+          arguments: { command, timeout_s: 5 },
+        },
+      }),
+      signal: controller.signal,
+    });
+    return { ok: mcpResponse.ok };
+  } catch {
+    return { ok: false };
   } finally {
     clearTimeout(timer);
   }

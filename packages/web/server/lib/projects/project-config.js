@@ -1,3 +1,4 @@
+import { parseCompanionState } from '../companion/state.js';
 import { DateTime, IANAZone } from 'luxon';
 import { CronExpressionParser } from 'cron-parser';
 
@@ -370,6 +371,7 @@ export const createProjectConfigRuntime = (deps) => {
     path,
     projectsDirPath,
     createTaskID,
+    onCompanionChanged = () => {},
   } = deps;
 
   const taskIDFactory = typeof createTaskID === 'function'
@@ -1063,7 +1065,21 @@ export const createProjectConfigRuntime = (deps) => {
     return path.join(projectPath, ...relative.split('/'));
   };
 
+  const readCompanionState = async (projectID) => parseCompanionState((await readRawProjectConfigFromDisk(projectID)).companion);
+  const updateCompanionState = (projectID, decide) => withProjectWriteLock(projectID, async () => {
+    const document = await readRawProjectConfigFromDisk(projectID);
+    const current = parseCompanionState(document.companion);
+    const before = JSON.stringify(current);
+    const next = parseCompanionState(await decide(current));
+    if (before === JSON.stringify(next)) return current;
+    await writeRawProjectConfigToDisk(projectID, { ...document, companion: next });
+    try { onCompanionChanged(projectID); } catch { /* Persistence remains authoritative. */ }
+    return next;
+  });
+
   return {
+    readCompanionState,
+    updateCompanionState,
     readProjectSetup,
     updateProjectSetup,
     updateSharedProjectSetup,

@@ -279,7 +279,7 @@ describe('scheduled-tasks runtime prompt dispatch', () => {
     vi.unstubAllGlobals();
   });
 
-  it('parks the briefing with resume: false so execution starts on the task prompt', async () => {
+  it.each([false, true])('parks the briefing before dispatch, companion=%s', async (companion) => {
     const posts = [];
     vi.stubGlobal('fetch', vi.fn(async (input, init = {}) => {
       const { pathname } = new URL(String(input));
@@ -288,14 +288,16 @@ describe('scheduled-tasks runtime prompt dispatch', () => {
       return new Response(JSON.stringify({ location: { directory: '/repo' }, data }), { status: 200, headers: { 'content-type': 'application/json' } });
     }));
     const task = {
-      id: 'task-1',
+      id: companion ? 'companion:12345678' : 'task-1',
       name: 'Nightly',
       enabled: true,
       schedule: { kind: 'daily', times: ['03:00'], timezone: 'UTC' },
       execution: { prompt: 'Review open issues', providerID: 'openai', modelID: 'gpt-5', goalEnabled: true, goalTokenBudget: 50_000 },
       state: { createdAt: 1, updatedAt: 1 },
     };
+    const prepareCompanionRun = vi.fn(async () => 'Previous companion result');
     const runtime = createScheduledTasksRuntime({
+      prepareCompanionRun,
       projectConfigRuntime: {
         listScheduledTasks: async () => [task],
         reconcileLoopTasks: async () => [task],
@@ -314,10 +316,14 @@ describe('scheduled-tasks runtime prompt dispatch', () => {
       logger: { info: () => {}, warn: () => {}, error: () => {} },
     });
     await runtime.start();
-    await runtime.runNow('proj', 'task-1');
+    await runtime.runNow('proj', task.id);
     runtime.stop();
 
     const dispatch = posts.filter((post) => post.pathname.startsWith('/api/session/ses_run/'));
+    expect(prepareCompanionRun).toHaveBeenCalledTimes(companion ? 1 : 0);
+    if (companion) {
+      expect(dispatch.shift().body).toEqual({ text: 'Previous companion result', resume: false });
+    }
     expect(dispatch.map((post) => post.pathname.split('/').at(-1))).toEqual(['synthetic', 'synthetic', 'prompt']);
     expect(dispatch[0].body).toMatchObject({ text: 'Project background', resume: false });
     expect(dispatch[1].body.resume).toBe(false);

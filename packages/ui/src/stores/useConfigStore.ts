@@ -38,7 +38,6 @@ const FALLBACK_MODEL_ID = "big-pickle";
 const ADD_PROVIDER_SENTINEL = "__add_provider__";
 const GIT_UTILITY_PROVIDER_ID = "zen";
 const GIT_UTILITY_PREFERRED_MODEL_ID = "big-pickle";
-const PROVIDER_CONFIG_REFRESH_CONCURRENCY = 4;
 
 interface OpenChamberDefaults {
     defaultModel?: string;
@@ -2159,16 +2158,19 @@ export const useConfigStore = create<ConfigStore>()(
                 },
 
                 setCurrentVariantOverride: (override, inherited) => {
-                    set((state) => {
-                        const currentVariant = resolveVariantFromSelection({ override, inherited });
-                        if (
-                            state.currentVariant === currentVariant
-                            && state.currentVariantSelection.override === override
-                            && state.currentVariantSelection.inherited === inherited
-                        ) {
-                            return state;
-                        }
+                    const currentVariant = resolveVariantFromSelection({ override, inherited });
+                    const state = get();
+                    // Returning the same state inside set still runs persist's
+                    // partialize and storage write. Skip it before entering set.
+                    if (
+                        state.currentVariant === currentVariant
+                        && state.currentVariantSelection.override === override
+                        && state.currentVariantSelection.inherited === inherited
+                    ) {
+                        return;
+                    }
 
+                    set((state) => {
                         const directoryKey = state.activeDirectoryKey;
                         const baseSnapshot = state.directoryScoped[directoryKey] ?? {
                             providers: state.providers,
@@ -3849,31 +3851,19 @@ if (typeof window !== "undefined") {
     window.__zustand_config_store__ = useConfigStore;
 }
 
-const refreshKnownProviderDirectories = async (source: string): Promise<void> => {
+const refreshActiveProviderDirectory = async (source: string): Promise<void> => {
     const runtimeContext = captureConfigRuntimeContext();
     const state = useConfigStore.getState();
-    const directoryKeys = Array.from(new Set([
-        state.activeDirectoryKey,
-        ...Object.keys(state.directoryScoped),
-    ])).filter((key) => key.length > 0);
+    const directoryKey = state.activeDirectoryKey;
 
+    // Invalidate inactive snapshots, but leave their runtime locations cold.
+    // A read in each cached directory starts its entire MCP server fleet.
     state.invalidateProviderCache();
-
-    let nextIndex = 0;
-    const workerCount = Math.min(PROVIDER_CONFIG_REFRESH_CONCURRENCY, directoryKeys.length);
-    const workers = Array.from({ length: workerCount }, async () => {
-        while (nextIndex < directoryKeys.length) {
-            if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
-            const directoryKey = directoryKeys[nextIndex];
-            nextIndex += 1;
-            await useConfigStore.getState().loadProviders({
-                directory: fromDirectoryKey(directoryKey),
-                source,
-            });
-        }
+    if (!directoryKey || !isConfigRuntimeContextCurrent(runtimeContext)) return;
+    await useConfigStore.getState().loadProviders({
+        directory: fromDirectoryKey(directoryKey),
+        source,
     });
-
-    await Promise.all(workers);
 };
 
 let unsubscribeConfigStoreChanges: (() => void) | null = null;
@@ -3890,7 +3880,7 @@ if (!unsubscribeConfigStoreChanges) {
         }
 
         if (scopeMatches(event, "providers")) {
-            tasks.push(refreshKnownProviderDirectories('configChange:providers'));
+            tasks.push(refreshActiveProviderDirectory('configChange:providers'));
         }
 
         if (tasks.length > 0) {

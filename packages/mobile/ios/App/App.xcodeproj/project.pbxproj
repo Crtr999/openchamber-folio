@@ -425,6 +425,10 @@
 		504EC3141FED79650016851F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+                CARTER_BUNDLE_ID = com.openchamber.app;
+                CARTER_APP_GROUP = group.com.openchamber.app;
+                CARTER_DISPLAY_NAME = OpenChamber;
+                CARTER_URL_SCHEME = openchamber;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -489,6 +493,10 @@
 		504EC3151FED79650016851F /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+                CARTER_BUNDLE_ID = com.openchamber.app;
+                CARTER_APP_GROUP = group.com.openchamber.app;
+                CARTER_DISPLAY_NAME = OpenChamber;
+                CARTER_URL_SCHEME = openchamber;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -548,12 +556,17 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = FC68EB0AF532CFC21C3344DD /* Pods-App.debug.xcconfig */;
 			buildSettings = {
+                CARTER_BUNDLE_ID = com.openchamber.app;
+                CARTER_APP_GROUP = group.com.openchamber.app;
+                CARTER_DISPLAY_NAME = OpenChamber;
+                CARTER_URL_SCHEME = openchamber;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-					CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
+					CARTER_APP_ENTITLEMENTS = App/App.entitlements;
+					CODE_SIGN_ENTITLEMENTS = "$(CARTER_APP_ENTITLEMENTS)";
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = App/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = OpenChamber;
+				INFOPLIST_KEY_CFBundleDisplayName = "$(CARTER_DISPLAY_NAME)";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.5;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -562,7 +575,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
-				PRODUCT_BUNDLE_IDENTIFIER = com.openchamber.app;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(CARTER_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_VERSION = 5.0;
@@ -574,12 +587,17 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = AF51FD2D460BCFE21FA515B2 /* Pods-App.release.xcconfig */;
 			buildSettings = {
+                CARTER_BUNDLE_ID = com.openchamber.app;
+                CARTER_APP_GROUP = group.com.openchamber.app;
+                CARTER_DISPLAY_NAME = OpenChamber;
+                CARTER_URL_SCHEME = openchamber;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-					CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
+					CARTER_APP_ENTITLEMENTS = App/App.entitlements;
+					CODE_SIGN_ENTITLEMENTS = "$(CARTER_APP_ENTITLEMENTS)";
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = App/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = OpenChamber;
+				INFOPLIST_KEY_CFBundleDisplayName = "$(CARTER_DISPLAY_NAME)";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.5;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -587,7 +605,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openchamber.app;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(CARTER_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
 				SWIFT_VERSION = 5.0;
@@ -598,6 +616,10 @@
 		D0A5000000000000000000E2 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+                CARTER_BUNDLE_ID = com.openchamber.app;
+                CARTER_APP_GROUP = group.com.openchamber.app;
+                CARTER_DISPLAY_NAME = OpenChamber;
+                CARTER_URL_SCHEME = openchamber;
 				CODE_SIGN_ENTITLEMENTS = OpenChamberWidget/OpenChamberWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -611,7 +633,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openchamber.app.OpenChamberWidget;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(CARTER_BUNDLE_ID).OpenChamberWidget";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
@@ -623,6 +645,10 @@
 		D0A5000000000000000000E3 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+                CARTER_BUNDLE_ID = com.openchamber.app;
+                CARTER_APP_GROUP = group.com.openchamber.app;
+                CARTER_DISPLAY_NAME = OpenChamber;
+                CARTER_URL_SCHEME = openchamber;
 				CODE_SIGN_ENTITLEMENTS = OpenChamberWidget/OpenChamberWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -636,7 +662,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openchamber.app.OpenChamberWidget;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(CARTER_BUNDLE_ID).OpenChamberWidget";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
@@ -647,6 +673,10 @@
 		D0B5000000000000000000E2 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+                CARTER_BUNDLE_ID = com.openchamber.app;
+                CARTER_APP_GROUP = group.com.openchamber.app;
+                CARTER_DISPLAY_NAME = OpenChamber;
+                CARTER_URL_SCHEME = openchamber;
 				CODE_SIGN_ENTITLEMENTS = OpenChamberNotificationService/OpenChamberNotificationService.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -660,7 +690,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openchamber.app.OpenChamberNotificationService;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(CARTER_BUNDLE_ID).OpenChamberNotificationService";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
@@ -672,6 +702,10 @@
 		D0B5000000000000000000E3 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+                CARTER_BUNDLE_ID = com.openchamber.app;
+                CARTER_APP_GROUP = group.com.openchamber.app;
+                CARTER_DISPLAY_NAME = OpenChamber;
+                CARTER_URL_SCHEME = openchamber;
 				CODE_SIGN_ENTITLEMENTS = OpenChamberNotificationService/OpenChamberNotificationService.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -685,7 +719,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openchamber.app.OpenChamberNotificationService;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(CARTER_BUNDLE_ID).OpenChamberNotificationService";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;

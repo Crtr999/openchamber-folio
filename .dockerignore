@@ -25,3 +25,13 @@ workspaces
 packages/desktop/src-tauri
 packages/desktop/target
 packages/intellij
+
+# Native build products and signing material never belong in server builds.
+**/Pods
+**/DerivedData
+**/*.mobileprovision
+**/*.p8
+**/*.p12
+packages/mobile/ios/App/App/public
+packages/electron/resources/web-dist
+packages/electron/resources/opencode-cli

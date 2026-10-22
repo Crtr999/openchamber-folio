@@ -9,6 +9,7 @@ that writes it:
 
 | Keys | Owner | Reached through |
 |---|---|---|
+| `companion` | `project-config.js` plus companion state schema | `/api/projects/:projectId/companion/*` |
 | `version`, `scheduledTasks` | `project-config.js` (scheduled-task runtime) | `/api/projects/:projectId/scheduled-tasks/*` |
 | `setup-worktree`, `setup-worktree-wait`, `projectActions`, `projectActionsPrimaryId`, `draftStarters`, `projectPath` | `project-setup.js` via `readProjectSetup` / `updateProjectSetup` on the same runtime | `GET/PUT /api/projects/:projectId/config` (`routes.js`) |
 

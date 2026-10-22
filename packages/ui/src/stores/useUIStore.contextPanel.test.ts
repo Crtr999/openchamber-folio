@@ -14,6 +14,25 @@ beforeEach(() => {
 });
 
 describe('useUIStore context panel tabs', () => {
+  test('computer handoffs reveal one persistent tab and update its selected screen', () => {
+    const store = useUIStore.getState();
+    store.openContextPanelTab('/repo', { mode: 'computer', targetPath: 'applicant' });
+    store.setContextRailVisible(false);
+    store.openContextPanelTab('/repo', { mode: 'computer', targetPath: 'research' });
+    store.openContextPanelTab('/repo', { mode: 'computer', targetPath: 'research' });
+    const state = useUIStore.getState();
+    const panel = state.contextPanelByDirectory['/repo'];
+    expect(panel.tabs.filter((tab) => tab.mode === 'computer')).toHaveLength(1);
+    expect(panel.tabs.find((tab) => tab.id === panel.activeTabId)?.targetPath).toBe('research');
+    expect(panel.isOpen).toBe(true);
+    expect(state.contextRailVisible).toBe(true);
+    const persisted = useUIStore.persist.getOptions().partialize?.(state);
+    expect(persisted).toMatchObject({ contextPanelByDirectory: { '/repo': {
+      activeTabId: panel.activeTabId,
+      tabs: panel.tabs,
+    } } });
+  });
+
   test('migration closes an unresolved selected pane without deleting genuine tabs or widths', async () => {
     useUIStore.getState().openContextSurface('/repo', 'notes');
     useUIStore.getState().setContextPanelWidth('/repo', 'notes', 620, 1240);

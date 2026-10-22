@@ -40,7 +40,9 @@ export const SessionSidebarActivityHeader: React.FC<{
   const friendProfiles = useFriendProfiles();
   const chatsRoot = useChatsRoot();
   const friendLook = chats && chatsRoot ? folderFriendAppearance(friendProfiles, chatsRoot) : null;
-  const activity = useFolderActivity(chats ? chatsRoot : null);
+  // All Chats is the one friend whose conversations live underneath it rather
+  // than in it, so its activity is found by being under the root.
+  const activity = useFolderActivity(chats ? chatsRoot : null, { includeNested: chats });
   const activityWorking = chats && activity.working;
   if (timelineView) {
     // Timeline zone header: no icon, text flush with the rows' left edge, and
@@ -70,7 +72,7 @@ export const SessionSidebarActivityHeader: React.FC<{
     >
       {/* A friend replaces the area's own mark: the face is the mark. */}
       {friendLook ? (
-        <span className="oc-friend-activity relative inline-flex size-5 shrink-0 items-center justify-center" data-working={activityWorking ? 'true' : undefined}>
+        <span className="oc-friend-activity relative inline-flex size-5 shrink-0 items-center justify-center" data-working={activityWorking ? 'true' : undefined} data-retrying={chats && activity.retrying ? 'true' : undefined}>
           <HomeFriendAvatar body={friendLook.body} color={friendLook.color} className="size-5" />
         </span>
       ) : (

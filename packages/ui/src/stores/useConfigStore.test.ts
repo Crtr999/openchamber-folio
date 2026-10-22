@@ -563,7 +563,7 @@ describe('useConfigStore provider persistence', () => {
     expect(reloaded.currentModelId).toBe('fresh-model');
   });
 
-  test('provider config events refresh all known directory provider caches immediately', async () => {
+  test('provider config events refresh the active directory and leave inactive runtimes cold', async () => {
     useConfigStore.setState({
       activeDirectoryKey: DIRECTORY,
       providers: [provider('active-stale')],
@@ -603,10 +603,14 @@ describe('useConfigStore provider persistence', () => {
     await configListener?.({ scopes: ['providers'], timestamp: Date.now() });
 
     const state = useConfigStore.getState();
-    expect(getProvidersCalls).toBe(2);
+    expect(getProvidersCalls).toBe(1);
     expect(state.directoryScoped[DIRECTORY]?.providers.map((entry) => entry.id)).toEqual(['active-live']);
-    expect(state.directoryScoped[OTHER_DIRECTORY]?.providers.map((entry) => entry.id)).toEqual(['inactive-live']);
-    expect(state.directoryScoped[OTHER_DIRECTORY]?.defaultProviders).toEqual({ 'inactive-live': 'inactive-live-model' });
+    expect(state.directoryScoped[OTHER_DIRECTORY]?.providers).toEqual([]);
+    // Selecting the invalidated directory still revalidates its own catalog.
+    await useConfigStore.getState().activateDirectory(OTHER_DIRECTORY);
+    expect(getProvidersCalls).toBe(2);
+    expect(useConfigStore.getState().providers.map((entry) => entry.id)).toEqual(['inactive-live']);
+    expect(useConfigStore.getState().directoryScoped[OTHER_DIRECTORY]?.defaultProviders).toEqual({ 'inactive-live': 'inactive-live-model' });
   });
 
   test('provider reload preserves a valid current variant', async () => {
@@ -748,6 +752,48 @@ describe('useConfigStore provider persistence', () => {
     expect(state.currentModelId).toBe('gpt-5.5');
     expect(state.currentVariant).toBe('high');
     expect(state.directoryScoped[DIRECTORY]?.currentVariant).toBe('high');
+  });
+
+  test('unchanged effort selection never schedules persistence; semantic changes still save', () => {
+    useConfigStore.setState({
+      currentVariant: 'high',
+      currentVariantSelection: { override: undefined, inherited: 'high' },
+    });
+    const storage = useConfigStore.persist.getOptions().storage;
+    if (!storage) throw new Error('Missing config persistence');
+    let writes = 0;
+    useConfigStore.persist.setOptions({ storage: {
+      ...storage,
+      setItem: (name, value) => {
+        writes += 1;
+        return storage.setItem(name, value);
+      },
+    } });
+    try {
+      const before = useConfigStore.getState();
+      for (let frame = 0; frame < 240; frame += 1) {
+        useConfigStore.getState().setCurrentVariant('high');
+        useConfigStore.getState().setCurrentVariantOverride(undefined, 'high');
+      }
+      expect(useConfigStore.getState()).toBe(before);
+      expect(writes).toBe(0);
+
+      // The same effective effort with a different source is a real change.
+      useConfigStore.getState().setCurrentVariantOverride('high', 'high');
+      expect(writes).toBe(1);
+      useConfigStore.getState().setCurrentVariantOverride('high', 'low');
+      expect(writes).toBe(2);
+      useConfigStore.getState().setCurrentVariantOverride(null, 'low');
+      expect(useConfigStore.getState().currentVariant).toBeUndefined();
+      expect(writes).toBe(3);
+      useConfigStore.getState().setCurrentVariantOverride(null, 'low');
+      expect(writes).toBe(3);
+      useConfigStore.getState().setCurrentVariantOverride(undefined, 'low');
+      expect(useConfigStore.getState().currentVariant).toBe('low');
+      expect(writes).toBe(4);
+    } finally {
+      useConfigStore.persist.setOptions({ storage });
+    }
   });
 
   test('cycleCurrentVariant reaches Default, low, and medium from inherited high', () => {

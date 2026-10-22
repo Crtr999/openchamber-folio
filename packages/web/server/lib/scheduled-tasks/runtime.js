@@ -258,6 +258,7 @@ export const createScheduledTasksRuntime = (deps) => {
     // The goal record lives in OpenChamber's metadata store (OpenCode 2.x takes
     // session metadata only at create time); without it goal mode cannot run.
     persistSessionGoal = null,
+    prepareCompanionRun = null,
     logger = console,
     maxGlobalConcurrency = DEFAULT_GLOBAL_CONCURRENCY,
     maxProjectConcurrency = DEFAULT_PROJECT_CONCURRENCY,
@@ -607,6 +608,11 @@ export const createScheduledTasksRuntime = (deps) => {
       } catch (error) {
         logger.warn?.('[scheduled-tasks] failed to enable permission auto-accept for session', sessionID, error?.message ?? error);
       }
+    }
+
+    if (prepareCompanionRun && task.id.startsWith('companion:')) {
+      const context = await prepareCompanionRun({ sessionID, directory: projectPath, task, projectID });
+      if (context) await client.session.synthetic({ sessionID, text: context, resume: false });
     }
 
     const scheduledCommand = await resolveScheduledCommand({ client, projectPath, task });

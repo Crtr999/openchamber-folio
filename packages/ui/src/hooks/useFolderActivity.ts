@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import { normalizeProjectPath } from '@/lib/projectResolution';
+import { normalizeFolderKeyPath } from '@/lib/friends';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 
 export type FolderActivity = {
@@ -26,16 +27,30 @@ const IDLE: FolderActivity = { working: false, workingCount: 0, retrying: false 
  * path, so a trailing slash or a symlinked spelling of the same folder is the
  * same folder. A nested folder is its own folder, exactly as the friend
  * widgets treat it.
+ *
+ * All Chats is the one exception: it is not a folder but the area above every
+ * folder, and each of its conversations lives in a dated directory underneath
+ * it. So it asks for `includeNested`, and its conversations are found by being
+ * under the root rather than at it.
  */
-export const useFolderActivity = (directory?: string | null): FolderActivity => {
+export const useFolderActivity = (
+  directory?: string | null,
+  options?: { includeNested?: boolean },
+): FolderActivity => {
   const statusById = useGlobalSessionStatusStore((state) => state.statusById);
+  const includeNested = options?.includeNested === true;
   return useMemo(() => {
     const scope = normalizeProjectPath(directory ?? '');
     if (!scope) return IDLE;
+    const nestedPrefix = includeNested ? `${normalizeFolderKeyPath(scope).replace(/\/+$/, '')}/` : null;
     let workingCount = 0;
     let retrying = false;
     for (const entry of statusById.values()) {
-      if (normalizeProjectPath(entry.directory) !== scope) continue;
+      const entryDirectory = normalizeProjectPath(entry.directory);
+      if (entryDirectory !== scope) {
+        if (!nestedPrefix) continue;
+        if (!normalizeFolderKeyPath(entryDirectory ?? '').startsWith(nestedPrefix)) continue;
+      }
       if (entry.status.type === 'retry') {
         retrying = true;
         workingCount += 1;
@@ -44,5 +59,5 @@ export const useFolderActivity = (directory?: string | null): FolderActivity => 
       if (entry.status.type === 'busy') workingCount += 1;
     }
     return { working: workingCount > 0, workingCount, retrying };
-  }, [statusById, directory]);
+  }, [statusById, directory, includeNested]);
 };

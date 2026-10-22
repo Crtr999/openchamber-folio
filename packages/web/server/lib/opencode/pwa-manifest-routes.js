@@ -176,7 +176,7 @@ export const registerPwaManifestRoute = (app, dependencies) => {
     }
   };
 
-  app.get('/manifest.webmanifest', async (req, res) => {
+  const serveManifest = async (req, res, mobile = false) => {
     const hasQueryOverride =
       typeof req.query?.pwa_name === 'string'
       || typeof req.query?.app_name === 'string'
@@ -214,14 +214,15 @@ export const registerPwaManifestRoute = (app, dependencies) => {
     );
 
     const shortName = appName.length > 30 ? appName.slice(0, 30) : appName;
-    const recentSessionShortcuts = await getRecentPwaSessionShortcuts(req);
+    // Mobile manifests are public installation metadata, never private chat titles.
+    const recentSessionShortcuts = mobile ? [] : await getRecentPwaSessionShortcuts(req);
 
     const manifest = {
-      name: appName,
-      short_name: shortName,
+      name: mobile ? 'Open Carter' : appName,
+      short_name: mobile ? 'Open Carter' : shortName,
       description: 'Web interface companion for OpenCode AI coding agent',
-      id: '/',
-      start_url: '/',
+      id: mobile ? '/mobile.html' : '/',
+      start_url: mobile ? '/mobile.html' : '/',
       scope: '/',
       display: 'standalone',
       display_override: ['window-controls-overlay'],
@@ -238,7 +239,12 @@ export const registerPwaManifestRoute = (app, dependencies) => {
         { src: '/favicon-32.png', sizes: '32x32', type: 'image/png' },
         { src: '/favicon-16.png', sizes: '16x16', type: 'image/png' },
       ],
-      shortcuts: [
+      shortcuts: mobile ? [{
+        name: 'Dictate',
+        short_name: 'Dictate',
+        url: '/mobile.html?dictate=1',
+        icons: [{ src: '/pwa-192.png', sizes: '192x192', type: 'image/png' }],
+      }] : [
         {
           name: 'Appearance Settings',
           short_name: 'Settings',
@@ -255,5 +261,7 @@ export const registerPwaManifestRoute = (app, dependencies) => {
     res.setHeader('Cache-Control', 'no-store, must-revalidate');
     res.type('application/manifest+json');
     res.send(JSON.stringify(manifest));
-  });
+  };
+  app.get('/manifest.webmanifest', (req, res) => serveManifest(req, res));
+  app.get('/mobile.webmanifest', (req, res) => serveManifest(req, res, true));
 };

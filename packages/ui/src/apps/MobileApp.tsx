@@ -1,3 +1,4 @@
+import { CompanionPanel } from './CompanionPanel';
 import { OpenCodeCompatibilityGate } from '@/components/update/OpenCodeCompatibilityGate';
 import React from 'react';
 
@@ -132,6 +133,9 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   // are idle-reaped by the server while the workspace drawer is closed.
   useTerminalSessionKeepalive();
   const [sessionsSheetOpen, setSessionsSheetOpen] = React.useState(false);
+  const [companionOpen, setCompanionOpen] = React.useState(false);
+  const closeCompanion = React.useCallback(() => setCompanionOpen(false), []);
+  const [quickDictation, setQuickDictation] = React.useState(() => new URLSearchParams(window.location.search).get('dictate') === '1');
   // The run overview covers the chat; selecting any session returns to it.
   React.useEffect(() => useSessionUIStore.subscribe((state, prev) => {
     if (state.currentSessionId && state.currentSessionId !== prev.currentSessionId) {
@@ -297,6 +301,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   // new-session intents resolve directly against the store, so they aren't wired here.
   const deepLinkHandlers = React.useMemo(
     () => ({
+      openDictation: () => setQuickDictation(true),
       openSessions: () => {
         if (isTabletLayout) setSidebarOpen(true);
         else setSessionsSheetOpen(true);
@@ -508,6 +513,17 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
             onOpenWorkspace={() => setWorkspaceOpen(true)}
             compactTitle={isTabletLayout}
           />
+          <div className="flex shrink-0 gap-2 px-3 pb-2">
+            <Button variant="outline" size="sm" onClick={() => setCompanionOpen(true)}>{t('companion.title')}</Button>
+            {quickDictation ? <Button size="sm" onClick={() => {
+              window.dispatchEvent(new CustomEvent('openchamber:dictation-toggle'));
+              setQuickDictation(false);
+              const url = new URL(window.location.href);
+              url.searchParams.delete('dictate');
+              window.history.replaceState(window.history.state, '', url);
+            }}>{t('chat.dictation.start')}</Button> : null}
+          </div>
+          {companionOpen ? <CompanionPanel onClose={closeCompanion} /> : null}
           <main ref={chatMainRef} className="relative min-h-0 flex-1 overflow-hidden" data-page-scroll-lock="true">
             <div className="h-full w-full">
               <ErrorBoundary>

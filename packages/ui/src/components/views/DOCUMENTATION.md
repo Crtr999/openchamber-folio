@@ -49,6 +49,15 @@ adapter. No native Claude option is added, and API billing is not substituted.
 
 ## Context panel retention
 
+The main desktop/web split uses complementary grid columns, with the chat track
+allowed to shrink and the docked surface retaining its requested width. Panel
+measurement uses the boxed `data-chat-area` row, not its `display: contents`
+wrapper. Drag previews update the CSS width at most once per animation frame
+with transitions disabled on both the panel and its content. Preferences commit
+once on release; cancellation, blur and unmount cancel queued frames. Expanded
+mode remains an explicit overlay. VS Code keeps its existing layout and shares
+the corrected panel measurement and drag lifecycle.
+
 `ContextPanel` keeps file, diff and walkthrough views mounted to preserve
 navigation, expanded sections and editor state. Its `visible` prop combines
 the panel's open state with the selected tab. Hiding via CSS alone does not

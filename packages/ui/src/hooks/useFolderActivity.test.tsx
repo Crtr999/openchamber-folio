@@ -101,3 +101,29 @@ test('the same folder spelled differently is the same folder', async () => {
     unmount();
   });
 });
+
+test('All Chats is busy when a conversation under its root is busy', async () => {
+  await withDom(async ({ render, unmount }) => {
+    replaceGlobalSessionStatusById(new Map([
+      ['ses_1', { status: { type: 'busy' }, directory: '/chats/2026-10-19/session-abc' }],
+      ['ses_2', { status: { type: 'busy' }, directory: '/chats-other/2026-10-19/session-xyz' }],
+    ]));
+
+    const seen: Record<string, ReturnType<typeof useFolderActivity>> = {};
+    function Probe() {
+      seen.nested = useFolderActivity('/chats', { includeNested: true });
+      seen.exact = useFolderActivity('/chats');
+      return null;
+    }
+
+    render(<Probe />);
+    // Only the conversations under the root are its own; a sibling that
+    // merely starts with the same letters is not.
+    expect(seen.nested?.working).toBe(true);
+    expect(seen.nested?.workingCount).toBe(1);
+    // A nested folder is its own friend, so without the nested ask the
+    // conversations under the root do not count.
+    expect(seen.exact?.working).toBe(false);
+    unmount();
+  });
+});

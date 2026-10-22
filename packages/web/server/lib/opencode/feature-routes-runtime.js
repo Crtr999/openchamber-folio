@@ -1,3 +1,5 @@
+import { registerCompanionRoutes } from '../companion/routes.js';
+import { registerCommitmentRoutes } from '../commitments/routes.js';
 import { registerFsRoutes } from '../fs/routes.js';
 import { registerQuotaRoutes } from '../quota/routes.js';
 import { registerSmallModelRoutes } from '../small-model/routes.js';
@@ -17,7 +19,7 @@ import { registerProjectSetupRoutes } from '../projects/routes.js';
 import { registerAgentMemoryRoutes } from '../agent-memory/routes.js';
 import { registerSessionKnowledgeRoutes } from '../session-knowledge/routes.js';
 import { registerComputerRoutes } from '../computer/routes.js';
-import { fetchComputerState, resolveComputerEndpoint } from '../computer/endpoint.js';
+import { fetchComputerState, resolveComputerEndpoint, sendComputerClipboard } from '../computer/endpoint.js';
 import { registerPermissionAutoAcceptRoutes } from '../permission-auto-accept/runtime.js';
 import { registerMessageQueueRoutes } from '../message-queue/runtime.js';
 import { registerRoutingPromptRewrite, registerRoutingRoutes } from '../routing/routes.js';
@@ -141,6 +143,10 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       sessionKnowledgeRuntime,
       scheduledTasksRuntime,
       scheduledTaskService,
+      companionCoordinator,
+      commitmentStore,
+      commitmentChecks,
+      onCommitmentsChanged,
       openChamberSessionService,
       openChamberControlService,
       waitForOpenCodeReady,
@@ -213,6 +219,10 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       getOpenChamberEventClients,
       writeSseEvent,
     });
+
+    registerCompanionRoutes(app, { scheduledTaskService, projectConfigRuntime, companionCoordinator });
+
+    registerCommitmentRoutes(app, { store: commitmentStore, checks: commitmentChecks, onChanged: onCommitmentsChanged });
 
     registerOpenChamberSessionRoutes(app, {
       readSettingsFromDiskMigrated,
@@ -366,6 +376,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     registerComputerRoutes(app, {
       resolveEndpoint: () => resolveComputerEndpoint(),
       fetchState: (endpoint) => fetchComputerState(endpoint),
+      sendClipboard: (endpoint, payload) => sendComputerClipboard(endpoint, payload),
     });
 
     registerSessionFoldersRoutes(app, {

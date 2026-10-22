@@ -80,7 +80,7 @@ import { runOpenCodeCliUpgrade } from './lib/opencode/cli-upgrade.js';
 import { resolveOpenCodeUpgradeCapability } from './lib/opencode/upgrade-capability.js';
 import { createBootstrapRuntime } from './lib/opencode/bootstrap-runtime.js';
 import { createSessionRuntime } from './lib/opencode/session-runtime.js';
-import { configureOpenCodeRuntimeProviders, resetOpenCodeRuntimeProviders } from './lib/small-model/client.js';
+import { configureOpenCodeRuntimeProviders, getSmallModelClient, resetOpenCodeRuntimeProviders } from './lib/small-model/client.js';
 import { createOpenCodeWatcherRuntime } from './lib/opencode/watcher.js';
 import { createSessionAssistRuntime } from './lib/session-assist/runtime.js';
 import { createSessionMemoryCaptureRuntime } from './lib/session-memory-capture/runtime.js';
@@ -90,6 +90,12 @@ import { createContextObligatoryRuntime } from './lib/context-obligatory/runtime
 import { createLinearSessionStatusRuntime } from './lib/linear/status-runtime.js';
 import { createSessionKnowledgeRuntime } from './lib/session-knowledge/runtime.js';
 import { createScheduledTasksRuntime } from './lib/scheduled-tasks/runtime.js';
+import { createCompanionDelivery } from './lib/companion/delivery.js';
+import { createCompanionCoordinator } from './lib/companion/coordinator.js';
+import { createCommitmentsStore } from './lib/commitments/store.js';
+import { createFolderGuard } from './lib/commitments/zdr-guard.js';
+import { createCommitmentCapture } from './lib/commitments/capture-runtime.js';
+import { createCommitmentChecks } from './lib/commitments/check-runtime.js';
 import { createServerStartupRuntime } from './lib/opencode/server-startup-runtime.js';
 import { createTunnelWiringRuntime } from './lib/opencode/tunnel-wiring-runtime.js';
 import { createStartupPipelineRuntime } from './lib/opencode/startup-pipeline-runtime.js';
@@ -597,6 +603,7 @@ if (movedUserDirs.length > 0) {
 }
 
 const projectConfigRuntime = createProjectConfigRuntime({
+  onCompanionChanged: (projectId) => broadcastOpenChamberUiEvent({ type: 'openchamber:companion-changed', properties: { projectId } }),
   fsPromises,
   path,
   projectsDirPath: OPENCHAMBER_PROJECTS_CONFIG_DIR,
@@ -885,7 +892,34 @@ notificationTemplateRuntime = createNotificationTemplateRuntime({
   resolveGitBinaryForSpawn,
 });
 
+let companionCoordinator = null;
+// The commitments list: declared here for the same reason as the coordinator.
+let commitmentChecks = null;
+let commitmentCapture = null;
+const companionDelivery = createCompanionDelivery({
+  readActivityContext: (projectID, taskID) => companionCoordinator?.activityContext(projectID, taskID) ?? '',
+  readSessionMetadata: readStoredSessionMetadata,
+  persistEnrollment: (sessionID, directory, companion) =>
+    persistSessionMetadataPatch(sessionID, { openchamber: { companion } }, { directory }),
+  readLastReply: fetchLastAssistantMessageText,
+});
+
 const notificationTriggerRuntime = createNotificationTriggerRuntime({
+  shouldNotifyCompletion: async (sessionID) => {
+    // A commitments check decides for itself whether it is worth a message;
+    // anything else falls through to the companion rules.
+    const commitment = await commitmentChecks?.considerCompletion(sessionID).catch((error) => {
+      console.warn('[commitments] could not judge a check result:', error?.message);
+      return false;
+    });
+    if (commitment !== undefined) return commitment;
+    return companionCoordinator
+      ? companionCoordinator.considerCompletion(sessionID).catch((error) => {
+        console.warn('[Companion] could not index result:', error?.message);
+        return true;
+      })
+      : companionDelivery.shouldNotify(sessionID);
+  },
   readSettingsFromDisk,
   prepareNotificationLastMessage,
   buildTemplateVariables,
@@ -967,7 +1001,7 @@ const sessionMemoryCaptureRuntime = createSessionMemoryCaptureRuntime({
   // chats root is a project of its own, so it keeps a memory of its own.
   // Only the team runtime's own home is left out: those are machine
   // conversations, not the user's.
-  isCapturableDirectory: (directory) => !isTeamRuntimeDirectory(directory),
+  isCapturableDirectory: (directory) => !isTeamRuntimeDirectory(directory) && !commitmentChecks?.isOwnDirectory(directory),
   lineage: sessionLineage,
 });
 
@@ -982,6 +1016,7 @@ const sessionGoalRuntime = createSessionGoalRuntime({
     persistSessionMetadataPatch(sessionID, { openchamber: { goal } }, { directory }),
   emitGoalNotification: async ({ sessionId, directory, status, goal }) => {
     if (!await notificationTriggerRuntime.isRootNotificationSession(sessionId, directory)) return;
+    if (status === 'complete' && !await notificationTriggerRuntime.shouldNotifyCompletion(sessionId)) return;
     // The goal settle notification replaces the per-turn ready notifications
     // (suppressed while the goal is active) — so it obeys the same toggle.
     const settings = await readSettingsFromDisk();
@@ -1138,8 +1173,12 @@ globalMessageStreamHub.subscribeEvent((event) => {
       agentToolRuntime?.abortSession?.(payload.properties.sessionID);
     }
     sessionLineage.observe(payload);
+    void companionCoordinator?.observe(payload, directory || payload.properties?.directory || '').catch((error) => {
+      console.warn('[Companion] activity read failed:', error?.message);
+    });
     sessionAssistRuntime.processPayload(payload, directory || payload.properties?.directory || '');
     sessionMemoryCaptureRuntime.processPayload(payload, directory || payload.properties?.directory || '');
+    commitmentCapture?.processPayload(payload, directory || payload.properties?.directory || '');
     sessionWorkRuntime.processPayload(payload, directory || payload.properties?.directory || '');
     sessionGoalRuntime.processPayload(payload, directory || payload.properties?.directory || '');
     contextObligatoryRuntime.processPayload(payload, directory || payload.properties?.directory || '');
@@ -1494,6 +1533,7 @@ const refreshOpenCodeAfterConfigChange = (...args) => openCodeLifecycleRuntime.r
 const startHealthMonitoring = () => openCodeLifecycleRuntime.startHealthMonitoring(HEALTH_CHECK_INTERVAL);
 const triggerHealthCheck = () => openCodeLifecycleRuntime.triggerHealthCheck();
 const scheduledTasksRuntime = createScheduledTasksRuntime({
+  prepareCompanionRun: companionDelivery.prepareRun,
   projectConfigRuntime,
   listProjects: async () => {
     const settings = await readSettingsFromDiskMigrated();
@@ -1586,6 +1626,53 @@ const scheduledTaskService = createScheduledTaskService({
   sanitizeProjects,
   projectConfigRuntime,
   scheduledTasksRuntime,
+});
+companionCoordinator = createCompanionCoordinator({
+  projectConfigRuntime, scheduledTaskService,
+  inspectResult: companionDelivery.inspectResult,
+  readMetadata: readStoredSessionMetadata,
+  readLastReply: fetchLastAssistantMessageText,
+  isRootSession: notificationTriggerRuntime.isRootNotificationSession,
+  notifyUpdate: notificationTriggerRuntime.sendCompanionUpdate,
+});
+// Commitments: deadlines noticed in conversations, checked on a timer, and
+// delivered through the ordinary notifications. The legal/ZDR guard runs
+// before any conversation is read or any item is checked.
+const commitmentStore = createCommitmentsStore({
+  fs: fsPromises,
+  filePath: path.join(OPENCHAMBER_DATA_DIR, 'commitments.json'),
+});
+const commitmentGuard = createFolderGuard({
+  resolveAllowedProviders: (directory) => resolveDirectoryAllowedProviders(directory),
+  readExcludedDirectories: async () => (await commitmentStore.read()).settings.excludedDirectories,
+});
+const emitCommitmentsChanged = () => broadcastOpenChamberUiEvent({ type: 'openchamber:commitments-changed', properties: {} });
+commitmentChecks = createCommitmentChecks({
+  store: commitmentStore,
+  guard: commitmentGuard,
+  getClient: getSmallModelClient,
+  chatsRoot: OPENCHAMBER_CHATS_DIR,
+  mkdir: (directory, options) => fsPromises.mkdir(directory, options),
+  persistEnrollment: (sessionID, directory, commitment) =>
+    persistSessionMetadataPatch(sessionID, { openchamber: { commitment } }, { directory }),
+  readSessionMetadata: readStoredSessionMetadata,
+  readLastReply: fetchLastAssistantMessageText,
+  archiveSession: (sessionID) => openChamberSessionService.archiveStore.archive([sessionID], Date.now()),
+  waitForReady: () => waitForOpenCodeReady(10_000, 250),
+  onChanged: emitCommitmentsChanged,
+});
+commitmentCapture = createCommitmentCapture({
+  buildOpenCodeUrl,
+  getOpenCodeAuthHeaders,
+  getSmallModelService: async () => import('./lib/small-model/index.js'),
+  store: commitmentStore,
+  guard: commitmentGuard,
+  resolveAllowedProviders: (directory) => resolveDirectoryAllowedProviders(directory),
+  readSessionMetadata: readStoredSessionMetadata,
+  isSessionArchived: (sessionID) => openChamberSessionService.archiveStore.isArchived(sessionID),
+  isOwnDirectory: (directory) => commitmentChecks.isOwnDirectory(directory),
+  lineage: sessionLineage,
+  onChanged: emitCommitmentsChanged,
 });
 const openChamberSessionService = createOpenChamberSessionService({
   readSettingsFromDiskMigrated,
@@ -1767,6 +1854,9 @@ const readAiTaskProjects = async () => [ALL_CHATS_TEAM_PROJECT, ...sanitizeProje
 const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   process,
   shutdownTimeoutMs: SHUTDOWN_TIMEOUT,
+  companionCoordinator,
+  commitmentChecks,
+  commitmentCapture,
   getExitOnShutdown: () => exitOnShutdown,
   getIsShuttingDown: () => isShuttingDown,
   setIsShuttingDown: (value) => {
@@ -2375,6 +2465,10 @@ async function main(options = {}) {
     sessionKnowledgeRuntime,
     scheduledTasksRuntime,
     scheduledTaskService,
+    companionCoordinator,
+    commitmentStore,
+    commitmentChecks,
+    onCommitmentsChanged: emitCommitmentsChanged,
     openChamberSessionService,
     openChamberControlService,
     waitForOpenCodeReady,
@@ -2453,6 +2547,8 @@ async function main(options = {}) {
 
   try {
     await scheduledTasksRuntime.start();
+    companionCoordinator.start();
+    commitmentChecks.start();
   } catch (error) {
     console.warn('[ScheduledTasks] Failed to start runtime:', error?.message || error);
   }

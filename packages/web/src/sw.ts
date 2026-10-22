@@ -1,4 +1,5 @@
 /// <reference lib="webworker" />
+import { notificationTarget } from './notificationTarget';
 
 // NOTE: keep the Workbox injection point so vite-plugin-pwa can build.
 // We intentionally do not use Workbox runtime helpers here: iOS Safari can be
@@ -70,7 +71,7 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil((async () => {
     // Prefer focusing an already-open window (e.g. the installed PWA) and
     // navigating it to the target, instead of always spawning a new window.
-    const target = new URL(url, self.location.origin).href;
+    const target = notificationTarget(url, self.location.origin);
     const windowClients = await self.clients.matchAll({
       type: 'window',
       includeUncontrolled: true,
@@ -79,7 +80,7 @@ self.addEventListener('notificationclick', (event) => {
     for (const client of windowClients) {
       try {
         if ('navigate' in client) {
-          await client.navigate(target);
+          await client.navigate(notificationTarget(url, self.location.origin, client.url));
         }
       } catch {
         // navigate() can reject for uncontrolled clients; fall back to focus.

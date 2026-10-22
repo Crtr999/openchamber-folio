@@ -132,3 +132,23 @@ describe('PWA manifest route', () => {
     }
   });
 });
+
+it('installs the mobile renderer with a speech shortcut and no private session reads', async () => {
+  const routes = new Map();
+  registerPwaManifestRoute({ get: (route, handler) => routes.set(route, handler) }, {
+    process: { platform: 'linux' },
+    resolveProjectDirectory: async () => { throw new Error('Mobile manifest must not read project sessions'); },
+    buildOpenCodeUrl: () => { throw new Error('No session titles in public metadata'); },
+    getOpenCodeAuthHeaders: () => ({}),
+    readSettingsFromDiskMigrated: async () => ({}),
+    normalizePwaAppName: (value, fallback) => value || fallback,
+    normalizePwaOrientation: (value, fallback) => value || fallback,
+  });
+  const response = createResponse();
+  await routes.get('/mobile.webmanifest')({ query: {} }, response);
+  const manifest = JSON.parse(response.body);
+  expect(manifest.name).toBe('Open Carter');
+  expect(manifest.start_url).toBe('/mobile.html');
+  expect(manifest.id).toBe('/mobile.html');
+  expect(manifest.shortcuts.map((shortcut) => shortcut.url)).toEqual(['/mobile.html?dictate=1']);
+});

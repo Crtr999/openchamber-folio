@@ -1,3 +1,4 @@
+import { initializePwa } from './pwaRegistration';
 import { createConfiguredWebAPIs } from './runtimeConfig';
 import type { RuntimeAPIs } from '@openchamber/ui/lib/api/types';
 import '@openchamber/ui/index.css';
@@ -16,3 +17,5 @@ void import('@openchamber/ui/apps/renderMobileApp')
   .then(({ renderMobileApp }) => {
     renderMobileApp(window.__OPENCHAMBER_RUNTIME_APIS__ ?? createConfiguredWebAPIs());
   });
+
+initializePwa();

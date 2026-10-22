@@ -23,7 +23,8 @@ COPY . .
 RUN bun run --cwd packages/sdk build
 RUN bun run build:web
 
-FROM oven/bun:1.4.2 AS runtime
+FROM node:22-bookworm-slim AS runtime
+COPY --from=base /usr/local/bin/bun /usr/local/bin/bun
 WORKDIR /home/openchamber
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -31,15 +32,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   ca-certificates \
   git \
   less \
-  nodejs \
-  npm \
   openssh-client \
   python3 \
   && rm -rf /var/lib/apt/lists/*
 
-# Replace the base image's 'bun' user (UID 1000) with 'openchamber'
+# Replace the base image's 'node' user (UID 1000) with 'openchamber'
 # so mounted volumes with 1000:1000 ownership work correctly.
-RUN userdel bun \
+RUN userdel node \
   && groupadd -g 1000 openchamber \
   && useradd -u 1000 -g 1000 -m -s /bin/bash openchamber \
   && chown -R openchamber:openchamber /home/openchamber

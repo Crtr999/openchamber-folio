@@ -9,7 +9,7 @@ import { createNotificationTriggerRuntime } from './runtime.js';
  * agent and model from the start, a user abort announces nothing, and an
  * active goal (which lives in OpenChamber's own metadata) silences the push.
  */
-const makeRuntime = ({ metadata = {}, seedRoot = true, settings = {}, focused = false } = {}) => {
+const makeRuntime = ({ metadata = {}, seedRoot = true, settings = {}, focused = false, shouldNotifyCompletion = async () => true } = {}) => {
   const emitDesktopNotification = vi.fn(() => true);
   const broadcastUiNotification = vi.fn();
   const sendPushToAllUiSessions = vi.fn(async () => undefined);
@@ -31,6 +31,7 @@ const makeRuntime = ({ metadata = {}, seedRoot = true, settings = {}, focused = 
     buildOpenCodeUrl: (path) => `http://opencode.test${path}`,
     getOpenCodeAuthHeaders: () => ({}),
     readSessionMetadata: async () => metadata,
+    shouldNotifyCompletion,
   });
   const originalTrigger = runtime.maybeSendPushForTrigger;
   runtime.maybeSendPushForTrigger = async (payload) => {
@@ -284,5 +285,33 @@ describe('subagent finish with subagent notifications off', () => {
     await runtime.maybeSendPushForTrigger(turnEnded('ses_child'));
     expect(emitDesktopNotification).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
+  });
+});
+
+describe('companion ready delivery gate', () => {
+  it('silences ready channels together while retaining new updates', async () => {
+    const { runtime, emitDesktopNotification, broadcastUiNotification, sendPushToAllUiSessions, sendApnsToAllUiSessions } = makeRuntime({ shouldNotifyCompletion: async () => false });
+    await runtime.maybeSendPushForTrigger(stepStarted('ses_quiet', 'msg_quiet'));
+    await runtime.maybeSendPushForTrigger(stepEnded('ses_quiet', 'msg_quiet'));
+    await runtime.maybeSendPushForTrigger(turnEnded('ses_quiet'));
+    for (const channel of [emitDesktopNotification, broadcastUiNotification, sendPushToAllUiSessions, sendApnsToAllUiSessions]) expect(channel).not.toHaveBeenCalled();
+    const normal = makeRuntime();
+    await normal.runtime.maybeSendPushForTrigger(stepStarted('ses_new', 'msg_new'));
+    await normal.runtime.maybeSendPushForTrigger(turnEnded('ses_new'));
+    expect(normal.sendPushToAllUiSessions).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('durable companion notification attempts', () => {
+  it('uses the ordinary channels and obeys notification opt-out', async () => {
+    const entry = { id: 'ses_update', title: 'Useful lead', excerpt: 'A verified change' };
+    const allowed = makeRuntime();
+    expect(await allowed.runtime.sendCompanionUpdate('project', entry)).toBe(true);
+    expect(allowed.emitDesktopNotification).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'ses_update', tag: 'companion-ses_update' }));
+    expect(allowed.sendPushToAllUiSessions).toHaveBeenCalledTimes(1);
+    expect(allowed.sendApnsToAllUiSessions).toHaveBeenCalledTimes(1);
+    const disabled = makeRuntime({ settings: { nativeNotificationsEnabled: false } });
+    expect(await disabled.runtime.sendCompanionUpdate('project', entry)).toBe(false);
+    expect(disabled.sendApnsToAllUiSessions).not.toHaveBeenCalled();
   });
 });

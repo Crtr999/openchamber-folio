@@ -89,3 +89,7 @@ Open Carter 1.0 is the finished personal build; changes after this are fixes, no
 ## 1.1: Today card and morph motion
 
 `TodayCard.tsx` (inside `NotionSearchPalette`, action "Today", or `openTodayCard()`) shows today's Apple Calendar events and Notion tasks due today or overdue; Record starts meeting notes for an event, and ticking moves the task to the board's done column. It opens once per day on first launch/focus (`open-carter:today-shown`). Motion helpers live in `lib/motion.ts` (morphFrom/morphInto/collapseAway/reshapeFrom, all disabled under reduced motion); confirmations use `showPill()` from `lib/pill.ts` rendered by `PillToaster`. The meeting pill grows into the meeting window and, while recording, the window shrinks back into the pill; the calendar prompt unfolds from a dot and folds into the pill.
+
+## Commitments
+
+Home has a Commitments card: deadlines noticed from your chats (or added by hand) get light, deadline-aware check-ins with a quiet-hours and daily limit. Stored locally in `commitments.json`; ZDR and legal folders are never read, searched or tracked. Details: `packages/web/server/lib/commitments/DOCUMENTATION.md`.

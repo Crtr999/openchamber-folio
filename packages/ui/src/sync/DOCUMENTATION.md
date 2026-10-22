@@ -114,6 +114,8 @@ client's config cache, otherwise the refresh would be answered from the copy
 cached seconds earlier. A re-read that returns an identical list keeps the
 objects already in the stores, so nothing re-renders.
 
+Catalog changes refresh only directory stores with a requested bootstrap. Sidebar badges create metadata-only stores without opening their runtime locations; refreshing those stores would start a separate MCP fleet for every visible historical directory. A later explicit selection bootstraps that directory with current configuration.
+
 **The model list.** OpenCode 2.0.8 removed the `catalog.updated` storm and
 replaced it with `provider.updated` and `model.updated`, which it publishes
 only when the list they name actually changed; `events.ts` translates them into

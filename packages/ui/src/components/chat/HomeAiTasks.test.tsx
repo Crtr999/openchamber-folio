@@ -83,7 +83,7 @@ test('failed reads preserve setup and drafts, and pre-session failures remain in
         await act(async () => button('').click());
         expect(creates).toBe(1);
         expect(container.textContent).toContain('Backtest');
-        expect(container.textContent).toContain('Choose a folder');
+        expect(container.textContent).toContain('No folder (All Chats)');
         await act(async () => button('Run details').click());
         expect(document.body.textContent).toContain('No chat linked');
         expect(document.body.textContent).toContain('HTTP 500');
@@ -243,7 +243,7 @@ test('cards hand off to the manager with a per-folder model and refuse unassigne
         expect(assignedCard?.textContent).toContain('Business Launch');
         expect(assignedCard?.textContent).toContain('ChatGPT · GPT Sub');
         const looseCard = cards.find(item => item.getAttribute('data-home-task') === loose);
-        expect(looseCard?.textContent).toContain('Choose a folder');
+        expect(looseCard?.textContent).toContain('No folder (All Chats)');
         expect(looseCard?.textContent).not.toContain('OpenRouter');
         const move = looseCard?.querySelector('button[aria-label="Move task"]');
         if (!move) throw new Error('Move control missing');

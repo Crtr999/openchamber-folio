@@ -1,3 +1,5 @@
+import { companionI18n } from './companion.i18n';
+import { commitmentsI18n } from './commitments.i18n';
 import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
 import { claudeI18n } from './claude.i18n';
@@ -23,6 +25,8 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 import { notionPickerI18n } from './notion-picker.i18n';
 export const dict = {
+  ...companionI18n["en"],
+  ...commitmentsI18n["en"],
   ...notionPickerI18n['en'],
   ...friendsI18n['en'],
   ...personalWorkspaceI18n.en,

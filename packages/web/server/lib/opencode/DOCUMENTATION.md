@@ -959,3 +959,7 @@ starts, after failure, during shutdown, or for external OpenCode. Restart clears
 the previous result, and readers discard results from a replaced preflight.
 This checks CLI compatibility, not server health; the normal startup flow still
 owns connection readiness. Explicit user compatibility checks remain fresh.
+
+### Mobile companion installation
+
+`pwa-manifest-routes.js` also serves `/mobile.webmanifest`. It installs `/mobile.html` with a distinct stable ID and a dictation shortcut. Unlike the desktop manifest's existing recent-session shortcuts, this public mobile manifest never reads sessions or includes private chat titles. `feature-routes-runtime.js` registers the authenticated project companion routes before generic OpenCode forwarding. Their daily rows remain owned by the existing scheduler.

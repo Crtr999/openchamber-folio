@@ -76,3 +76,21 @@ Required local tools:
 ## Generated Assets
 
 The native projects currently use Capacitor-generated launcher and splash assets. Replace them before release branding work.
+
+## Home Screen companion
+
+The hosted `/mobile.html` entry uses the same MobileApp and ChatView as the native shell. It now registers the production push service worker and links `/mobile.webmanifest`, whose stable start URL keeps the mobile renderer on launch. `/mobile.html?dictate=1` presents a user-triggered shortcut to the existing composer dictation engine. It never starts the microphone automatically or sends a draft without the normal dictation/send controls. Native schemes skip service-worker registration.
+
+Follow-ups opens project-owned daily schedules through `/api/projects/:projectId/companion`. The normal desktop scheduler owns those same records and result sessions. This is explicit daily monitoring, not autonomous enrollment from every chat or a general-purpose notification ranking system. Both devices must connect to the same server to see the same sessions and artifacts. Existing Mac-local sessions are not replicated by opening a cloud instance. See `deploy/companion/README.md` for deployment and remaining real-device checks.
+
+## Personal iPhone companion
+
+The native app keeps existing chats, new chats, attachment/artifact viewing, server terminal work and project follow-ups in the same MobileApp. These features use the selected server as authority, so the Mac must connect to that server too. A separate cloud server does not synchronize an existing Mac-local database automatically.
+
+On iOS 18+, the widget extension now offers a Dictate to Carter Control Center control and discoverable App Intent. `openchamber://dictate` opens the normal recording controls for the current composer. The user starts capture and chooses insert/send. The URL cannot supply text, submit a message or start recording. Cold-launch URLs are read after listener registration; a newer live URL takes precedence.
+
+Native remote push requires an Apple Developer membership, valid signing for all app/extension IDs and configured APNs delivery. Free weekly Personal Team installation is not equivalent to native background push. The existing iOS project contains upstream team, bundle and App Group values. Before personal device distribution, configure all three targets and their shared App Group consistently under the user's team. Do not use upstream signing credentials. The optional `deploy/companion/native-push.compose.yaml` uses a separately mounted private Apple push key for a personally signed app. No signing key belongs in the app bundle.
+
+### Free weekly personal builds
+
+The default build keeps APNs and upstream bundle identifiers. For a separate personal build, pass Xcode settings `CARTER_BUNDLE_ID`, `CARTER_APP_GROUP`, `CARTER_DISPLAY_NAME`, `CARTER_URL_SCHEME=opencarter`, your `DEVELOPMENT_TEAM`, and `CARTER_APP_ENTITLEMENTS=App/PersonalTeam.entitlements`. This optional entitlement file retains the shared widget container and omits APNs. The native bridge reports the provisioned APNs capability before JavaScript starts, so unsupported builds do not request/register remote push. Apple Personal Team installation expires and must be renewed weekly; server results still persist while the app is closed, but cannot alert through Apple remote push. Keep the same personal bundle ID and app group on subsequent builds to retain on-device data. Both `openchamber:` and `opencarter:` deep links are accepted.

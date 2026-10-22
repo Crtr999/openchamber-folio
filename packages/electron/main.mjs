@@ -1096,11 +1096,30 @@ const BROWSER_PANEL_PARTITION = 'persist:openchamber-browser';
  * A computer that is not configured, or not running, is not an error: the
  * panel simply shows nothing signed in, which is the truth.
  */
+let computerOrigin = null;
+
+const isComputerClipboardPermission = (permission, rawUrl) => {
+  if (permission !== 'clipboard-read' && permission !== 'clipboard-sanitized-write' && permission !== 'clipboard-write') {
+    return false;
+  }
+  if (!computerOrigin || !rawUrl) return false;
+  try {
+    return new URL(rawUrl).origin === computerOrigin;
+  } catch {
+    return false;
+  }
+};
+
 const grantComputerAccess = async () => {
   try {
     const { resolveComputerEndpoint } = await import('@openchamber/web/server/lib/computer/endpoint.js');
     const endpoint = resolveComputerEndpoint();
     if (!endpoint) return;
+    try {
+      computerOrigin = new URL(endpoint.baseUrl).origin;
+    } catch {
+      computerOrigin = null;
+    }
     // The key goes on as a cookie, never into the renderer: the computer's
     // control centre is a web page, and a page authenticates itself with a
     // cookie rather than with a token in its address.
@@ -1114,7 +1133,8 @@ const grantComputerAccess = async () => {
       name: 'cb_key',
       value: endpoint.token,
       path: '/',
-      sameSite: 'none',
+      httpOnly: true,
+      sameSite: 'no_restriction',
       secure: true,
     };
     await session.defaultSession.cookies.set(cookie);
@@ -1179,17 +1199,24 @@ const hardenBrowserPanelSession = () => {
     callback(false);
   });
 
-  panelSession.setPermissionRequestHandler((_contents, permission, callback, details) => {
+  panelSession.setPermissionRequestHandler((contents, permission, callback, details) => {
+    const requestingUrl = details?.requestingUrl || contents?.getURL?.() || '';
+    if (isComputerClipboardPermission(permission, requestingUrl)) {
+      callback(true);
+      return;
+    }
     log.info('[electron] browser panel denied a permission request', {
       permission,
-      origin: details?.requestingUrl || '',
+      origin: requestingUrl,
     });
     callback(false);
   });
 
   // Asked before some features even request; answering here keeps a page from
   // reporting a capability it would then be denied.
-  panelSession.setPermissionCheckHandler(() => false);
+  panelSession.setPermissionCheckHandler((contents, permission, requestingOrigin) => (
+    isComputerClipboardPermission(permission, requestingOrigin || contents?.getURL?.() || '')
+  ));
 
   // Serial, HID and USB device pickers.
   panelSession.setDevicePermissionHandler(() => false);
@@ -2134,6 +2161,19 @@ const dispatchDeepLink = (link) => {
       target.focus();
     }
     emitToAllWindows('openchamber:deep-link-focus', { reason: link.value || null });
+    return;
+  }
+
+  // A screen selection opens the existing Computer surface; it never grants
+  // credentials or completes the tool's login/approval handoff.
+  if (link.type === 'computer' && /^[a-z0-9-]+$/.test(link.value)) {
+    const target = state.mainWindow;
+    if (target && !target.isDestroyed()) {
+      if (target.isMinimized()) target.restore();
+      target.show();
+      target.focus();
+    }
+    emitToPrimaryWindow('openchamber:open-computer', link.value);
     return;
   }
 
@@ -4852,7 +4892,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
 const buildMacMenu = () => {
   const dispatchAction = (action) => dispatchMenuAction(action);
   const handleCopyAction = () => {
-    BrowserWindow.getFocusedWindow()?.webContents.copy();
+    (webContents.getFocusedWebContents() || BrowserWindow.getFocusedWindow()?.webContents)?.copy();
     dispatchAction('copy');
   };
 
@@ -4962,7 +5002,7 @@ const buildMacMenu = () => {
 const buildAutoHiddenMenu = () => {
   const dispatchAction = (action) => dispatchMenuAction(action);
   const handleCopyAction = () => {
-    BrowserWindow.getFocusedWindow()?.webContents.copy();
+    (webContents.getFocusedWebContents() || BrowserWindow.getFocusedWindow()?.webContents)?.copy();
     dispatchAction('copy');
   };
 

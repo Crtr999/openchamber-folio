@@ -16,7 +16,7 @@ describe('personal home column layout', () => {
         const layout = restoreHomeLayout(null, previous);
         const resized = resizeHomeColumns(layout, 'start', 61.37);
         expect(homeColumnWidth(resized)).toBe(61.37);
-        expect(resized.filter(({ column }) => column === 'right').every(({ width }) => width === 38.63)).toBe(true);
+        expect(homeLayoutSections(resized)[0].items.filter(({ column }) => column === 'right').every(({ width }) => width === 38.63)).toBe(true);
         expect(restoreHomeLayout(JSON.stringify(resized), previous)).toEqual(resized);
         expect(resized.map(({ id }) => id)).toEqual(layout.map(({ id }) => id));
     });
@@ -43,13 +43,13 @@ describe('personal home column layout', () => {
         const moved = moveHomeWidget(layout, 'recent', 'home-column:start:left', { kind: 'column', section: 'start', column: 'left' }, true);
         expect(homeLayoutSections(moved)[0].items.filter((item) => item.column === 'left').at(-1)?.id).toBe('recent');
         expect(moved.find((item) => item.id === 'recent')?.wide).toBe(false);
-        expect(new Set(moved.map((item) => item.id)).size).toBe(8);
+        expect(new Set(moved.map((item) => item.id)).size).toBe(9);
     });
     test('places above or below a widget in the chosen column', () => {
         const layout = restoreHomeLayout(null, previous);
         const target = { kind: 'widget', section: 'start', column: 'right' } as const;
         const moved = moveHomeWidget(layout, 'working', 'habits', target, true);
-        expect(moved.filter((item) => item.column === 'right').map((item) => item.id)).toEqual(['habits', 'working', 'recent', 'projects']);
+        expect(moved.filter((item) => item.column === 'right').map((item) => item.id)).toEqual(['habits', 'working', 'recent', 'projects', 'commitments']);
         expect(moveHomeWidget(layout, 'working', 'habits', target, false)[1].id).toBe('working');
     });
     test('full-width widgets remain barriers between independent column sections', () => {
@@ -65,8 +65,8 @@ describe('personal home column layout', () => {
         const layout = restoreHomeLayout(null, previous);
         expect(moveHomeWidget(layout, 'recent', 'removed', { kind: 'widget', section: 'start', column: 'right' }, false)).toEqual(layout);
         const restored = restoreHomeLayout(JSON.stringify([layout[0], layout[0]]), null);
-        expect(new Set(restored.map((item) => item.id)).size).toBe(8);
-        expect(restored).toHaveLength(8);
+        expect(new Set(restored.map((item) => item.id)).size).toBe(9);
+        expect(restored).toHaveLength(9);
     });
     test('a fresh Home leads with full-width Friends; saved layouts keep their order and gain Friends below', () => {
         expect(defaultHomeLayout()[0]).toEqual({ id: 'friends', wide: true, column: 'left', width: 50 });

@@ -25,6 +25,7 @@ export const createNotificationTriggerRuntime = (deps) => {
     // OpenChamber's own session metadata (the goal lives there, not on the
     // OpenCode record). Optional: without it no goal can suppress a push.
     readSessionMetadata = null,
+    shouldNotifyCompletion = async () => true,
   } = deps;
   let getIsSessionAutoAccepting = deps.getIsSessionAutoAccepting;
   const activityProbe = createSessionActivityProbe({ buildOpenCodeUrl, getOpenCodeAuthHeaders, timeoutMs: 2000 });
@@ -450,6 +451,8 @@ export const createNotificationTriggerRuntime = (deps) => {
           return;
         }
 
+        if (!await shouldNotifyCompletion(sessionId)) return;
+
         if (settings.notificationMode !== 'always' && getIsWindowFocused?.()) {
           return;
         }
@@ -854,7 +857,25 @@ export const createNotificationTriggerRuntime = (deps) => {
     );
   };
 
+  const sendCompanionUpdate = async (_projectID, entry) => {
+    const settings = await readSettingsFromDisk();
+    if (settings.notifyOnCompletion === false || settings.nativeNotificationsEnabled === false) return false;
+    const payload = {
+      title: entry.title, body: entry.excerpt.slice(0, 240), tag: `companion-${entry.id}`,
+      kind: 'ready', sessionId: entry.id, requireHidden: settings.notificationMode !== 'always',
+    };
+    const desktopNotificationDelivered = emitDesktopNotification(payload);
+    broadcastUiNotification(payload, { desktopNotificationDelivered });
+    await fanoutPush({
+      title: payload.title, body: payload.body, tag: payload.tag,
+      data: { url: buildSessionDeepLinkUrl(entry.id), sessionId: entry.id, sessionName: entry.title, type: 'ready' },
+    }, { requireNoSse: true });
+    return true;
+  };
+
   return {
+    sendCompanionUpdate,
+    shouldNotifyCompletion,
     isRootNotificationSession: async (sessionId, directory) => await fetchSessionParentId(sessionId, directory) === null,
     maybeSendPushForTrigger,
     setAutoAcceptSession,

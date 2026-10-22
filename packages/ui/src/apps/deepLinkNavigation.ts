@@ -19,6 +19,8 @@ import { parseDeepLink, type DeepLinkIntent, type SessionsFilter, type ViewTarge
  */
 
 export interface DeepLinkHandlers {
+  /** Reveal the recording button; a URL never starts the microphone or sends text. */
+  openDictation?: () => void;
   /** Open the sessions sheet, optionally pre-filtered (filter support is best-effort for now). */
   openSessions?: (filter?: SessionsFilter) => void;
   /** Open a non-session surface (files / mcp / instances / update). */
@@ -55,6 +57,11 @@ const execute = (intent: DeepLinkIntent): boolean => {
     case 'sessions':
       if (!handlers.openSessions) return false;
       handlers.openSessions(intent.filter);
+      return true;
+
+    case 'dictation':
+      if (!handlers.openDictation) return false;
+      handlers.openDictation();
       return true;
 
     case 'status':
@@ -150,7 +157,9 @@ export const useDeepLinkSource = (options: { ready: boolean }): void => {
     void import('@capacitor/app')
       .then(async ({ App }) => {
         if (disposed) return;
+        let receivedLiveUrl = false;
         const handle = await App.addListener('appUrlOpen', (event) => {
+          receivedLiveUrl = true;
           applyDeepLinkUrl(event?.url);
         });
         if (disposed) {
@@ -158,6 +167,8 @@ export const useDeepLinkSource = (options: { ready: boolean }): void => {
           return;
         }
         cleanup.push(() => void handle.remove());
+        const launch = await App.getLaunchUrl();
+        if (!disposed && !receivedLiveUrl) applyDeepLinkUrl(launch?.url);
       })
       .catch(() => undefined);
 

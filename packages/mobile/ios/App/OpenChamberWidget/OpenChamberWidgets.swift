@@ -316,6 +316,7 @@ struct OpenChamberWidgetBundle: WidgetBundle {
         LockAttentionWidget()
         if #available(iOS 18.0, *) {
             OpenChamberNewSessionControl()
+            OpenCarterDictationControl()
         }
     }
 }

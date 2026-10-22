@@ -34,6 +34,8 @@ run('cap', ['copy', 'ios']);
 
 // 2. Strip the MLKit barcode-scanning pod, then reinstall pods without it.
 const originalPodfile = readFileSync(podfilePath, 'utf8');
+const lockfilePath = join(iosAppDir, 'Podfile.lock');
+const originalLockfile = readFileSync(lockfilePath, 'utf8');
 const strippedPodfile = originalPodfile
   .split('\n')
   .filter((line) => !line.includes('CapacitorMlkitBarcodeScanning'))
@@ -62,7 +64,11 @@ try {
   //    and Podfile.lock return to their original state (a no-op for git once this completes).
   if (strippedPodfile !== originalPodfile) {
     writeFileSync(podfilePath, originalPodfile);
-    run('pod', ['install'], iosAppDir);
+    // Restore the device lock before installing. If restoration fails, Xcode's
+    // manifest check must reject the stripped simulator Pods rather than silently
+    // produce a device app without its native scanner.
+    writeFileSync(lockfilePath, originalLockfile);
+    run('pod', ['install', '--deployment'], iosAppDir);
   }
 }
 
