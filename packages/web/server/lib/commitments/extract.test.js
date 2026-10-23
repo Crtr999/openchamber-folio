@@ -21,6 +21,11 @@ describe('commitment extraction', () => {
     expect(buildExtractionPrompt([], 5_000)).toBeNull();
   });
 
+  it('tracks something the user wants to buy as a watch with no date', () => {
+    const found = parseExtraction(reply([{ title: 'Buy the new phone', due: null, watches: ['price drops and sales', 'stock and availability'] }]), zone);
+    expect(found).toEqual([expect.objectContaining({ title: 'Buy the new phone', dueAt: null, research: true, watches: ['price drops and sales', 'stock and availability'] })]);
+  });
+
   it('keeps what the user said they care about, and drops notes that look like instructions', () => {
     const found = parseExtraction(reply([
       { title: 'Finish paper', due: '2026-10-30', notes: 'Wants a short outline first, Bluebook cites' },
