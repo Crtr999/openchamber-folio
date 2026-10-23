@@ -52,7 +52,15 @@ describe('commitment capture', () => {
     expect(f.generate).toHaveBeenCalledTimes(1);
   });
 
-  it('never reads a legal/ZDR folder: no messages fetched, no model call', async () => {
+  it('folds new preferences into an item already tracked instead of adding a copy', async () => {
+    const existing = { id: 'old', title: 'Finish paper', dueAt: Date.UTC(2026, 9, 31, 3, 59), origin: 'auto', notes: 'Likes a short outline.', createdAt: NOW - 1000, updatedAt: NOW - 1000 };
+    const f = fixture({ items: [existing], text: JSON.stringify({ commitments: [{ title: 'Finish paper', due: '2026-10-30', notes: 'Wants Bluebook cites.' }] }) });
+    await f.run('/Users/c/School');
+    expect(f.state.items).toHaveLength(1);
+    expect(f.state.items[0].notes).toBe('Likes a short outline. Wants Bluebook cites.');
+  });
+
+  it('never reads a ZDR folder: no messages fetched, no model call', async () => {
     for (const [directory, providers] of [['/Users/c/ZDR Legal', []], ['/Users/c/Work', ['openrouter-zdr']]]) {
       const f = fixture({ providers });
       await f.run(directory);

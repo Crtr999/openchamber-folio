@@ -102,6 +102,7 @@ const ALL_PARAMETER_PROPERTIES = {
   due: { type: 'string', description: 'Due date as YYYY-MM-DD in the user\'s timezone, for commitment.add and commitment.update' },
   until: { type: 'string', description: 'Snooze until this date, YYYY-MM-DD; omit to snooze for one day' },
   watch: { type: 'string', description: 'Something to keep an eye on for a commitment, such as a product release or availability' },
+  notes: { type: 'string', description: 'For commitment.add and commitment.update: what the user said they want or like for this (scope, format, preferences), in a sentence, so later follow-ups reflect it' },
   research: { type: 'boolean', description: 'false keeps follow-ups for this commitment off the web; use it for anything confidential' },
   status: { type: 'string', enum: ['active', 'done', 'snoozed'], description: 'New status for commitment.update' },
   memoryId: { type: 'string', description: 'Memory ID from a memory.list or memory.read result' },

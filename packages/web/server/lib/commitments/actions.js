@@ -18,6 +18,7 @@ const view = (item, timezone) => ({
   due: item.dueAt == null ? null : DateTime.fromMillis(item.dueAt, { zone: timezone }).toFormat('yyyy-LL-dd'),
   status: item.status,
   watching: item.watches,
+  notes: item.notes || null,
   lastUpdate: item.finding || null,
   webResearch: item.research,
   addedAutomatically: item.origin === 'auto' && !item.confirmedAt,
@@ -68,6 +69,7 @@ export const createCommitmentActions = ({ store, guard, onChanged = () => {}, no
         title: title.slice(0, 160),
         dueAt: text(input.due) ? parseDay(input.due, timezone) : null,
         watches: watch ? [watch.slice(0, 200)] : [],
+        notes: (text(input.notes) ?? '').slice(0, 400),
         research: input.research !== false,
         origin: 'manual',
         confirmedAt: now(),
@@ -90,6 +92,7 @@ export const createCommitmentActions = ({ store, guard, onChanged = () => {}, no
       if (text(input.due)) changes.dueAt = parseDay(input.due, timezone);
       if (text(input.watch)) changes.watches = [text(input.watch).slice(0, 200)];
       if (typeof input.research === 'boolean') changes.research = input.research;
+      if (text(input.notes)) changes.notes = text(input.notes).slice(0, 400);
       if (input.status !== undefined) {
         if (!['active', 'done', 'snoozed'].includes(input.status)) throw new OpenChamberControlError('status must be active, done or snoozed', 400);
         changes.status = input.status;

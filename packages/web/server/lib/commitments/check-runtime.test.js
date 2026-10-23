@@ -40,6 +40,12 @@ const fixture = ({ items = [baseItem()], settings = {}, guardOk = true, usable =
 };
 
 describe('commitment checks', () => {
+  it('gives the follow-up what the user said he cares about', async () => {
+    const f = fixture({ items: [baseItem({ notes: 'Wants a short outline first' })] });
+    await f.checks.tick();
+    expect(f.prompts[0].text).toContain('Wants a short outline first');
+  });
+
   it('opens the follow-up in the folder the item came from when it can', async () => {
     const f = fixture({ items: [baseItem({ sourceDirectory: '/work/friend' })], usable: true });
     await f.checks.tick();

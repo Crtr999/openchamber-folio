@@ -14,8 +14,9 @@ export const buildExtractionSystemPrompt = ({ now, timezone }) => {
     `Today is ${today.toFormat('cccc, yyyy-LL-dd')} and the user\'s time zone is ${timezone}. Resolve relative dates like "Friday" or "next week" against it.`,
     'A commitment is something the USER personally owes or is waiting on, with a date: a paper or assignment due, an application deadline, a form to file, a product release they plan to buy, an appointment to prepare for.',
     'Not a commitment: a topic they are only discussing, work the assistant just finished, hypotheticals, dates inside documents they are only reading, or anything that has no date and no condition to watch.',
-    'Return exactly one JSON object and nothing else: {"commitments": [{"title": "...", "due": "YYYY-MM-DD" or "YYYY-MM-DDTHH:mm" or null, "watches": ["..."], "research": true}]}.',
+    'Return exactly one JSON object and nothing else: {"commitments": [{"title": "...", "due": "YYYY-MM-DD" or "YYYY-MM-DDTHH:mm" or null, "watches": ["..."], "notes": "...", "research": true}]}.',
     'title is short and plain, under 80 characters. due is null only when the user wants a condition watched without a date.',
+    'notes is under 200 characters: what the user said they want, like or care about for this commitment (scope, format, preferences, how they want to be helped) plus any key detail that would matter when reminding them later. Use their own preferences, not your advice. Empty string when there is none.',
     'watches holds a condition only if the user asked to keep an eye on it, such as "same-day pickup availability". Otherwise leave it empty.',
     'Set research to false for anything that looks like work, a legal or client matter, or anything private or confidential: those are counted down but never searched for on the web. When unsure, use false.',
     'Never include a secret, an account or ID number, or the names of clients or parties in a title or watch.',
@@ -40,6 +41,7 @@ const entrySchema = z.object({
   title: z.string().trim().min(1).max(160),
   due: z.string().trim().nullable().optional(),
   watches: z.array(z.string().trim().min(1).max(200)).max(3).optional(),
+  notes: z.string().trim().max(400).optional(),
   research: z.boolean().optional(),
 });
 
@@ -69,12 +71,13 @@ export const parseExtraction = (text, { now, timezone }) => {
     const entry = entrySchema.safeParse(candidate);
     if (!entry.success) continue;
     const watches = entry.data.watches ?? [];
-    if (findThreatPattern([entry.data.title, ...watches].join('\n'))) continue;
+    const notes = (entry.data.notes ?? '').slice(0, 300);
+    if (findThreatPattern([entry.data.title, ...watches, notes].join('\n'))) continue;
     const dueAt = toEpoch(entry.data.due, timezone);
     if (dueAt === undefined) continue;
     if (dueAt === null && watches.length === 0) continue;
     if (dueAt !== null && dueAt < now - STALE_MS) continue;
-    found.push({ title: entry.data.title, dueAt, watches, research: entry.data.research !== false });
+    found.push({ title: entry.data.title, dueAt, watches, notes, research: entry.data.research !== false });
     if (found.length >= MAX_PER_CAPTURE) break;
   }
   return found;

@@ -37,6 +37,9 @@ export const commitmentSchema = z.object({
   watches: z.array(z.string().trim().min(1).max(200)).max(5).default([]),
   // Work, legal or client matters are tracked but never searched on the web.
   research: z.boolean().default(true),
+  // What the user said they want or care about for this, in a few words, so a
+  // follow-up weeks later still reflects it.
+  notes: z.string().max(400).default(''),
   finding: z.string().max(1000).default(''),
   findingFingerprint: z.string().default(''),
   snoozedUntil: z.number().int().nullable().default(null),
@@ -73,6 +76,7 @@ const userPatchSchema = z.object({
   dueAt: z.number().int().nullable().optional(),
   watches: z.array(z.string().trim().min(1).max(200)).max(5).optional(),
   research: z.boolean().optional(),
+  notes: z.string().trim().max(400).optional(),
   status: z.enum(['active', 'done', 'snoozed', 'dismissed']).optional(),
   snoozedUntil: z.number().int().nullable().optional(),
   confirmed: z.literal(true).optional(),

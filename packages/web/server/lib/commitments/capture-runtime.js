@@ -113,20 +113,31 @@ export const createCommitmentCapture = ({
       const found = parseExtraction(generated?.text, { now: time, timezone: before.settings.timezone });
       if (!found.length) return;
       let added = 0;
+      let changed = false;
       await store.update((state) => {
         const items = [...state.items];
         for (const candidate of found) {
-          if (isDuplicate(candidate, items)) continue;
+          const index = items.findIndex((item) => isDuplicate(candidate, [item]));
+          if (index >= 0) {
+            // The same deadline restated: keep the one item, but fold in anything new
+            // the user said they want, so it is not lost.
+            const existing = items[index];
+            if (candidate.notes && (existing.status === 'active' || existing.status === 'snoozed') && !existing.notes?.includes(candidate.notes)) {
+              items[index] = { ...existing, notes: `${existing.notes ? `${existing.notes} ` : ''}${candidate.notes}`.slice(-400), updatedAt: time };
+              changed = true;
+            }
+            continue;
+          }
           items.push({
             id: randomUUID(),
             title: candidate.title, dueAt: candidate.dueAt, status: 'active', origin: 'auto',
             sourceSessionId: sessionId, sourceDirectory: directory,
-            watches: candidate.watches, research: candidate.research,
+            watches: candidate.watches, notes: candidate.notes, research: candidate.research,
             createdAt: time, updatedAt: time,
           });
           added += 1;
         }
-        return added ? { ...state, items } : state;
+        return added || changed ? { ...state, items } : state;
       });
       logger.log?.(`[commitments] captured ${added} new item(s)`);
       if (added) onChanged();
