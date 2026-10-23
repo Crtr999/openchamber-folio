@@ -11,7 +11,7 @@ const baseItem = (over = {}) => ({
   lastDecisionSessionId: null, lastDecisionFingerprint: null, ...over,
 });
 
-const fixture = ({ items = [baseItem()], settings = {}, guardOk = true, reply = 'Two sources found. Want an outline?', metadata } = {}) => {
+const fixture = ({ items = [baseItem()], settings = {}, guardOk = true, usable = false, reply = 'Two sources found. Want an outline?', metadata } = {}) => {
   let state = parseCommitmentsState({ version: 1, settings: { timezone: 'America/New_York', ...settings }, items });
   const store = {
     read: async () => state,
@@ -30,7 +30,7 @@ const fixture = ({ items = [baseItem()], settings = {}, guardOk = true, reply = 
   const archived = [];
   const checks = createCommitmentChecks({
     store, guard: { check: vi.fn(async () => (guardOk ? { ok: true } : { ok: false, reason: 'zdr-name' })) },
-    getClient: () => client, chatsRoot: '/chats', mkdir: vi.fn(async () => {}),
+    getClient: () => client, chatsRoot: '/chats', directoryUsable: async () => usable, mkdir: vi.fn(async () => {}),
     persistEnrollment: async (id, directory, value) => { enrollments.set(id, value); },
     readSessionMetadata: async (id) => metadata ?? (enrollments.has(id) ? { openchamber: { commitment: enrollments.get(id) } } : {}),
     readLastReply: async () => reply, archiveSession: async (id) => { archived.push(id); },
@@ -40,6 +40,20 @@ const fixture = ({ items = [baseItem()], settings = {}, guardOk = true, reply = 
 };
 
 describe('commitment checks', () => {
+  it('opens the follow-up in the folder the item came from when it can', async () => {
+    const f = fixture({ items: [baseItem({ sourceDirectory: '/work/friend' })], usable: true });
+    await f.checks.tick();
+    expect(f.created[0].location.directory).toBe('/work/friend');
+    const [call] = f.client.session.create.mock.calls;
+    expect(call[0].permissions[1]).toEqual({ action: 'openchamber', resource: '*', effect: 'allow' });
+  });
+
+  it('falls back to the tucked-away folder when the source folder is gone', async () => {
+    const f = fixture({ items: [baseItem({ sourceDirectory: '/work/gone' })], usable: false });
+    await f.checks.tick();
+    expect(f.created[0].location.directory).toMatch(/^\/chats\/commitment-checks\//);
+  });
+
   it('starts one check for the nearest due item, claims it first, and gives web-only tools', async () => {
     const f = fixture({ items: [baseItem(), baseItem({ id: 'zzzzzzzz-far', dueAt: NOW + 20 * DAY })] });
     await f.checks.tick();
@@ -48,6 +62,7 @@ describe('commitment checks', () => {
     expect(f.created[0].location.directory).toMatch(/^\/chats\/commitment-checks\/2026-10-22-abcdef12-/);
     expect(f.created[0].permissions).toEqual([
       { action: '*', resource: '*', effect: 'deny' },
+      { action: 'openchamber', resource: '*', effect: 'allow' },
       { action: 'websearch', resource: '*', effect: 'allow' },
       { action: 'webfetch', resource: '*', effect: 'allow' },
     ]);
@@ -60,7 +75,10 @@ describe('commitment checks', () => {
   it('gives a private item no tools at all', async () => {
     const f = fixture({ items: [baseItem({ research: false })] });
     await f.checks.tick();
-    expect(f.created[0].permissions).toEqual([{ action: '*', resource: '*', effect: 'deny' }]);
+    expect(f.created[0].permissions).toEqual([
+      { action: '*', resource: '*', effect: 'deny' },
+      { action: 'openchamber', resource: '*', effect: 'allow' },
+    ]);
     expect(f.prompts[0].text).toContain('Do not use any tools');
   });
 

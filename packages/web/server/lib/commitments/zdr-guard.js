@@ -4,7 +4,7 @@ const ZDR_PROVIDER = 'openrouter-zdr';
 
 // Deliberately wider than the folder-name rule in the UI: a match anywhere in
 // the path counts, because a false positive only means a folder is not
-// tracked, and a false negative would put legal material into a list.
+// tracked, and a false negative would put zero-retention material into a list.
 export const isZdrNamed = (directory) => /zdr/i.test(directory);
 
 const isInside = (directory, parent) => {
@@ -16,7 +16,7 @@ const isInside = (directory, parent) => {
 /**
  * Decides whether a folder's conversations may feed the commitments list.
  *
- * It fails closed: a folder it cannot judge is not tracked. The legal/ZDR
+ * It fails closed: a folder it cannot judge is not tracked. The ZDR
  * rule cannot be turned off by a setting; the user's own exclusions are an
  * extra on top of it.
  */

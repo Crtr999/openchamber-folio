@@ -92,4 +92,4 @@ Open Carter 1.0 is the finished personal build; changes after this are fixes, no
 
 ## Commitments
 
-Home has a Commitments card: deadlines noticed from your chats (or added by hand) get light, deadline-aware check-ins with a quiet-hours and daily limit. Stored locally in `commitments.json`; ZDR and legal folders are never read, searched or tracked. Details: `packages/web/server/lib/commitments/DOCUMENTATION.md`.
+No screen. Deadlines you mention in a chat are noticed and followed up on in that friend/folder's own chat, within quiet hours and a daily limit; you answer there ("done", "push it to Friday") and any chat can list or change them. Stored locally in `commitments.json`; only ZDR folders are excluded. Details: `packages/web/server/lib/commitments/DOCUMENTATION.md`.

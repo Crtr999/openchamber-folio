@@ -18,8 +18,8 @@ export const commitmentSettingsSchema = z.object({
   timezone: z.string().refine(validZone).default(systemZone),
   quietStart: clock.default('21:00'),
   quietEnd: clock.default('08:00'),
-  dailyNudgeLimit: z.number().int().min(1).max(5).default(1),
-  // Folders the user never wants tracked. The legal/ZDR guard is separate and
+  dailyNudgeLimit: z.number().int().min(1).max(5).default(3),
+  // Folders the user never wants tracked. The ZDR guard is separate and
   // cannot be switched off from here.
   excludedDirectories: z.array(z.string().min(1).max(4096)).max(100).default([]),
 }).passthrough();

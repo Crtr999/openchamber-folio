@@ -69,6 +69,7 @@ export const createSessionMemoryCaptureRuntime = ({
   isSessionArchived = async () => false,
   // Dated chat directories are one shared project, not a folder of the user's.
   isCapturableDirectory = () => true,
+  isCapturableSession = async () => true,
   // The seam the tests use; the real client is OpenCode's own SDK.
   createClient = ({ baseUrl, headers }) => OpenCode.make({ baseUrl, headers }),
   quietMs = CAPTURE_QUIET_MS,
@@ -164,6 +165,7 @@ export const createSessionMemoryCaptureRuntime = ({
       if (!(await isAgentMemoryEnabled())) { skip('memory is off'); return; }
       if (!(await isCaptureEnabled())) { skip('capture is switched off'); return; }
       if (!isCapturableDirectory(directory)) { skip('not a capturable directory', directory); return; }
+      if (!(await isCapturableSession(sessionId))) { skip('not a capturable session', sessionId); return; }
       const projectId = asNonEmptyString(await resolveProjectId(directory));
       if (!projectId) { skip('no project for this directory', directory); return; }
       if (exhausted.has(projectId)) { skip('the store for this project is full', projectId); return; }

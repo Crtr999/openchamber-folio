@@ -2,7 +2,7 @@
  * Notices deadlines in finished conversations and adds them to the list.
  *
  * It runs after a turn, on a quiet timer, and never during one. A folder is
- * read only if the folder guard allows it; legal/ZDR folders are skipped
+ * read only if the folder guard allows it; ZDR folders are skipped
  * before their messages are fetched. A failure is logged without any
  * conversation text and never reaches the user.
  */

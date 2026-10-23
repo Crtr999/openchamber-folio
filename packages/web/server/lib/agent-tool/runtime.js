@@ -98,6 +98,12 @@ const ALL_PARAMETER_PROPERTIES = {
   tabId: { type: 'string', description: 'Browser tab to act on, an id from the tabs a browser.snapshot lists. Omit to use the tab the user is looking at' },
   body: { type: 'string', description: 'Full text of the memory; state it so it still makes sense in a session that has none of this conversation' },
   scope: { type: 'string', enum: ['global', 'project', 'both'], description: 'global is about the user and applies everywhere; project is about this codebase. both is only valid for memory.list' },
+  commitmentId: { type: 'string', description: 'A commitment id from commitment.list, or distinctive words from its title' },
+  due: { type: 'string', description: 'Due date as YYYY-MM-DD in the user\'s timezone, for commitment.add and commitment.update' },
+  until: { type: 'string', description: 'Snooze until this date, YYYY-MM-DD; omit to snooze for one day' },
+  watch: { type: 'string', description: 'Something to keep an eye on for a commitment, such as a product release or availability' },
+  research: { type: 'boolean', description: 'false keeps follow-ups for this commitment off the web; use it for anything confidential' },
+  status: { type: 'string', enum: ['active', 'done', 'snoozed'], description: 'New status for commitment.update' },
   memoryId: { type: 'string', description: 'Memory ID from a memory.list or memory.read result' },
   type: { type: 'string', enum: ['fact', 'preference', 'reference'], description: 'fact is something true, preference is how the user wants work done, reference points at a resource that is hard to find again' },
 };

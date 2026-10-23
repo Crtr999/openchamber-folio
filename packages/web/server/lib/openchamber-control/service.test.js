@@ -50,6 +50,20 @@ const createService = (overrides = {}) => {
 };
 
 describe('OpenChamber control service', () => {
+  it('lets a follow-up conversation manage commitments and nothing else', async () => {
+    const commitmentActions = { execute: vi.fn(async () => ({ commitments: [] })) };
+    const { service } = createService({ commitmentActions, isFollowUpSession: async (id) => id === 'ses_followup' });
+    await expect(service.execute('commitment.list', {}, '/repo', { contextSessionId: 'ses_followup' })).resolves.toEqual({ commitments: [] });
+    await expect(service.execute('projects.list', {}, '/repo', { contextSessionId: 'ses_followup' })).rejects.toMatchObject({ statusCode: 403 });
+    await expect(service.execute('projects.list', {}, '/repo', { contextSessionId: 'ses_other' })).resolves.toBeDefined();
+    expect(commitmentActions.execute).toHaveBeenCalledWith('commitment.list', {}, '/repo', { contextSessionId: 'ses_followup' });
+  });
+
+  it('reports commitments as unavailable when the server has none', async () => {
+    const { service } = createService();
+    await expect(service.execute('commitment.list', {}, '/repo')).rejects.toMatchObject({ statusCode: 503 });
+  });
+
   it('serves project and model projections without an HTTP or CLI round trip', async () => {
     const { service } = createService();
     await expect(service.execute('projects.list')).resolves.toEqual({

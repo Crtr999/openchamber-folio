@@ -22,6 +22,10 @@ export const OPENCHAMBER_CONTROL_ACTION_DEFINITIONS = Object.freeze([
   { action: 'schedule.run', title: 'Run a scheduled task', description: 'Run taskId; scope with projectId or directory' },
   { action: 'schedule.delete', title: 'Delete a scheduled task', description: 'Delete taskId; scope with projectId or directory' },
   { action: 'schedule.toggle', title: 'Enable or disable a scheduled task', description: 'Enable or disable taskId; requires the disabled boolean' },
+  { action: 'commitment.list', title: 'List the user\'s commitments', description: 'List what is due or being watched for the user, nearest first; no parameters. Use it when they ask what is coming up' },
+  { action: 'commitment.add', title: 'Track a commitment', description: 'Track something due; requires title and due (YYYY-MM-DD) or watch. Follow-ups then arrive in this folder on their own. Set research false for anything confidential. Do this when the user states a deadline, not on every mention' },
+  { action: 'commitment.update', title: 'Change a commitment', description: 'Change a commitment; commitmentId is an id or words from its title. Set status done, snoozed (until is optional, default one day) or active; due, title, watch and research change those fields. Only when the user asks or tells you it is handled' },
+  { action: 'commitment.remove', title: 'Stop tracking a commitment', description: 'Stop tracking commitmentId (an id or words from its title) when the user no longer wants it followed' },
   { action: 'file.open', title: 'Show a file to the user', description: 'Open path in the user\'s file panel, in front of whatever they had open, so they can look at a result you produced: a screenshot, report, CSV, recording, or generated page. Relative to the session directory. Use it only when seeing the file moves the work forward, not for every file you touch' },
 ]);
 

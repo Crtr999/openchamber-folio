@@ -1,5 +1,4 @@
 import { registerCompanionRoutes } from '../companion/routes.js';
-import { registerCommitmentRoutes } from '../commitments/routes.js';
 import { registerFsRoutes } from '../fs/routes.js';
 import { registerQuotaRoutes } from '../quota/routes.js';
 import { registerSmallModelRoutes } from '../small-model/routes.js';
@@ -144,9 +143,6 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       scheduledTasksRuntime,
       scheduledTaskService,
       companionCoordinator,
-      commitmentStore,
-      commitmentChecks,
-      onCommitmentsChanged,
       openChamberSessionService,
       openChamberControlService,
       waitForOpenCodeReady,
@@ -222,7 +218,6 @@ export const createFeatureRoutesRuntime = (dependencies) => {
 
     registerCompanionRoutes(app, { scheduledTaskService, projectConfigRuntime, companionCoordinator });
 
-    registerCommitmentRoutes(app, { store: commitmentStore, checks: commitmentChecks, onChanged: onCommitmentsChanged });
 
     registerOpenChamberSessionRoutes(app, {
       readSettingsFromDiskMigrated,

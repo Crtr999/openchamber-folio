@@ -96,6 +96,7 @@ import { createCommitmentsStore } from './lib/commitments/store.js';
 import { createFolderGuard } from './lib/commitments/zdr-guard.js';
 import { createCommitmentCapture } from './lib/commitments/capture-runtime.js';
 import { createCommitmentChecks } from './lib/commitments/check-runtime.js';
+import { createCommitmentActions } from './lib/commitments/actions.js';
 import { createServerStartupRuntime } from './lib/opencode/server-startup-runtime.js';
 import { createTunnelWiringRuntime } from './lib/opencode/tunnel-wiring-runtime.js';
 import { createStartupPipelineRuntime } from './lib/opencode/startup-pipeline-runtime.js';
@@ -1002,6 +1003,8 @@ const sessionMemoryCaptureRuntime = createSessionMemoryCaptureRuntime({
   // Only the team runtime's own home is left out: those are machine
   // conversations, not the user's.
   isCapturableDirectory: (directory) => !isTeamRuntimeDirectory(directory) && !commitmentChecks?.isOwnDirectory(directory),
+  // A follow-up is the list talking to the user, not something to remember.
+  isCapturableSession: async (sessionID) => !(await readStoredSessionMetadata(sessionID))?.openchamber?.commitment,
   lineage: sessionLineage,
 });
 
@@ -1636,7 +1639,7 @@ companionCoordinator = createCompanionCoordinator({
   notifyUpdate: notificationTriggerRuntime.sendCompanionUpdate,
 });
 // Commitments: deadlines noticed in conversations, checked on a timer, and
-// delivered through the ordinary notifications. The legal/ZDR guard runs
+// delivered through the ordinary notifications. The ZDR guard runs
 // before any conversation is read or any item is checked.
 const commitmentStore = createCommitmentsStore({
   fs: fsPromises,
@@ -1646,7 +1649,7 @@ const commitmentGuard = createFolderGuard({
   resolveAllowedProviders: (directory) => resolveDirectoryAllowedProviders(directory),
   readExcludedDirectories: async () => (await commitmentStore.read()).settings.excludedDirectories,
 });
-const emitCommitmentsChanged = () => broadcastOpenChamberUiEvent({ type: 'openchamber:commitments-changed', properties: {} });
+const commitmentActions = createCommitmentActions({ store: commitmentStore, guard: commitmentGuard });
 commitmentChecks = createCommitmentChecks({
   store: commitmentStore,
   guard: commitmentGuard,
@@ -1659,7 +1662,10 @@ commitmentChecks = createCommitmentChecks({
   readLastReply: fetchLastAssistantMessageText,
   archiveSession: (sessionID) => openChamberSessionService.archiveStore.archive([sessionID], Date.now()),
   waitForReady: () => waitForOpenCodeReady(10_000, 250),
-  onChanged: emitCommitmentsChanged,
+  directoryUsable: async (directory) => {
+    if (isTeamRuntimeDirectory(directory)) return false;
+    try { return (await fsPromises.stat(directory)).isDirectory(); } catch { return false; }
+  },
 });
 commitmentCapture = createCommitmentCapture({
   buildOpenCodeUrl,
@@ -1672,7 +1678,6 @@ commitmentCapture = createCommitmentCapture({
   isSessionArchived: (sessionID) => openChamberSessionService.archiveStore.isArchived(sessionID),
   isOwnDirectory: (directory) => commitmentChecks.isOwnDirectory(directory),
   lineage: sessionLineage,
-  onChanged: emitCommitmentsChanged,
 });
 const openChamberSessionService = createOpenChamberSessionService({
   readSettingsFromDiskMigrated,
@@ -1789,6 +1794,8 @@ const openChamberControlService = createOpenChamberControlService({
   scheduledTaskService,
   browserControl: browserControlRouter,
   fileOpen: fileOpenRequester,
+  commitmentActions,
+  isFollowUpSession: async (sessionID) => Boolean((await readStoredSessionMetadata(sessionID))?.openchamber?.commitment),
   // The tool is off by default; a plugin generated before it was switched off
   // must not keep paging the user.
   notifyUser: async (input) => {
@@ -2466,9 +2473,6 @@ async function main(options = {}) {
     scheduledTasksRuntime,
     scheduledTaskService,
     companionCoordinator,
-    commitmentStore,
-    commitmentChecks,
-    onCommitmentsChanged: emitCommitmentsChanged,
     openChamberSessionService,
     openChamberControlService,
     waitForOpenCodeReady,

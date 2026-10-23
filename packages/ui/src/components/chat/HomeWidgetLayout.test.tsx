@@ -40,7 +40,6 @@ async function fixture() {
         projects: { label: 'Projects', content: <p>Projects content</p> },
         shortcuts: { label: 'Shortcuts', content: <p>Shortcuts content</p> },
         friends: { label: 'Friends', content: <p>Friends content</p> },
-        commitments: { label: 'Commitments', content: <p>Commitments content</p> },
     };
     await act(async () => root.render(<I18nProvider><HomeWidgetLayout widgets={widgets} /></I18nProvider>));
     const divider = browser.document.querySelector('[role="separator"]');

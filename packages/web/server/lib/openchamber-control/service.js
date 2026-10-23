@@ -156,6 +156,10 @@ export const createOpenChamberControlService = (dependencies) => {
     fileOpen = null,
     notifyUser = null,
     agentMemoryActions = null,
+    commitmentActions = null,
+    // True for a follow-up conversation. It may use the commitment actions and
+    // nothing else of the control surface.
+    isFollowUpSession = async () => false,
     // Archive lives in OpenChamber's own store now — v2 has no route that sets
     // Session.time.archived — so an unwired store simply means nothing is archived.
     archiveStore = null,
@@ -505,6 +509,15 @@ export const createOpenChamberControlService = (dependencies) => {
     try {
       if (!CONTROL_ACTIONS.has(action)) {
         throw new OpenChamberControlError(`Unsupported OpenChamber action: ${action || 'missing'}`, 400);
+      }
+      if (options.contextSessionId && !action.startsWith('commitment.') && await isFollowUpSession(options.contextSessionId)) {
+        throw new OpenChamberControlError('A follow-up conversation can only manage commitments', 403);
+      }
+      if (action.startsWith('commitment.')) {
+        if (!commitmentActions) {
+          throw new OpenChamberControlError('Commitments are not available on this server', 503);
+        }
+        return commitmentActions.execute(action, input, contextDirectory, options);
       }
       if (action.startsWith('memory.')) {
         if (!agentMemoryActions) {

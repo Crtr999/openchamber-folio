@@ -1,5 +1,4 @@
 import React from 'react';
-import { CompanionPanel } from '@/apps/CompanionPanel';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
@@ -11,14 +10,13 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useAllLiveSessions, useAllSessionStatuses } from '@/sync/sync-context';
 import { compareSessionsByLifecycleOrder, useSessionOrderingStore } from '@/sync/session-ordering';
 import { cn, formatDirectoryName } from '@/lib/utils';
-import { isElectronShell, isDesktopLocalOriginActive, isVSCodeRuntime } from '@/lib/desktop';
+import { isElectronShell, isDesktopLocalOriginActive } from '@/lib/desktop';
 import { useClaudeStore } from '@/stores/useClaudeStore';
 import coastalLandscape from '@/assets/home-coast.webp';
 import './HomeDashboard.css';
 import { HomePersonalPanels, HomeChatExport } from './HomePersonalPanels';
 import { HomeWidgetLayout } from './HomeWidgetLayout';
 import { HomeFriends } from './HomeFriends';
-import { HomeCommitments } from './HomeCommitments';
 import { openMeetingWorkspace } from '@/lib/meetings/workspace';
 import { meetingsSupported } from '@/lib/meetings/contract';
 
@@ -82,8 +80,6 @@ export const HomeQuickActions: React.FC<{ className?: string; stacked?: boolean 
 };
 
 export const HomeDashboard: React.FC = () => {
-    const [companionOpen, setCompanionOpen] = React.useState(false);
-    const closeCompanion = React.useCallback(() => setCompanionOpen(false), []);
     const { t } = useI18n();
     const cachedSessions = useGlobalSessionsStore((state) => state.activeSessions);
     const loadStatus = useGlobalSessionsStore((state) => state.status);
@@ -110,12 +106,9 @@ export const HomeDashboard: React.FC = () => {
 
     return (
         <div className="flex min-w-0 flex-col gap-4">
-        {companionOpen ? <CompanionPanel onClose={closeCompanion} /> : null}
-        {!isVSCodeRuntime() ? <Button variant="outline" size="sm" className="self-end" onClick={() => setCompanionOpen(true)}>{t('companion.title')}</Button> : null}
         <HomeQuickActions className="flex justify-end xl:hidden" />
         <HomePersonalPanels>{(personalPanels) => <HomeWidgetLayout widgets={{
             friends: { label: t('friends.title'), content: <HomeFriends /> },
-            commitments: { label: t('commitments.title'), content: <HomeCommitments /> },
             working: { label: t('home.working'), content: <section>
                 <h2 className="oc-home-card-heading">
                     <Icon name="flashlight" className="size-3.5" />
