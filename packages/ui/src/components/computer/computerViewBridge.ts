@@ -792,6 +792,8 @@ export const COMPUTER_VIEW_ENHANCEMENT_SCRIPT = `(() => {
     mo.observe(observeTarget, { childList: true, subtree: true });
   }
   scanAll();
-  setInterval(scanAll, 600);
+  // The observer above catches changes as they happen; this is only a
+  // backstop, so it can be slow and need not run while nobody is looking.
+  setInterval(() => { if (!document.hidden) scanAll(); }, 1500);
   return true;
 })();`;
