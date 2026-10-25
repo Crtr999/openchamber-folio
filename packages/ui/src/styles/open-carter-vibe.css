@@ -120,67 +120,132 @@
     letter-spacing: -0.03em;
 }
 
-/* ── Home: an illustrated scene with floating cards ───────────────────── */
-[data-oc-personal-interactions] .oc-home-content {
-    padding-top: clamp(150px, 24vh, 250px);
-}
-[data-oc-personal-interactions] .oc-home-landscape {
-    height: clamp(340px, 56vh, 560px);
+/* ── The scene: one window-wide layer the shell floats over ──────────── */
+/* MainLayout's root becomes its own stacking context so the fixed scene
+   (z-index -1) paints above the root's canvas and under every panel. */
+[data-oc-personal-interactions] { isolation: isolate; }
+/* The shell shows the window-wide copy; the in-content one is for other runtimes. */
+[data-oc-personal-interactions] .oc-home-landscape { display: none; }
+[data-oc-personal-interactions] .oc-home-content { padding-top: clamp(150px, 24vh, 250px); }
+
+.oc-scene-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
     background: var(--surface-background);
-    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 52%, rgb(0 0 0 / 0.7) 70%, rgb(0 0 0 / 0.28) 86%, transparent 100%);
-    mask-image: linear-gradient(to bottom, #000 0%, #000 52%, rgb(0 0 0 / 0.7) 70%, rgb(0 0 0 / 0.28) 86%, transparent 100%);
+    pointer-events: none;
 }
-[data-oc-personal-interactions] .oc-home-landscape img { object-position: center 58%; }
-/* Ink tint layer (per scene below) and a fine dot screen with the fade. */
-[data-oc-personal-interactions] .oc-home-landscape::before {
+.oc-scene-art {
+    position: absolute;
+    inset: 0;
+    isolation: isolate;
+    background: var(--surface-background);
+    /* Off Home the scene is only a quiet tint through the frosted panels. */
+    opacity: 0.4;
+    transition: opacity 520ms var(--oc-ease-settle, ease-out);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 42%, rgb(0 0 0 / 0.8) 58%, rgb(0 0 0 / 0.5) 72%, rgb(0 0 0 / 0.22) 86%, rgb(0 0 0 / 0.08) 100%);
+    mask-image: linear-gradient(to bottom, #000 0%, #000 42%, rgb(0 0 0 / 0.8) 58%, rgb(0 0 0 / 0.5) 72%, rgb(0 0 0 / 0.22) 86%, rgb(0 0 0 / 0.08) 100%);
+}
+html[data-oc-home] .oc-scene-art {
+    opacity: 1;
+    animation: oc-scene-arrive 1100ms var(--oc-ease-settle, ease-out) both;
+}
+@keyframes oc-scene-arrive {
+    from { opacity: 0.4; transform: scale(1.035); }
+    to { opacity: 1; transform: none; }
+}
+.oc-scene-art img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 38%;
+}
+/* Ink tint layer (per scene below) and a fine dot screen that melts into
+   the page colour toward the bottom. */
+.oc-scene-art::before,
+.oc-scene-art::after {
     content: "";
     position: absolute;
     inset: 0;
-    background: transparent;
     pointer-events: none;
 }
-[data-oc-personal-interactions] .oc-home-landscape::after {
+.oc-scene-art::after {
     background:
         radial-gradient(circle, color-mix(in srgb, var(--surface-background) 30%, transparent) 0.7px, transparent 1.1px) 0 0 / 4px 4px,
-        linear-gradient(to bottom, transparent 0%, transparent 55%, color-mix(in srgb, var(--surface-background) 70%, transparent) 85%, var(--surface-background) 100%);
+        linear-gradient(to bottom, transparent 0%, transparent 48%, color-mix(in srgb, var(--surface-background) 45%, transparent) 76%, color-mix(in srgb, var(--surface-background) 80%, transparent) 100%);
 }
 
 /* Engraved coast: cobalt engraving that prints straight onto the cream
    paper, or reverses out of the ink in dark mode. */
-[data-oc-personal-interactions] .oc-home-landscape[data-scene="engraved-coast"] img { mix-blend-mode: multiply; }
-.dark [data-oc-personal-interactions] .oc-home-landscape[data-scene="engraved-coast"] img {
+.oc-scene-backdrop[data-scene="engraved-coast"] img { mix-blend-mode: multiply; }
+.dark .oc-scene-backdrop[data-scene="engraved-coast"] img {
     filter: grayscale(1) invert(1) contrast(1.15) brightness(0.92);
     mix-blend-mode: normal;
 }
-.dark [data-oc-personal-interactions] .oc-home-landscape[data-scene="engraved-coast"]::before {
+.dark .oc-scene-backdrop[data-scene="engraved-coast"] .oc-scene-art::before {
     background: #8197ff;
     mix-blend-mode: multiply;
 }
 
 /* Night coast: the original painting as a cobalt duotone. */
-[data-oc-personal-interactions] .oc-home-landscape[data-scene="night-coast"] img { filter: grayscale(1) contrast(1.25) brightness(1.1); }
-[data-oc-personal-interactions] .oc-home-landscape[data-scene="night-coast"]::before {
+.oc-scene-backdrop[data-scene="night-coast"] img { filter: grayscale(1) contrast(1.25) brightness(1.1); }
+.oc-scene-backdrop[data-scene="night-coast"] .oc-scene-art::before {
     background: var(--primary-base);
     mix-blend-mode: lighten;
 }
-.dark [data-oc-personal-interactions] .oc-home-landscape[data-scene="night-coast"] img { filter: grayscale(1) contrast(1.2) brightness(1.15); }
-.dark [data-oc-personal-interactions] .oc-home-landscape[data-scene="night-coast"]::before {
+.dark .oc-scene-backdrop[data-scene="night-coast"] img { filter: grayscale(1) contrast(1.2) brightness(1.15); }
+.dark .oc-scene-backdrop[data-scene="night-coast"] .oc-scene-art::before {
     background: #6f86ff;
     mix-blend-mode: multiply;
 }
 
 /* Cloud sky: daylight as painted; dusk in dark mode. */
-.dark [data-oc-personal-interactions] .oc-home-landscape[data-scene="cloud-sky"] img { filter: brightness(0.52) saturate(0.9) contrast(1.05); }
+.dark .oc-scene-backdrop[data-scene="cloud-sky"] img { filter: brightness(0.52) saturate(0.9) contrast(1.05); }
 
 /* Stipple night: stars on ink; on paper it prints as cobalt stipple. */
-html:not(.dark) [data-oc-personal-interactions] .oc-home-landscape[data-scene="stipple-night"] img {
+html:not(.dark) .oc-scene-backdrop[data-scene="stipple-night"] img {
     filter: invert(1) grayscale(1);
     mix-blend-mode: multiply;
 }
-html:not(.dark) [data-oc-personal-interactions] .oc-home-landscape[data-scene="stipple-night"]::before {
+html:not(.dark) .oc-scene-backdrop[data-scene="stipple-night"] .oc-scene-art::before {
     background: var(--primary-base);
     mix-blend-mode: lighten;
 }
+
+/* On Home the canvas layers between the window and the Home content step
+   aside, so the scene runs edge to edge behind the composer and cards. */
+html[data-oc-home] [data-oc-personal-interactions] :is(.bg-background, main[data-main-chat-pane]):has(.oc-home-content) {
+    background-color: transparent;
+}
+
+/* Sidebar, header and context rail are frosted panes over the scene: a
+   cream or ink wash plus blur keeps their text on a near-solid ground. */
+[data-oc-personal-interactions] :is(aside.bg-background, .header-safe-area.bg-background, nav.w-11.bg-background, [data-chat-area] > .contents > .bg-background) {
+    --oc-pane-wash: 88%;
+    background-color: color-mix(in srgb, var(--surface-background) var(--oc-pane-wash), transparent);
+    -webkit-backdrop-filter: blur(22px) saturate(1.25);
+    backdrop-filter: blur(22px) saturate(1.25);
+}
+html[data-oc-home] [data-oc-personal-interactions] :is(aside.bg-background, nav.w-11.bg-background, [data-chat-area] > .contents > .bg-background) {
+    --oc-pane-wash: 62%;
+}
+html[data-oc-home] [data-oc-personal-interactions] .header-safe-area.bg-background {
+    --oc-pane-wash: 62%;
+}
+/* The cobalt night-coast duotone is the one dark sky on cream paper: its
+   panes keep a heavier wash so muted labels stay above 4.5:1. */
+html:not(.dark)[data-oc-home] [data-oc-personal-interactions]:has(> .oc-scene-backdrop[data-scene="night-coast"]) :is(aside.bg-background, .header-safe-area.bg-background, nav.w-11.bg-background, [data-chat-area] > .contents > .bg-background) {
+    --oc-pane-wash: 82%;
+}
+/* Sticky section headers inside the sidebar keep a ground of their own. */
+[data-oc-personal-interactions] aside.bg-background > * {
+    --sidebar: color-mix(in srgb, var(--surface-background) 86%, transparent);
+}
+/* Hairline edges where panes meet the scene. */
+[data-oc-personal-interactions] aside.bg-background { box-shadow: inset -1px 0 0 var(--oc-hairline); }
+[data-oc-personal-interactions] [data-chat-area] > .contents > .bg-background { box-shadow: inset 1px 0 0 var(--oc-hairline); }
 
 /* The greeting sits on a frosted paper plate so it reads over any scene. */
 [data-oc-personal-interactions] .oc-home-greeting {
@@ -210,9 +275,23 @@ html:not(.dark) [data-oc-personal-interactions] .oc-home-landscape[data-scene="s
         backdrop-filter: none;
     }
     [data-oc-personal-interactions] .oc-home-card { background: var(--surface-elevated); }
+    [data-oc-personal-interactions] :is(aside.bg-background, .header-safe-area.bg-background, nav.w-11.bg-background, [data-chat-area] > .contents > .bg-background) {
+        --oc-pane-wash: 100% !important;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .oc-scene-art,
+    html[data-oc-home] .oc-scene-art {
+        animation: none;
+        transition: none;
+    }
 }
 
 @media (forced-colors: active) {
     [data-oc-personal-interactions]::after,
-    [data-oc-personal-interactions] .oc-home-landscape::before { display: none; }
+    .oc-scene-art::before,
+    .oc-scene-art::after { display: none; }
 }

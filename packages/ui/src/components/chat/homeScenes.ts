@@ -64,3 +64,20 @@ export const cycleHomeScene = (current: HomeSceneId) => {
   window.dispatchEvent(new Event(CHANGE_EVENT));
   return next;
 };
+
+let activeHomeViews = 0;
+
+/**
+ * Marks Home as showing (`data-oc-home` on <html>) while the caller is
+ * mounted, so the shell can let the scene flow through its panels.
+ */
+export const useHomeSceneActive = () => {
+  React.useEffect(() => {
+    activeHomeViews += 1;
+    document.documentElement.setAttribute('data-oc-home', '');
+    return () => {
+      activeHomeViews = Math.max(0, activeHomeViews - 1);
+      if (activeHomeViews === 0) document.documentElement.removeAttribute('data-oc-home');
+    };
+  }, []);
+};

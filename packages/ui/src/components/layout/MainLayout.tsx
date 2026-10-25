@@ -1,4 +1,5 @@
 import { useChatGPTStore } from '@/stores/useChatGPTStore';
+import { HomeSceneBackdrop } from '@/components/chat/HomeSceneBackdrop';
 import { useClaudeStore } from '@/stores/useClaudeStore';
 import React from 'react';
 import { Header } from './Header';
@@ -187,6 +188,7 @@ export const MainLayout: React.FC = () => {
                 data-oc-personal-interactions="true"
                 className="main-content-safe-area relative flex h-[100dvh] bg-background"
             >
+                <HomeSceneBackdrop />
                 <CommandPalette />
                 <NotionSearchPalette />
                 <PillToaster />

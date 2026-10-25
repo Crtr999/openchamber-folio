@@ -12,7 +12,7 @@ import { compareSessionsByLifecycleOrder, useSessionOrderingStore } from '@/sync
 import { cn, formatDirectoryName } from '@/lib/utils';
 import { isElectronShell, isDesktopLocalOriginActive } from '@/lib/desktop';
 import { useClaudeStore } from '@/stores/useClaudeStore';
-import { cycleHomeScene, useHomeScene } from './homeScenes';
+import { cycleHomeScene, useHomeScene, useHomeSceneActive } from './homeScenes';
 import './HomeDashboard.css';
 import { HomePersonalPanels, HomeChatExport } from './HomePersonalPanels';
 import { HomeWidgetLayout } from './HomeWidgetLayout';
@@ -20,9 +20,12 @@ import { HomeFriends } from './HomeFriends';
 import { openMeetingWorkspace } from '@/lib/meetings/workspace';
 import { meetingsSupported } from '@/lib/meetings/contract';
 
-/** The illustrated hero scene the greeting, composer and cards float over. */
+/** The illustrated hero scene the greeting, composer and cards float over.
+ *  The desktop shell hides this copy and shows the window-wide
+ *  HomeSceneBackdrop instead; other runtimes keep it. */
 export const HomeLandscape: React.FC = () => {
     const scene = useHomeScene();
+    useHomeSceneActive();
     return (
         <div className="oc-home-landscape" data-scene={scene.id} aria-hidden="true">
             <img key={scene.id} src={scene.src} alt="" width={scene.width} height={scene.height} decoding="async" />

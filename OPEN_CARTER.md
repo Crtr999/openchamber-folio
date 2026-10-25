@@ -87,6 +87,11 @@ titles, `--oc-font-display`) and Instrument Serif (Home greeting, `--oc-font-ser
 Home scenes are bundled in `components/chat/homeScenes.ts` (engraved coast default,
 night coast duotone, cloud sky, stipple night); the greeting's palette button cycles
 them and stores the choice in `localStorage` (`openCarter.homeScene`).
+The scene is one window-wide fixed layer (`HomeSceneBackdrop` in MainLayout). While
+Home shows, `useHomeSceneActive` sets `data-oc-home` on `<html>`: the canvas layers
+around the Home content turn transparent and the sidebar, header and context rail
+become frosted washes over it; elsewhere the scene drops to a 40% tint seen only
+through those panes.
 
 The desktop titlebar spans the whole window above the sidebar and chat. It reserves
 only native window-control clearance and the measured sidebar-toggle footprint,
