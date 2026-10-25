@@ -42,6 +42,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { Button } from '@/components/ui/button';
 import { WebsiteTabPinMenuItem } from './WebsiteTabPinMenuItem';
 import { handleDropdownNavigationKey } from '@/components/ui/dropdown-navigation';
+import { prefersReducedMotion } from '@/lib/motion';
 
 const restrictToXAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 });
 
@@ -68,6 +69,7 @@ const WebsiteTabItem: React.FC<{
           : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground',
       )}
       data-active={isActive ? 'true' : 'false'}
+      data-tab-id={tab.id}
       data-active-session-tab={isActive || undefined}
       {...attributes}
       {...listeners}
@@ -225,6 +227,7 @@ const SessionTabItem: React.FC<{
       style={{ transform: DndCSS.Translate.toString(transform), transition }}
       className={cn('session-tab-slot flex h-7 w-[200px] min-w-[88px] touch-none', isDragging && 'z-10 opacity-60')}
       data-active={isActive ? 'true' : 'false'}
+      data-tab-id={tab.id}
       {...(isActive ? { 'data-active-session-tab': true } : {})}
       {...attributes}
       {...listeners}
@@ -366,6 +369,30 @@ const SessionTabItem: React.FC<{
   );
 };
 
+/** A non-interactive copy of a closing tab that shrinks away in its place. */
+const leaveGhost = (slot: HTMLElement) => {
+  const rect = slot.getBoundingClientRect();
+  if (!rect.width) return;
+  const ghost = slot.cloneNode(true);
+  if (!(ghost instanceof HTMLElement)) return;
+  ghost.removeAttribute('data-tab-id');
+  ghost.removeAttribute('data-active-session-tab');
+  ghost.setAttribute('aria-hidden', 'true');
+  ghost.setAttribute('data-oc-tab-ghost', 'true');
+  ghost.inert = true;
+  Object.assign(ghost.style, {
+    position: 'fixed', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`,
+    height: `${rect.height}px`, margin: '0', pointerEvents: 'none', zIndex: '60', transform: 'none',
+  });
+  document.body.appendChild(ghost);
+  const exit = ghost.animate(
+    [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(0.86)' }],
+    { duration: 140, easing: 'cubic-bezier(0.32, 0, 0.67, 0)', fill: 'forwards' },
+  );
+  const remove = () => ghost.remove();
+  exit.finished.then(remove, remove);
+};
+
 /**
  * The header's horizontal working set of sessions and singleton websites.
  *
@@ -435,10 +462,6 @@ export const SessionTabsStrip: React.FC<{
     activateHeaderTab(tab.id);
   }, []);
 
-  const handleClose = React.useCallback((id: string) => {
-    closeSessionTabAndActivateNeighbour(id);
-  }, []);
-
   const handleCloseOthers = React.useCallback((id: string) => {
     closeOtherTabs(id);
     activateHeaderTab(id);
@@ -459,6 +482,46 @@ export const SessionTabsStrip: React.FC<{
   // Tabs shrink to share the strip (no edge fade); past the minimum width the
   // strip scrolls and keeps the active tab in view.
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
+
+  // Closing a tab: the tab leaves the store at once (callers and tests rely
+  // on that), a detached copy of it shrinks away where it stood, and the
+  // tabs after it slide into the gap instead of snapping. Only each slot's
+  // contents move; the sortable slot itself is never transformed.
+  const pendingSlide = React.useRef<Map<HTMLElement, number> | null>(null);
+  const handleClose = React.useCallback((id: string) => {
+    const strip = scrollRef.current;
+    if (!strip || prefersReducedMotion()) {
+      closeSessionTabAndActivateNeighbour(id);
+      return;
+    }
+    const slots = Array.from(strip.querySelectorAll<HTMLElement>('.session-tab-slot[data-tab-id]'));
+    const closing = slots.find((slot) => slot.dataset.tabId === id);
+    const before = new Map<HTMLElement, number>();
+    for (const slot of slots) {
+      if (slot !== closing) before.set(slot, slot.getBoundingClientRect().left);
+    }
+    if (closing) leaveGhost(closing);
+    pendingSlide.current = before;
+    closeSessionTabAndActivateNeighbour(id);
+    requestAnimationFrame(() => { pendingSlide.current = null; });
+  }, []);
+
+  React.useLayoutEffect(() => {
+    const before = pendingSlide.current;
+    pendingSlide.current = null;
+    if (!before) return;
+    for (const [slot, left] of before) {
+      if (!slot.isConnected) continue;
+      const dx = left - slot.getBoundingClientRect().left;
+      if (Math.abs(dx) < 0.5) continue;
+      for (const child of Array.from(slot.children)) {
+        child.animate(
+          [{ transform: `translate3d(${dx}px, 0, 0)` }, { transform: 'none' }],
+          { duration: 220, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+        );
+      }
+    }
+  }, [tabs]);
 
   // Keep the active tab in view when it changes.
   React.useEffect(() => {

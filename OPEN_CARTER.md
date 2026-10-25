@@ -68,6 +68,13 @@ its transform follows pointer, touch and keyboard input directly. Other cards
 keep their sortable placement transitions. MainLayout does not fade the entire
 main view on chat or website navigation; content appears at full opacity when ready.
 
+Tactile polish (button press springs, sidebar current-row marker, Home card
+hover shadows, composer focus glow, tab close slide) lives in
+`packages/ui/src/styles/open-carter-feel.css`, scoped to the desktop shell and
+switched off under reduced motion. It moves only transform and opacity, never
+transforms sortable wrappers, and leaves tab activation as an instant snap. A
+closing header tab leaves the store immediately; a detached copy fades in its place.
+
 The desktop titlebar spans the whole window above the sidebar and chat. It reserves
 only native window-control clearance and the measured sidebar-toggle footprint,
 so Home and session tabs do not shift to the sidebar's right edge when it opens.

@@ -1,0 +1,261 @@
+/* Open Carter feel: tactile presses, layered surfaces and quick settles.
+   Scoped to the desktop shell (data-oc-personal-interactions, set by
+   MainLayout) so other runtimes keep upstream styling. Rules here are
+   unlayered on purpose: they refine the utility classes they sit on.
+   Motion is transform/opacity only (theme-system Animation Contract);
+   borders and shadows change state without being animated. Sortable
+   wrappers (dnd-kit) are never transformed by CSS, only their contents. */
+
+:root {
+    --oc-ease-spring: cubic-bezier(0.34, 1.45, 0.64, 1);
+    --oc-ease-settle: cubic-bezier(0.16, 1, 0.3, 1);
+    --oc-radius-card: 14px;
+    --oc-hairline: color-mix(in srgb, var(--surface-foreground) 9%, transparent);
+    --oc-hairline-strong: color-mix(in srgb, var(--surface-foreground) 17%, transparent);
+    --oc-hover-boost: color-mix(in srgb, var(--surface-foreground) 5%, transparent);
+    --oc-shadow-card:
+        inset 0 1px 0 0 color-mix(in srgb, var(--surface-foreground) 3%, transparent),
+        0 1px 2px rgb(0 0 0 / 0.06),
+        0 4px 14px -6px rgb(0 0 0 / 0.1);
+    --oc-shadow-lift:
+        0 2px 4px rgb(0 0 0 / 0.06),
+        0 14px 30px -12px rgb(0 0 0 / 0.22);
+    --oc-shadow-composer:
+        inset 0 1px 0 0 color-mix(in srgb, var(--surface-foreground) 4%, transparent),
+        0 1px 2px rgb(0 0 0 / 0.06),
+        0 10px 28px -12px rgb(0 0 0 / 0.18);
+}
+:root.dark {
+    --oc-hover-boost: color-mix(in srgb, var(--surface-foreground) 6%, transparent);
+    --oc-shadow-card:
+        inset 0 1px 0 0 color-mix(in srgb, var(--surface-foreground) 5%, transparent),
+        0 1px 2px rgb(0 0 0 / 0.3),
+        0 6px 18px -8px rgb(0 0 0 / 0.45);
+    --oc-shadow-lift:
+        inset 0 1px 0 0 color-mix(in srgb, var(--surface-foreground) 7%, transparent),
+        0 2px 6px rgb(0 0 0 / 0.35),
+        0 18px 36px -14px rgb(0 0 0 / 0.6);
+    --oc-shadow-composer:
+        inset 0 1px 0 0 color-mix(in srgb, var(--surface-foreground) 7%, transparent),
+        0 1px 2px rgb(0 0 0 / 0.35),
+        0 14px 34px -14px rgb(0 0 0 / 0.65);
+}
+
+/* ── Presses: in fast, out with a little spring ───────────────────────── */
+/* personal-interactions.css owns the colour transitions; this adds `scale`
+   so the index.css press (scale 0.96 on :active) eases instead of snapping. */
+[data-oc-personal-interactions] button:not(:disabled) {
+    transition:
+        background-color 85ms var(--oc-ease-settle),
+        border-color 85ms var(--oc-ease-settle),
+        color 85ms var(--oc-ease-settle),
+        opacity 85ms var(--oc-ease-settle),
+        transform 260ms var(--oc-ease-spring),
+        scale 260ms var(--oc-ease-spring);
+}
+[data-oc-personal-interactions] button:not(:disabled):active {
+    transition-duration: 50ms, 50ms, 50ms, 50ms, 70ms, 70ms;
+    transition-timing-function: ease-out;
+}
+
+/* Ghost and outline buttons answer the pointer with a visible lift layer
+   over whatever they already paint (no layout, no animation). */
+[data-oc-personal-interactions] [data-slot="button"]:is([data-variant="ghost"], [data-variant="outline"], [data-variant="secondary"]):not(:disabled):not([class*="hover:bg-transparent"]):hover {
+    background-image: linear-gradient(var(--oc-hover-boost), var(--oc-hover-boost));
+}
+
+/* ── Sidebar ───────────────────────────────────────────────────────────── */
+/* Clear hierarchy: section headings are firm, rows a step quieter, the
+   current chat fully lit with a marker that grows in. */
+[data-oc-personal-interactions] :is([data-sidebar-sticky-header] .typography-ui-label, [data-sidebar-scheduled] .typography-ui-label, .group\/chats .typography-ui-label, .group\/website span.truncate) {
+    font-weight: 620;
+    color: var(--surface-foreground);
+}
+[data-oc-personal-interactions] [data-session-row] {
+    color: color-mix(in srgb, var(--surface-foreground) 80%, var(--surface-muted-foreground));
+    transition: background-color 85ms var(--oc-ease-settle), color 85ms var(--oc-ease-settle), scale 240ms var(--oc-ease-spring);
+}
+[data-oc-personal-interactions] [data-session-row]:not([aria-current="page"]):not(:has([aria-pressed="true"])):hover {
+    background-color: var(--interactive-hover);
+    color: var(--surface-foreground);
+}
+[data-oc-personal-interactions] [data-session-row]:active {
+    scale: 0.985;
+    transition-duration: 50ms, 50ms, 70ms;
+}
+[data-oc-personal-interactions] [data-session-row][aria-current="page"] {
+    background-color: var(--interactive-selection);
+    color: var(--interactive-selection-foreground);
+    font-weight: 520;
+    box-shadow: inset 0 0 0 1px var(--oc-hairline);
+}
+[data-oc-personal-interactions] [data-session-row][aria-current="page"]::before {
+    content: "";
+    position: absolute;
+    inset-block: 6px;
+    inset-inline-start: 1px;
+    width: 3px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--interactive-selection-foreground) 70%, transparent);
+    pointer-events: none;
+    animation: oc-feel-marker-in 240ms var(--oc-ease-spring) both;
+}
+@keyframes oc-feel-marker-in {
+    from { transform: scaleY(0.2); opacity: 0; }
+    to { transform: scaleY(1); opacity: 1; }
+}
+
+/* Opening the sidebar: the geometry lands in one frame (Sidebar.tsx), the
+   contents glide the last few pixels in rather than appearing. */
+[data-oc-personal-interactions] aside[style*="--oc-left-sidebar-width"][aria-hidden="false"] > .z-10 {
+    animation: oc-feel-slide-in 200ms var(--oc-ease-settle);
+}
+@keyframes oc-feel-slide-in {
+    from { transform: translate3d(-10px, 0, 0); }
+    to { transform: translate3d(0, 0, 0); }
+}
+
+/* ── Header tabs ───────────────────────────────────────────────────────── */
+[data-oc-personal-interactions] :is(.session-tab-slot [role="tab"], [data-oc-header-action="home"]) {
+    transition: background-color 85ms var(--oc-ease-settle), color 85ms var(--oc-ease-settle), transform 260ms var(--oc-ease-spring), scale 260ms var(--oc-ease-spring);
+}
+[data-oc-personal-interactions] :is(.session-tab-slot [role="tab"], [data-oc-header-action="home"]):active {
+    transform: none;
+    scale: 0.96;
+    transition-duration: 50ms, 50ms, 70ms, 70ms;
+}
+/* The selected tab sits on a raised chip. */
+[data-oc-personal-interactions] .session-tab[aria-selected="true"],
+[data-oc-personal-interactions] .session-tab-slot[data-active="true"]:not(:has(> .session-tab)) {
+    box-shadow:
+        inset 0 0 0 1px var(--oc-hairline),
+        inset 0 -2px 0 color-mix(in srgb, var(--interactive-selection-foreground) 35%, transparent),
+        0 1px 2px rgb(0 0 0 / 0.18);
+}
+/* A tab that joins the strip pops in (its content, not the sortable slot). */
+[data-oc-personal-interactions] .session-tab-slot:not([data-oc-tab-ghost]) > * {
+    animation: oc-feel-tab-in 220ms var(--oc-ease-spring) backwards;
+}
+@keyframes oc-feel-tab-in {
+    from { opacity: 0; transform: translate3d(0, 3px, 0) scale(0.94); }
+    to { opacity: 1; transform: none; }
+}
+
+/* ── Surfaces ──────────────────────────────────────────────────────────── */
+/* Home cards: one radius, a translucent hairline, a soft drop, and a lift
+   layer that fades in on hover. Cards are sortable, so they never move. */
+[data-oc-personal-interactions] .oc-home-card {
+    border-color: var(--oc-hairline);
+    border-radius: var(--oc-radius-card);
+    box-shadow: var(--oc-shadow-card);
+}
+[data-oc-personal-interactions] .oc-home-card::after,
+[data-oc-personal-interactions] .oc-friend-card::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    box-shadow: var(--oc-shadow-lift);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 180ms var(--oc-ease-settle);
+}
+[data-oc-personal-interactions] .oc-home-card:hover,
+[data-oc-personal-interactions] .oc-friend-card:hover {
+    border-color: var(--oc-hairline-strong);
+}
+[data-oc-personal-interactions] .oc-home-card:hover::after,
+[data-oc-personal-interactions] .oc-friend-card:hover::after { opacity: 1; }
+[data-oc-personal-interactions] .oc-home-card.oc-home-dragging::after { opacity: 1; }
+
+/* Friends: cards rise toward the pointer and press back down. Not sortable. */
+[data-oc-personal-interactions] .oc-friend-card {
+    border-color: var(--oc-hairline);
+    border-radius: var(--oc-radius-card);
+    background:
+        linear-gradient(to bottom, color-mix(in srgb, var(--surface-foreground) 3%, transparent), transparent 60%),
+        var(--surface-elevated);
+    box-shadow: var(--oc-shadow-card);
+    transition: border-color 110ms var(--oc-ease-settle), transform 280ms var(--oc-ease-spring);
+}
+[data-oc-personal-interactions] .oc-friend-card:hover { transform: translate3d(0, -2px, 0); }
+/* On press the card drops back while its button presses in (index.css). */
+[data-oc-personal-interactions] .oc-friend-card:active {
+    transform: translate3d(0, 0, 0);
+    transition-duration: 110ms, 80ms;
+}
+[data-oc-personal-interactions] .oc-friend-card-main.oc-friend-card-main { border-radius: calc(var(--oc-radius-card) - 2px); }
+[data-oc-personal-interactions] .oc-friend-card-avatar { transition: transform 320ms var(--oc-ease-spring); }
+[data-oc-personal-interactions] .oc-friend-card:hover .oc-friend-card-avatar { transform: translate3d(0, -2px, 0) rotate(-6deg) scale(1.06); }
+
+/* Board/AI task cards match the card language. */
+[data-oc-personal-interactions] :is(.oc-home-task, .oc-ai-task) {
+    border-color: var(--oc-hairline);
+    border-radius: 10px;
+    box-shadow: inset 0 1px 0 0 color-mix(in srgb, var(--surface-foreground) 3%, transparent);
+}
+[data-oc-personal-interactions] :is(.oc-home-task, .oc-ai-task):hover { border-color: var(--oc-hairline-strong); }
+
+/* The landscape dissolves into the page instead of ending on a line. */
+[data-oc-personal-interactions] .oc-home-landscape {
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 30%, rgb(0 0 0 / 0.78) 50%, rgb(0 0 0 / 0.45) 68%, rgb(0 0 0 / 0.16) 85%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0%, #000 30%, rgb(0 0 0 / 0.78) 50%, rgb(0 0 0 / 0.45) 68%, rgb(0 0 0 / 0.16) 85%, transparent 100%);
+}
+
+/* Composer: reads as the primary surface, and glows softly while focused.
+   The glow is a pseudo-element whose opacity animates. */
+[data-oc-personal-interactions] .oc-glass-composer {
+    border-color: var(--oc-hairline-strong);
+    box-shadow: var(--oc-shadow-composer);
+}
+[data-oc-personal-interactions] .oc-glass-composer::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--interactive-focus-ring) 45%, transparent),
+        0 0 0 4px color-mix(in srgb, var(--interactive-focus-ring) 14%, transparent),
+        0 8px 30px -10px color-mix(in srgb, var(--interactive-focus-ring) 28%, transparent);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 180ms var(--oc-ease-settle);
+}
+[data-oc-personal-interactions] .oc-glass-composer:focus-within::after { opacity: 1; }
+
+/* Tool and activity blocks get an edge so they stop reading as mud. */
+[data-oc-personal-interactions] :is(.tool-output-surface, .tool-input-surface) {
+    box-shadow: inset 0 0 0 1px var(--oc-hairline);
+}
+
+/* Empty states: a small badge holds the icon so the message has a centre. */
+.oc-empty-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin-bottom: 4px;
+    border-radius: 14px;
+    background: var(--surface-elevated);
+    box-shadow: inset 0 0 0 1px var(--oc-hairline), var(--oc-shadow-card);
+    animation: oc-feel-badge-in 320ms var(--oc-ease-spring) both;
+}
+@keyframes oc-feel-badge-in {
+    from { opacity: 0; transform: scale(0.85); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+/* Checkboxes give under the finger; the tick's pop lives in index.css. */
+[data-oc-personal-interactions] [role="checkbox"] { transition: scale 240ms var(--oc-ease-spring); }
+[data-oc-personal-interactions] [role="checkbox"]:active { scale: 0.86; transition-duration: 60ms; }
+
+@media (prefers-reduced-motion: reduce) {
+    [data-oc-personal-interactions] :is(button, [data-session-row], .session-tab-slot [role="tab"], [data-oc-header-action="home"], [role="checkbox"], .oc-friend-card, .oc-friend-card-avatar):active { scale: none; transform: none; }
+    [data-oc-personal-interactions] .oc-friend-card:hover,
+    [data-oc-personal-interactions] .oc-friend-card:hover .oc-friend-card-avatar { transform: none; }
+    [data-oc-personal-interactions] [data-session-row][aria-current="page"]::before,
+    [data-oc-personal-interactions] aside[style*="--oc-left-sidebar-width"][aria-hidden="false"] > .z-10,
+    [data-oc-personal-interactions] .session-tab-slot > *,
+    .oc-empty-badge { animation: none; }
+}

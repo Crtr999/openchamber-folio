@@ -207,7 +207,7 @@ export function ComputerPane({ directory, requestedScreen }: { directory: string
   if (!state.available || !state.baseUrl) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
-        <Icon name="window" className="size-6 text-muted-foreground" />
+        <span className="oc-empty-badge" aria-hidden="true"><Icon name="window" className="size-5 text-muted-foreground" /></span>
         <p className="text-sm font-medium">{t('computer.unavailable')}</p>
         <p className="max-w-xs text-xs text-muted-foreground">{t('computer.unavailableHint')}</p>
       </div>

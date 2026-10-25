@@ -112,6 +112,9 @@ function Button({
   return (
     <Comp
       data-slot="button"
+      // Lets shared feel styles (styles/open-carter-feel.css) tell quiet
+      // variants apart without reparsing utility classes.
+      data-variant={variant ?? "default"}
       className={cn(buttonVariants({ variant, size, className }))}
       {...typeProps}
       {...props}
