@@ -2997,7 +2997,7 @@ export const useUIStore = create<UIStore>()(
       {
         name: 'ui-store',
         storage: createDeferredSafeJSONStorage(),
-        version: 26,
+        version: 27,
         migrate: (persistedState, version) => {
           if (!persistedState || typeof persistedState !== 'object') {
             return persistedState;
@@ -3009,6 +3009,10 @@ export const useUIStore = create<UIStore>()(
 
           // Missing preferences retain the existing visible default, including on web.
           state.contextRailVisible = z.boolean().catch(true).parse(state.contextRailVisible);
+
+          // v26 -> v27: the personal desktop's default UI font became the bundled
+          // Plus Jakarta Sans. Only the previous default moves; other picks stay.
+          if (version < 27 && isElectronShell() && (state.uiFont === undefined || state.uiFont === 'system')) state.uiFont = 'plus-jakarta-sans';
 
           // v21 -> v22: personal desktop's header now owns open website tabs.
           if (version < 22 && isElectronShell()) state.sessionTabsEnabled = true;

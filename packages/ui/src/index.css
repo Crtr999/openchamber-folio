@@ -5,6 +5,7 @@
 @import "./styles/chat-width.css";
 @import "./styles/personal-interactions.css";
 @import "./styles/open-carter-feel.css";
+@import "./styles/open-carter-vibe.css";
 @import "./styles/mobile.css";
 /* KaTeX styles are loaded eagerly through `styles/katex-css` (a JS import) at
    every app entry point. Keeping them eager avoids a late stylesheet injection

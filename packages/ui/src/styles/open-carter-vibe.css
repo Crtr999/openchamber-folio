@@ -1,0 +1,218 @@
+/* Open Carter vibe: print-poster art direction on top of open-carter-feel.css.
+   Cobalt ink on cream paper (light) and cream type on ink black (dark), a
+   static paper grain, an illustrated Home scene with floating rounded cards,
+   an editorial serif greeting and an extended grotesk for widget titles.
+   Shapes, type and scenes are scoped to the desktop shell
+   (data-oc-personal-interactions); the palette-specific hairlines and grain
+   only apply while one of the Open Carter themes is active (data-theme-id).
+   Nothing here animates; presses and lifts stay in open-carter-feel.css. */
+
+:root {
+    --oc-font-display: "Archivo Variable", "Archivo", "Plus Jakarta Sans Variable", system-ui, sans-serif;
+    --oc-font-serif: "Instrument Serif", "Iowan Old Style", "Times New Roman", serif;
+    --oc-radius-float: 24px;
+}
+
+/* ── Palette-specific print details (Open Carter themes only) ─────────── */
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) {
+    --oc-hairline: color-mix(in srgb, var(--primary-base) 17%, transparent);
+    --oc-hairline-strong: color-mix(in srgb, var(--primary-base) 34%, transparent);
+    --oc-shadow-card:
+        inset 0 1px 0 0 rgb(255 255 255 / 0.55),
+        0 1px 2px rgb(20 27 61 / 0.05),
+        0 16px 36px -20px rgb(20 27 61 / 0.32);
+    --oc-shadow-lift:
+        0 2px 6px rgb(20 27 61 / 0.07),
+        0 24px 44px -20px rgb(20 27 61 / 0.38);
+    /* Dark ink specks on paper. */
+    --oc-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .08 0 0 0 0 .1 0 0 0 0 .24 1.8 0 0 0 -.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    --oc-grain-opacity: 0.07;
+}
+:root.dark:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) {
+    --oc-hairline: color-mix(in srgb, var(--surface-foreground) 12%, transparent);
+    --oc-hairline-strong: color-mix(in srgb, var(--surface-foreground) 24%, transparent);
+    --oc-shadow-card:
+        inset 0 1px 0 0 color-mix(in srgb, var(--surface-foreground) 7%, transparent),
+        0 1px 2px rgb(0 0 0 / 0.4),
+        0 18px 40px -20px rgb(0 0 0 / 0.8);
+    --oc-shadow-lift:
+        inset 0 1px 0 0 color-mix(in srgb, var(--surface-foreground) 9%, transparent),
+        0 2px 6px rgb(0 0 0 / 0.45),
+        0 26px 48px -20px rgb(0 0 0 / 0.85);
+    /* Cream specks on ink, like the poster's dust and stars. */
+    --oc-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .93 0 0 0 0 .89 0 0 0 0 .81 1.8 0 0 0 -.7'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    --oc-grain-opacity: 0.09;
+}
+
+/* One static grain sheet over the whole window. It never repaints, never
+   takes input, and sits under portalled menus' own stacking contexts. */
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-oc-personal-interactions]::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background-image: var(--oc-grain);
+    background-size: 180px 180px;
+    opacity: var(--oc-grain-opacity);
+    pointer-events: none;
+}
+
+/* ── Shape: rounder cards, pill primaries ─────────────────────────────── */
+[data-oc-personal-interactions] {
+    --oc-radius-card: 22px;
+}
+[data-oc-personal-interactions] :is(.oc-home-task, .oc-ai-task) { border-radius: 14px; }
+[data-oc-personal-interactions] .oc-glass-composer { border-radius: var(--oc-radius-float); }
+
+/* Primary actions print as solid cobalt pills with cream type. */
+[data-oc-personal-interactions] [data-slot="button"][data-variant="default"] {
+    border-color: transparent;
+    border-radius: 999px;
+    corner-shape: round;
+    background-color: var(--primary-base);
+    color: var(--primary-foreground);
+}
+[data-oc-personal-interactions] [data-slot="button"][data-variant="default"]:hover:not(:disabled) {
+    background-color: var(--primary-hover);
+}
+[data-oc-personal-interactions] [data-slot="button"][data-variant="default"]:active:not(:disabled) {
+    background-color: var(--primary-active);
+}
+
+/* ── Type ─────────────────────────────────────────────────────────────── */
+/* Widget titles: a wide, heavy grotesk, tight-tracked like poster type. */
+[data-oc-personal-interactions] :is(.oc-home-card-heading, .oc-home-card-heading h2) {
+    color: var(--surface-elevated-foreground);
+    font-family: var(--oc-font-display);
+    font-size: 14.5px;
+    font-stretch: 116%;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+}
+[data-oc-personal-interactions] .oc-home-card-heading :is(.oc-home-count, button, [data-slot="select-trigger"], span.ml-auto) {
+    font-family: var(--font-sans);
+    font-stretch: normal;
+    font-weight: 500;
+    letter-spacing: normal;
+}
+[data-oc-personal-interactions] .oc-home-card-heading > svg,
+[data-oc-personal-interactions] .oc-home-card-heading h2 > svg { color: var(--primary-text, var(--primary-base)); }
+
+/* The Home greeting and the draft title: big editorial serif. */
+[data-oc-personal-interactions] .oc-home-greeting-title {
+    font-family: var(--oc-font-serif);
+    font-size: clamp(40px, 5.2vw, 64px);
+    font-weight: 400;
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+}
+[data-oc-personal-interactions] .oc-home-greeting-title em {
+    color: var(--primary-text, var(--primary-base));
+    font-style: italic;
+}
+.oc-home-greeting-title {
+    font-size: 1.875rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+[data-oc-personal-interactions] .oc-draft-title {
+    font-family: var(--oc-font-serif);
+    letter-spacing: -0.03em;
+}
+
+/* ── Home: an illustrated scene with floating cards ───────────────────── */
+[data-oc-personal-interactions] .oc-home-content {
+    padding-top: clamp(150px, 24vh, 250px);
+}
+[data-oc-personal-interactions] .oc-home-landscape {
+    height: clamp(340px, 56vh, 560px);
+    background: var(--surface-background);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 52%, rgb(0 0 0 / 0.7) 70%, rgb(0 0 0 / 0.28) 86%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0%, #000 52%, rgb(0 0 0 / 0.7) 70%, rgb(0 0 0 / 0.28) 86%, transparent 100%);
+}
+[data-oc-personal-interactions] .oc-home-landscape img { object-position: center 58%; }
+/* Ink tint layer (per scene below) and a fine dot screen with the fade. */
+[data-oc-personal-interactions] .oc-home-landscape::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    pointer-events: none;
+}
+[data-oc-personal-interactions] .oc-home-landscape::after {
+    background:
+        radial-gradient(circle, color-mix(in srgb, var(--surface-background) 30%, transparent) 0.7px, transparent 1.1px) 0 0 / 4px 4px,
+        linear-gradient(to bottom, transparent 0%, transparent 55%, color-mix(in srgb, var(--surface-background) 70%, transparent) 85%, var(--surface-background) 100%);
+}
+
+/* Engraved coast: cobalt engraving that prints straight onto the cream
+   paper, or reverses out of the ink in dark mode. */
+[data-oc-personal-interactions] .oc-home-landscape[data-scene="engraved-coast"] img { mix-blend-mode: multiply; }
+.dark [data-oc-personal-interactions] .oc-home-landscape[data-scene="engraved-coast"] img {
+    filter: grayscale(1) invert(1) contrast(1.15) brightness(0.92);
+    mix-blend-mode: normal;
+}
+.dark [data-oc-personal-interactions] .oc-home-landscape[data-scene="engraved-coast"]::before {
+    background: #8197ff;
+    mix-blend-mode: multiply;
+}
+
+/* Night coast: the original painting as a cobalt duotone. */
+[data-oc-personal-interactions] .oc-home-landscape[data-scene="night-coast"] img { filter: grayscale(1) contrast(1.25) brightness(1.1); }
+[data-oc-personal-interactions] .oc-home-landscape[data-scene="night-coast"]::before {
+    background: var(--primary-base);
+    mix-blend-mode: lighten;
+}
+.dark [data-oc-personal-interactions] .oc-home-landscape[data-scene="night-coast"] img { filter: grayscale(1) contrast(1.2) brightness(1.15); }
+.dark [data-oc-personal-interactions] .oc-home-landscape[data-scene="night-coast"]::before {
+    background: #6f86ff;
+    mix-blend-mode: multiply;
+}
+
+/* Cloud sky: daylight as painted; dusk in dark mode. */
+.dark [data-oc-personal-interactions] .oc-home-landscape[data-scene="cloud-sky"] img { filter: brightness(0.52) saturate(0.9) contrast(1.05); }
+
+/* Stipple night: stars on ink; on paper it prints as cobalt stipple. */
+html:not(.dark) [data-oc-personal-interactions] .oc-home-landscape[data-scene="stipple-night"] img {
+    filter: invert(1) grayscale(1);
+    mix-blend-mode: multiply;
+}
+html:not(.dark) [data-oc-personal-interactions] .oc-home-landscape[data-scene="stipple-night"]::before {
+    background: var(--primary-base);
+    mix-blend-mode: lighten;
+}
+
+/* The greeting sits on a frosted paper plate so it reads over any scene. */
+[data-oc-personal-interactions] .oc-home-greeting {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 100%;
+    padding: 14px 30px 12px;
+    border: 1px solid var(--oc-hairline);
+    border-radius: 28px;
+    background: color-mix(in srgb, var(--surface-background) 76%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(1.15);
+    backdrop-filter: blur(14px) saturate(1.15);
+    box-shadow: var(--oc-shadow-card);
+}
+[data-oc-personal-interactions] .oc-home-scene-button { margin-top: 6px; }
+
+/* Cards float over the scene as cream (or ink) panels. */
+[data-oc-personal-interactions] .oc-home-card {
+    background: color-mix(in srgb, var(--surface-elevated) 94%, transparent);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+    [data-oc-personal-interactions] .oc-home-greeting {
+        background: var(--surface-background);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+    [data-oc-personal-interactions] .oc-home-card { background: var(--surface-elevated); }
+}
+
+@media (forced-colors: active) {
+    [data-oc-personal-interactions]::after,
+    [data-oc-personal-interactions] .oc-home-landscape::before { display: none; }
+}

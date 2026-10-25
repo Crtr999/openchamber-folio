@@ -1,4 +1,4 @@
-export type UiFontOption = 'inter' | 'fixel' | 'geist-sans' | 'atkinson-hyperlegible' | 'source-sans-3' | 'roboto' | 'noto-sans' | 'dm-sans' | 'manrope' | 'system';
+export type UiFontOption = 'plus-jakarta-sans' | 'inter' | 'fixel' | 'geist-sans' | 'atkinson-hyperlegible' | 'source-sans-3' | 'roboto' | 'noto-sans' | 'dm-sans' | 'manrope' | 'system';
 
 export type MonoFontOption = 'jetbrains-mono' | 'fira-code' | 'geist-mono' | 'commit-mono' | 'source-code-pro' | 'cascadia-code' | 'roboto-mono' | 'iosevka' | 'system-mono';
 
@@ -28,6 +28,13 @@ export interface FontOptionDefinition<T extends string> {
 }
 
 export const UI_FONT_OPTIONS: FontOptionDefinition<UiFontOption>[] = [
+    {
+        id: 'plus-jakarta-sans',
+        label: 'Plus Jakarta Sans',
+        description: 'Open Carter\u2019s poster-style geometric sans, bundled with the app.',
+        // Bundled (OFL) and registered by useAppFontEffects, so it needs no loader source.
+        stack: '"Plus Jakarta Sans Variable", "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+    },
     {
         id: 'inter',
         label: 'Inter',
@@ -178,7 +185,7 @@ const buildFontMap = <T extends string>(options: FontOptionDefinition<T>[]) =>
 export const UI_FONT_OPTION_MAP = buildFontMap(UI_FONT_OPTIONS);
 export const CODE_FONT_OPTION_MAP = buildFontMap(CODE_FONT_OPTIONS);
 
-export const DEFAULT_UI_FONT: UiFontOption = 'system';
+export const DEFAULT_UI_FONT: UiFontOption = 'plus-jakarta-sans';
 export const DEFAULT_MONO_FONT: MonoFontOption = 'system-mono';
 
 export const isUiFontOption = (value: unknown): value is UiFontOption =>

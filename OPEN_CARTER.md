@@ -75,6 +75,19 @@ switched off under reduced motion. It moves only transform and opacity, never
 transforms sortable wrappers, and leaves tab activation as an instant snap. A
 closing header tab leaves the store immediately; a detached copy fades in its place.
 
+The print-poster look lives in `packages/ui/src/styles/open-carter-vibe.css`.
+The default themes `openchamber-light`/`openchamber-dark` were retuned in place to
+the "Open Carter" palette (cobalt ink on cream; cream on ink black, cobalt accent);
+the previous palette stays selectable as "OpenChamber Classic"
+(`openchamber-classic-*`). `cssGenerator` sets `data-theme-id` on `<html>` so the
+grain and cobalt hairlines apply only to the Open Carter themes. Fonts are bundled
+OFL packages imported by `useAppFontEffects.ts`: Plus Jakarta Sans (default UI font;
+UI store v27 moves the old `system` default on desktop), Archivo (wide, heavy widget
+titles, `--oc-font-display`) and Instrument Serif (Home greeting, `--oc-font-serif`).
+Home scenes are bundled in `components/chat/homeScenes.ts` (engraved coast default,
+night coast duotone, cloud sky, stipple night); the greeting's palette button cycles
+them and stores the choice in `localStorage` (`openCarter.homeScene`).
+
 The desktop titlebar spans the whole window above the sidebar and chat. It reserves
 only native window-control clearance and the measured sidebar-toggle footprint,
 so Home and session tabs do not shift to the sidebar's right edge when it opens.

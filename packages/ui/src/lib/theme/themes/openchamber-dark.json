@@ -1,47 +1,48 @@
 {
   "metadata": {
     "id": "openchamber-dark",
-    "name": "OpenChamber",
+    "name": "Open Carter",
     "variant": "dark",
-    "description": "The OpenChamber signature - Vitesse syntax over OpenCode-deep neutrals with Flexoki accents, harmonized in OKLCH (dark variant)",
+    "description": "Print poster palette: ink black with cream type and a cobalt accent (dark variant)",
     "version": "1.0.0",
-    "author": "OpenChamber",
+    "author": "Open Carter",
     "tags": [
       "dark",
       "brand",
-      "hybrid",
-      "warm",
+      "print",
+      "cobalt",
       "ink"
     ]
   },
   "colors": {
     "primary": {
-      "base": "#da7c47",
-      "hover": "#eb8c57",
-      "active": "#fd9b66",
-      "muted": "#da7c4780"
+      "base": "#3a58dc",
+      "hover": "#3452d2",
+      "active": "#2c48bd",
+      "foreground": "#f7f0e1",
+      "muted": "#3a58dc80"
     },
     "surface": {
-      "background": "#120f0e",
-      "foreground": "#c9c5ba",
-      "muted": "#171615",
-      "mutedForeground": "#8f8b81",
-      "elevated": "#181715",
-      "subtle": "#171616"
+      "background": "#0a0a0a",
+      "foreground": "#ede4cf",
+      "muted": "#111110",
+      "mutedForeground": "#a59e8d",
+      "elevated": "#151514",
+      "subtle": "#121211"
     },
     "interactive": {
-      "border": "#242323",
-      "selection": "#c8c6c52b",
-      "borderHover": "#504e4c",
-      "focusRing": "#da7c4755",
-      "hover": "#ffffff12",
-      "active": "#ffffff1f"
+      "border": "#ede4cf1f",
+      "selection": "#ede4cf21",
+      "borderHover": "#ede4cf42",
+      "focusRing": "#5b78f580",
+      "hover": "#ede4cf0f",
+      "active": "#ede4cf1a"
     },
     "status": {
-      "error": "#da5b4a",
-      "warning": "#c67f13",
-      "success": "#76ad4f",
-      "info": "#479fe6"
+      "error": "#e0634f",
+      "warning": "#d39a2a",
+      "success": "#7fb35a",
+      "info": "#4fb3c9"
     },
     "syntax": {
       "base": {
@@ -71,27 +72,27 @@
     },
     "pr": {
       "open": "#93a233",
-      "blocked": "#da7c47",
+      "blocked": "#3a58dc",
       "merged": "#9988e5"
     },
     "chat": {
-      "userMessageBackground": "#25170e",
-      "divider": "#302e2b"
+      "userMessageBackground": "#181b2a",
+      "divider": "#ede4cf24"
     },
     "markdown": {
-      "link": "#5d99a9",
-      "linkHover": "#6ba7b8",
-      "inlineCode": "#76ad4f",
-      "inlineCodeBackground": "#1F1C1B",
-      "blockquote": "#8f8b81",
-      "blockquoteBorder": "#302e2b",
-      "listMarker": "#4d934e99"
+      "link": "#8ea2ff",
+      "linkHover": "#a9b8ff",
+      "inlineCode": "#b9c4ff",
+      "inlineCodeBackground": "#16171d",
+      "blockquote": "#a59e8d",
+      "blockquoteBorder": "#ede4cf33",
+      "listMarker": "#5b78f599"
     },
     "tools": {
-      "border": "#302e2b99",
-      "icon": "#ada9a0",
-      "title": "#c9c5ba",
-      "description": "#aba9a3",
+      "border": "#ede4cf1f",
+      "icon": "#b3ac9b",
+      "title": "#ede4cf",
+      "description": "#a59e8d",
       "edit": {
         "addedBackground": "#4d934e25",
         "removedBackground": "#cb767625",

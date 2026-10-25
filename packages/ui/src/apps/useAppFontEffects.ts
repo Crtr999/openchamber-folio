@@ -1,4 +1,10 @@
 import React from 'react';
+// Bundled OFL faces (no runtime CDN): the default UI sans, the display
+// grotesk (with its width axis) and the editorial serif used on Home.
+import '@fontsource-variable/plus-jakarta-sans/wght.css';
+import '@fontsource-variable/archivo/wdth.css';
+import '@fontsource/instrument-serif/400.css';
+import '@fontsource/instrument-serif/400-italic.css';
 import { useFontPreferences } from '@/hooks/useFontPreferences';
 import { CODE_FONT_OPTION_MAP, DEFAULT_MONO_FONT, DEFAULT_UI_FONT, UI_FONT_OPTION_MAP } from '@/lib/fontOptions';
 import { loadMonoFont, loadUiFont } from '@/lib/fontLoader';

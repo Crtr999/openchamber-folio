@@ -12,7 +12,7 @@ import { compareSessionsByLifecycleOrder, useSessionOrderingStore } from '@/sync
 import { cn, formatDirectoryName } from '@/lib/utils';
 import { isElectronShell, isDesktopLocalOriginActive } from '@/lib/desktop';
 import { useClaudeStore } from '@/stores/useClaudeStore';
-import coastalLandscape from '@/assets/home-coast.webp';
+import { cycleHomeScene, useHomeScene } from './homeScenes';
 import './HomeDashboard.css';
 import { HomePersonalPanels, HomeChatExport } from './HomePersonalPanels';
 import { HomeWidgetLayout } from './HomeWidgetLayout';
@@ -20,11 +20,15 @@ import { HomeFriends } from './HomeFriends';
 import { openMeetingWorkspace } from '@/lib/meetings/workspace';
 import { meetingsSupported } from '@/lib/meetings/contract';
 
-export const HomeLandscape: React.FC = () => (
-    <div className="oc-home-landscape" aria-hidden="true">
-        <img src={coastalLandscape} alt="" width={2172} height={724} />
-    </div>
-);
+/** The illustrated hero scene the greeting, composer and cards float over. */
+export const HomeLandscape: React.FC = () => {
+    const scene = useHomeScene();
+    return (
+        <div className="oc-home-landscape" data-scene={scene.id} aria-hidden="true">
+            <img key={scene.id} src={scene.src} alt="" width={scene.width} height={scene.height} decoding="async" />
+        </div>
+    );
+};
 
 const greetingKey = (now = new Date()) => {
     const hour = now.getHours();
@@ -47,8 +51,29 @@ export const HomeGreeting: React.FC = () => {
                 {now.toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric' })}
                 {running ? <span className="ml-2 normal-case tracking-normal text-foreground/60">· {t('home.greeting.working', { count: running })}</span> : null}
             </p>
-            <h1 className="mt-1 text-balance text-2xl font-semibold tracking-tight text-foreground md:text-3xl">{t(greetingKey(now))}, Carter</h1>
+            <h1 className="oc-home-greeting-title mt-1 text-balance text-foreground">{t(greetingKey(now))}, <em>Carter</em></h1>
+            <HomeScenePicker />
         </div>
+    );
+};
+
+/** Cycles the bundled hero scenes; the choice stays on this device. */
+const HomeScenePicker: React.FC = () => {
+    const { t } = useI18n();
+    const scene = useHomeScene();
+    const sceneName = t(scene.labelKey);
+    return (
+        <Button
+            size="sm"
+            variant="ghost"
+            className="oc-press oc-home-scene-button mt-2 h-7 rounded-full px-3 text-[12px] font-medium text-muted-foreground hover:text-foreground"
+            aria-label={t('home.scene.change', { scene: sceneName })}
+            title={t('home.scene.change', { scene: sceneName })}
+            onClick={() => cycleHomeScene(scene.id)}
+        >
+            <Icon name="palette" className="size-3.5" />
+            {sceneName}
+        </Button>
     );
 };
 
