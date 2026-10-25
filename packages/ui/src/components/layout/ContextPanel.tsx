@@ -422,8 +422,8 @@ const EditorTreeColumn: React.FC<{ visible: boolean; active: boolean; fill?: boo
         ['--oc-editor-tree-width' as string]: `${isResizing ? (liveWidthRef.current ?? width) : width}px`,
         overflowX: 'clip',
         transitionProperty: isResizing ? 'none' : 'width',
-        transitionDuration: '200ms',
-        transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
+        transitionDuration: 'var(--oc-glide-duration, 200ms)',
+        transitionTimingFunction: 'var(--oc-glide-ease, cubic-bezier(0.22, 1, 0.36, 1))',
       }}
       aria-hidden={!visible}
     >
@@ -1323,7 +1323,7 @@ export const ContextPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
           : 'relative h-full flex-shrink-0',
         !visible && 'pointer-events-none',
         'will-change-[width] motion-reduce:transition-none',
-        isResizing ? 'transition-none' : 'transition-[width] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]'
+        isResizing ? 'transition-none' : 'transition-[width] duration-[var(--oc-glide-duration,200ms)] ease-[var(--oc-glide-ease,cubic-bezier(0.22,1,0.36,1))]'
       )}
       onKeyDownCapture={handlePanelKeyDownCapture}
       style={panelStyle}
@@ -1352,7 +1352,7 @@ export const ContextPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
       )}
       <div
         className={cn(
-          'relative z-10 flex h-full min-h-0 shrink-0 flex-col duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+          'relative z-10 flex h-full min-h-0 shrink-0 flex-col duration-[var(--oc-glide-duration,200ms)] ease-[var(--oc-glide-ease,cubic-bezier(0.22,1,0.36,1))] motion-reduce:transition-none',
           // Keep the surface exactly aligned with its column during a drag.
           isResizing ? 'transition-none' : 'transition-[width,opacity]',
           !visible && 'pointer-events-none select-none opacity-0'

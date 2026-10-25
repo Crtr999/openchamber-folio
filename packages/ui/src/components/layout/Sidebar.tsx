@@ -142,8 +142,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, cl
                 ['--oc-left-sidebar-width' as string]: `${isResizing ? currentWidth : openWidth}px`,
                 overflowX: 'clip',
                 transitionProperty: isResizing ? 'none' : 'width, min-width, max-width',
-                transitionDuration: '200ms',
-                transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
+                // One shared glide for both side columns (see --oc-glide-* in
+                // open-carter-polish.css); width is the only layout property.
+                transitionDuration: 'var(--oc-glide-duration, 200ms)',
+                transitionTimingFunction: 'var(--oc-glide-ease, cubic-bezier(0.22, 1, 0.36, 1))',
             }}
             aria-hidden={!isOpen || appliedWidth === 0}
         >
@@ -164,7 +166,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, cl
             )}
             <div
                 className={cn(
-                    'relative z-10 flex h-full shrink-0 flex-col transition-opacity duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+                    'relative z-10 flex h-full shrink-0 flex-col transition-opacity duration-[var(--oc-glide-duration,200ms)] ease-[var(--oc-glide-ease,cubic-bezier(0.22,1,0.36,1))] motion-reduce:transition-none',
                     isResizing && 'pointer-events-none',
                     !isOpen && 'pointer-events-none select-none opacity-0'
                 )}
