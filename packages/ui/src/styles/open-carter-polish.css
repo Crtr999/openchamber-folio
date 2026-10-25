@@ -1,0 +1,418 @@
+/* Open Carter polish: the last pass that carries the print-poster look from
+   Home into every other surface — sidebar headers, settings, chat blocks,
+   code, menus, dialogs, toasts, focus, selection, skeletons and the small
+   "done" moments. Palette-specific details only apply under the Open Carter
+   themes (data-theme-id); portalled layers (menus, dialogs, toasts) are
+   matched by theme because they render outside the shell root.
+   Motion here is transform/opacity only and is switched off under
+   prefers-reduced-motion at the bottom of this file. */
+
+:root {
+    /* Shared glide for the sidebar and context panel widths (Sidebar.tsx,
+       ContextPanel.tsx). Width is layout, so it stays short; the curve does
+       the softening. */
+    --oc-glide-duration: 260ms;
+    --oc-glide-ease: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) {
+    --oc-ink-cobalt: var(--primary-text, var(--primary-base));
+    --oc-selection: color-mix(in srgb, var(--primary-base) 26%, transparent);
+    --oc-text-selection: var(--oc-selection);
+    --oc-scrollbar-thumb: color-mix(in srgb, var(--primary-base) 22%, transparent);
+    --oc-scrollbar-thumb-hover: color-mix(in srgb, var(--primary-base) 42%, transparent);
+    --oc-shadow-float:
+        0 0 0 1px var(--oc-hairline),
+        0 2px 6px rgb(20 27 61 / 0.06),
+        0 18px 40px -18px rgb(20 27 61 / 0.34);
+}
+:root.dark:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) {
+    --oc-selection: color-mix(in srgb, var(--primary-base) 42%, transparent);
+    --oc-scrollbar-thumb: color-mix(in srgb, var(--surface-foreground) 16%, transparent);
+    --oc-scrollbar-thumb-hover: color-mix(in srgb, var(--primary-base) 55%, transparent);
+    --oc-shadow-float:
+        inset 0 1px 0 0 color-mix(in srgb, var(--surface-foreground) 8%, transparent),
+        0 0 0 1px var(--oc-hairline),
+        0 2px 6px rgb(0 0 0 / 0.4),
+        0 22px 44px -18px rgb(0 0 0 / 0.8);
+}
+
+/* ── Selection ──────────────────────────────────────────────── */
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) ::selection {
+    background-color: var(--oc-selection);
+}
+/* Focus rings come from the themes' cobalt focusRing token. */
+
+/* ── Sidebar: section headers that only print a ground once they stick ── */
+/* The old 86% wash read as a muddy band over the frosted pane. A header now
+   sits on the pane itself; once it sticks it frosts the rows sliding under
+   it (the pane is its backdrop root) and draws a hairline. */
+@supports (container-type: scroll-state) {
+    [data-oc-personal-interactions] aside.bg-background [data-sidebar-sticky-header] {
+        container-type: scroll-state;
+        background-color: transparent;
+    }
+    [data-oc-personal-interactions] aside.bg-background [data-sidebar-sticky-header] > :first-child {
+        position: relative;
+    }
+    [data-oc-personal-interactions] aside.bg-background [data-sidebar-sticky-header] > :first-child::before {
+        content: "";
+        position: absolute;
+        inset: 0 -2px;
+        z-index: -1;
+        border-radius: 10px;
+        opacity: 0;
+        pointer-events: none;
+        background-color: color-mix(in srgb, var(--surface-background) 72%, transparent);
+        -webkit-backdrop-filter: blur(10px);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 1px 0 0 var(--oc-hairline, var(--interactive-border));
+        transition: opacity 160ms ease-out;
+    }
+    @container scroll-state(stuck: top) {
+        [data-oc-personal-interactions] aside.bg-background [data-sidebar-sticky-header] > :first-child::before {
+            opacity: 1;
+        }
+    }
+}
+/* Folder/friend glyphs in section headers carry the ink colour. */
+[data-oc-personal-interactions] aside.bg-background [data-sidebar-sticky-header] .font-semibold,
+[data-oc-personal-interactions] aside.bg-background [data-sidebar-sticky-header] [class*="font-medium"] {
+    letter-spacing: -0.01em;
+}
+/* The active session row: a cobalt hairline marker instead of a grey slab. */
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-oc-personal-interactions] aside.bg-background [aria-current="page"],
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-oc-personal-interactions] aside.bg-background [data-active="true"] {
+    background-color: color-mix(in srgb, var(--primary-base) 9%, transparent);
+}
+
+/* Selected nav items elsewhere (Settings) share the cobalt wash and inked icon. */
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) button[aria-current="page"].bg-interactive-selection {
+    background-color: color-mix(in srgb, var(--primary-base) 11%, transparent);
+}
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) button[aria-current="page"].bg-interactive-selection svg {
+    color: var(--oc-ink-cobalt);
+}
+
+/* ── Icons ────────────────────────────────────────────────────────────── */
+/* Rail: rounder hit chips; the open panel's icon is inked on a cobalt wash. */
+[data-oc-personal-interactions] nav.w-11 button { border-radius: 10px; }
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-oc-personal-interactions] nav.w-11 button[aria-pressed="true"] {
+    color: var(--oc-ink-cobalt);
+    background-color: color-mix(in srgb, var(--primary-base) 11%, transparent);
+}
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-oc-personal-interactions] nav.w-11 button[aria-pressed="true"] svg {
+    color: var(--oc-ink-cobalt);
+}
+
+/* ── Editorial headers ────────────────────────────────────────────────── */
+/* Settings page titles print in the display grotesk with a hairline under
+   the header block; section titles get a small tracked eyebrow weight. */
+[data-oc-personal-interactions] .typography-settings-page-title,
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) .typography-settings-page-title {
+    color: var(--surface-foreground);
+    font-family: var(--oc-font-display);
+    font-size: 26px;
+    font-stretch: 112%;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+}
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) div:has(> div > [data-settings-page-heading]),
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) div:has(> div > div > [data-settings-page-heading]) {
+    border-bottom: 1px solid var(--oc-hairline);
+}
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) .typography-settings-section-title {
+    font-family: var(--oc-font-display);
+    font-stretch: 108%;
+    font-weight: 750;
+    letter-spacing: -0.015em;
+}
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) section[data-settings-item].border-t,
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) section.border-t.py-8 {
+    border-top-color: var(--oc-hairline);
+}
+/* Dialog titles share the display face. */
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-slot="dialog-title"] {
+    font-family: var(--oc-font-display);
+    font-stretch: 110%;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+}
+
+/* ── Floating layers: menus, popovers, selects, tooltips ──────────────── */
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) :is([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="select-content"], .oc-glass-popover) {
+    border-radius: 16px;
+    corner-shape: round;
+    box-shadow: var(--oc-shadow-float);
+}
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) :is([data-slot="dropdown-menu-item"], [data-slot="select-item"], [data-slot="dropdown-menu-sub-trigger"]) {
+    border-radius: 10px;
+}
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) :is([data-slot="dropdown-menu-item"], [data-slot="select-item"])[data-highlighted] {
+    background-color: color-mix(in srgb, var(--primary-base) 10%, transparent);
+}
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) :is([data-slot="dropdown-menu-item"], [data-slot="select-item"])[data-highlighted] svg {
+    color: var(--oc-ink-cobalt);
+}
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-slot="dropdown-menu-separator"] {
+    background-color: var(--oc-hairline);
+}
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-slot="dropdown-menu-label"] {
+    font-size: 10.5px;
+    font-weight: 650;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-slot="tooltip-content"] {
+    border-radius: 9px;
+    box-shadow: var(--oc-shadow-float);
+}
+
+/* ── Dialogs ──────────────────────────────────────────────────────────── */
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-slot="dialog-content"] {
+    border-color: var(--oc-hairline);
+    border-radius: 24px;
+    corner-shape: round;
+    box-shadow:
+        var(--oc-shadow-float),
+        0 40px 90px -30px rgb(20 27 61 / 0.35);
+}
+:root.dark:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-slot="dialog-content"] {
+    box-shadow:
+        var(--oc-shadow-float),
+        0 40px 90px -30px rgb(0 0 0 / 0.7);
+}
+/* The page behind a dialog sinks into a soft ink veil. */
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-slot="dialog-overlay"] {
+    background-color: color-mix(in srgb, var(--surface-foreground) 18%, transparent);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+}
+
+/* ── Toasts ───────────────────────────────────────────────────────────── */
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-sonner-toast] {
+    border-radius: 18px !important;
+    box-shadow: var(--oc-shadow-float) !important;
+}
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-sonner-toast] :is([data-button], [data-cancel]) {
+    border-radius: 999px !important;
+    padding-inline: 12px !important;
+}
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-sonner-toast] [data-title] {
+    font-weight: 650 !important;
+    letter-spacing: -0.01em;
+}
+
+/* ── Chat: tool rows, activity, output, code ──────────────────────────── */
+/* Tool output prints on a paper card with a hairline and no grey mud. */
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-oc-personal-interactions] :is(.tool-output-surface, .tool-input-surface) {
+    background-color: color-mix(in srgb, var(--surface-elevated) 70%, transparent);
+    box-shadow: inset 0 0 0 1px var(--oc-hairline);
+    border-color: transparent;
+}
+/* Code blocks: a framed plate with a tracked mono caption for the language. */
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) .markdown-content [data-markdown="code-block"] {
+    border-color: var(--oc-hairline-strong);
+    border-radius: 14px;
+    box-shadow: 0 10px 24px -18px rgb(20 27 61 / 0.4);
+}
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-markdown="code-block-header"] {
+    border-bottom-color: var(--oc-hairline);
+    background: color-mix(in srgb, var(--primary-base) 6%, var(--surface-muted));
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+/* Inline code: a small cobalt-tinted chip. */
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) .markdown-content :not(pre) > code {
+    border-radius: 6px;
+    background-color: color-mix(in srgb, var(--primary-base) 8%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-base) 12%, transparent);
+}
+/* Tables ride the same hairline. */
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) .markdown-content :is(table, th, td) {
+    border-color: var(--oc-hairline);
+}
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) .markdown-content blockquote {
+    border-left-color: var(--oc-ink-cobalt);
+    font-family: var(--oc-font-serif);
+    font-size: 1.08em;
+}
+/* Headings in answers pick up the display face so long replies scan. */
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) .markdown-content :is(h1, h2) {
+    font-family: var(--oc-font-display);
+    font-stretch: 108%;
+    letter-spacing: -0.02em;
+}
+
+/* ── Scrollbars ───────────────────────────────────────────────────────── */
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) *::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+}
+
+/* ── Empty states ─────────────────────────────────────────────────────── */
+/* A short serif line on a faint stipple band, like the poster's dust. */
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-oc-personal-interactions] .oc-home-empty {
+    position: relative;
+    padding: 12px 8px 10px;
+    border-radius: 12px;
+    background:
+        radial-gradient(circle, color-mix(in srgb, var(--primary-base) 18%, transparent) 0.6px, transparent 1px) 0 0 / 6px 6px;
+    -webkit-mask-image: linear-gradient(to right, #000 0%, #000 70%, rgb(0 0 0 / 0.85) 100%);
+    color: var(--surface-muted-foreground);
+    font-family: var(--oc-font-serif);
+    font-size: 15px;
+    font-style: italic;
+    line-height: 1.35;
+}
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) .oc-empty-badge {
+    color: var(--oc-ink-cobalt);
+    background:
+        radial-gradient(circle, color-mix(in srgb, var(--primary-base) 22%, transparent) 0.6px, transparent 1px) 0 0 / 5px 5px,
+        var(--surface-elevated);
+    box-shadow: inset 0 0 0 1px var(--oc-hairline), var(--oc-shadow-card);
+}
+
+/* ── Loading skeletons: a sheen that slides (transform only) ──────────── */
+[data-slot="skeleton"], .oc-home-task-skeleton {
+    position: relative;
+    overflow: hidden;
+}
+[data-slot="skeleton"]::after, .oc-home-task-skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 20%, color-mix(in srgb, var(--surface-background) 55%, transparent) 50%, transparent 80%);
+    transform: translateX(-100%);
+    animation: oc-polish-sheen 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    pointer-events: none;
+}
+@keyframes oc-polish-sheen {
+    to { transform: translateX(100%); }
+}
+
+/* ── Context panel: contents settle in as the column opens ────────────── */
+[data-oc-personal-interactions] aside[data-context-panel="true"]:not([inert]) > .z-10 {
+    animation: oc-polish-panel-in var(--oc-glide-duration) var(--oc-glide-ease);
+}
+@keyframes oc-polish-panel-in {
+    from { transform: translate3d(12px, 0, 0); opacity: 0.6; }
+    to { transform: none; opacity: 1; }
+}
+
+/* ── Habits and tasks: a stamped check and a burst when the day is done ─ */
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) .oc-home-habits [role="checkbox"][data-checked] {
+    border-color: transparent;
+    background-color: var(--primary-base);
+}
+:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) .oc-home-habits [role="checkbox"][data-checked] > * {
+    color: var(--primary-foreground);
+}
+/* A single ink ring leaves the box as it is ticked. */
+.oc-home-habits [role="checkbox"][data-checked]::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    border: 2px solid var(--primary-base);
+    opacity: 0;
+    pointer-events: none;
+    animation: oc-polish-ring 520ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes oc-polish-ring {
+    0% { opacity: 0.7; transform: scale(1); }
+    100% { opacity: 0; transform: scale(2.1); }
+}
+.oc-home-habits label { transition: opacity 200ms ease-out; }
+.oc-home-habits label:has([data-checked]) { opacity: 0.78; }
+
+/* Every habit ticked: the heading's check stamps and a ring of ink dots
+   bursts from it once. Pure CSS, plays when the last box is ticked. */
+section:has(> .oc-home-habits[data-complete]) > .oc-home-card-heading { position: relative; }
+section:has(> .oc-home-habits[data-complete]) > .oc-home-card-heading > svg {
+    color: var(--status-success, #16a34a);
+    animation: oc-polish-stamp 560ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+section:has(> .oc-home-habits[data-complete]) > .oc-home-card-heading::after {
+    content: "";
+    position: absolute;
+    left: -11px;
+    top: 50%;
+    width: 36px;
+    height: 36px;
+    margin-top: -18px;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 50% 0%, var(--primary-base) 2px, transparent 2.5px),
+        radial-gradient(circle at 100% 50%, var(--status-success, #16a34a) 2px, transparent 2.5px),
+        radial-gradient(circle at 50% 100%, var(--primary-base) 2px, transparent 2.5px),
+        radial-gradient(circle at 0% 50%, var(--status-success, #16a34a) 2px, transparent 2.5px),
+        radial-gradient(circle at 15% 15%, var(--status-success, #16a34a) 1.6px, transparent 2px),
+        radial-gradient(circle at 85% 15%, var(--primary-base) 1.6px, transparent 2px),
+        radial-gradient(circle at 85% 85%, var(--status-success, #16a34a) 1.6px, transparent 2px),
+        radial-gradient(circle at 15% 85%, var(--primary-base) 1.6px, transparent 2px);
+    opacity: 0;
+    pointer-events: none;
+    animation: oc-polish-burst 760ms cubic-bezier(0.16, 1, 0.3, 1) 80ms both;
+}
+@keyframes oc-polish-stamp {
+    0% { transform: scale(0.6) rotate(-14deg); }
+    60% { transform: scale(1.3) rotate(4deg); }
+    100% { transform: none; }
+}
+@keyframes oc-polish-burst {
+    0% { opacity: 1; transform: scale(0.3); }
+    70% { opacity: 0.9; }
+    100% { opacity: 0; transform: scale(1.6); }
+}
+/* Task cards that land in Done: replace the box-shadow glow (a paint
+   animation) with a ring that scales out. */
+[data-oc-personal-interactions] .oc-task-done {
+    position: relative;
+    animation: oc-task-land 360ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+[data-oc-personal-interactions] .oc-task-done::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: 0 0 0 2px var(--status-success, #16a34a);
+    opacity: 0;
+    pointer-events: none;
+    animation: oc-polish-ring-soft 620ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes oc-polish-ring-soft {
+    0% { opacity: 0.8; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.06); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root { --oc-glide-duration: 0ms; }
+    [data-slot="skeleton"]::after, .oc-home-task-skeleton::after { animation: none; opacity: 0; }
+    [data-oc-personal-interactions] aside[data-context-panel="true"]:not([inert]) > .z-10,
+    .oc-home-habits [role="checkbox"][data-checked]::after,
+    section:has(> .oc-home-habits[data-complete]) > .oc-home-card-heading > svg,
+    section:has(> .oc-home-habits[data-complete]) > .oc-home-card-heading::after,
+    [data-oc-personal-interactions] .oc-task-done::after { animation: none !important; }
+    .oc-home-habits label { transition: none; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+    [data-oc-personal-interactions] aside.bg-background [data-sidebar-sticky-header] > :first-child::before {
+        background-color: var(--surface-background);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+    :root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-slot="dialog-overlay"] {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+}
+
+@media (forced-colors: active) {
+    [data-slot="skeleton"]::after, .oc-home-task-skeleton::after,
+    section:has(> .oc-home-habits[data-complete]) > .oc-home-card-heading::after { display: none; }
+    .oc-home-empty { background: none !important; }
+}
