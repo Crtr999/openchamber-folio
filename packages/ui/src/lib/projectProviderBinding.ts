@@ -22,6 +22,7 @@ type CatalogProvider = { id: string; models: ReadonlyArray<{ id: string }> };
 const OPEN_CARTER_FOLDER_PROVIDERS: Record<string, string[]> = {
   claude: ['claude-code'],
   chatgpt: ['openai'],
+  health: ['openai'],
   gemini: ['gemini-cli'],
 };
 

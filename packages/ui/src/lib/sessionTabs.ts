@@ -1,13 +1,17 @@
+import { useGeminiStore } from '@/stores/useGeminiStore';
 import { useSessionTabsStore } from '@/stores/useSessionTabsStore';
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useUIStore } from '@/stores/useUIStore';
 import { canUseElectronDesktopIPC, isDesktopLocalOriginActive } from '@/lib/desktop';
+import { useVeniceStore } from '@/stores/useVeniceStore';
 import { useClaudeStore } from '@/stores/useClaudeStore';
 
 const websiteTabs = [
   { id: 'website:chatgpt', title: 'ChatGPT' },
   { id: 'website:claude', title: 'Claude' },
+  { id: 'website:venice', title: 'Venice' },
+  { id: 'website:gemini', title: 'Gemini' },
 ] as const;
 
 export const getWebsiteTab = (id: string) => websiteTabs.find((tab) => tab.id === id);
@@ -15,6 +19,8 @@ export const getWebsiteTab = (id: string) => websiteTabs.find((tab) => tab.id ==
 export const getActiveWebsiteTabId = (): string | null => {
   const ui = useUIStore.getState();
   if (ui.isChatGPTPageOpen) return 'website:chatgpt';
+  if (ui.isVenicePageOpen) return 'website:venice';
+  if (ui.isGeminiPageOpen) return 'website:gemini';
   if (ui.isClaudePageOpen) return 'website:claude';
   return null;
 };
@@ -29,6 +35,8 @@ export const activateHeaderTab = (id: string): boolean => {
     if (!isWebsiteTabAvailable()) return false;
     // ChatGPT's current full/integrated mode belongs to its retained workspace.
     if (id === 'website:chatgpt') ui.setChatGPTPageOpen(true);
+    if (id === 'website:venice') useVeniceStore.getState().open();
+    if (id === 'website:gemini') useGeminiStore.getState().open();
     if (id === 'website:claude') useClaudeStore.getState().open();
     return true;
   }

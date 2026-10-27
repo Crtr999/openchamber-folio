@@ -1512,6 +1512,7 @@ const startLocalServer = async () => {
   const { startWebUiServer } = await import('@openchamber/web/server/index.js');
 
   const handle = await startWebUiServer({
+    desktopWebsiteModels: true,
     port: chosenPort,
     host: bindHost,
     uiPassword: desktopUiPassword || null,
@@ -1523,6 +1524,7 @@ const startLocalServer = async () => {
       : undefined,
     onDesktopNotification: (payload) => maybeShowNativeNotification(payload),
     getIsWindowFocused: isAnyWindowFocused,
+    personalAwareness: { readSources: (input) => personalHome.readAwareness(input) },
     aiTaskConnection: {
       filePath: path.join(app.getPath('userData'), 'ai-tasks.json'),
       notion: personalHome.automation,
@@ -5144,7 +5146,7 @@ const attachWebsiteGuestSecurity = (contents) => {
     const runtime = parent ? getWindowRuntimeConfig(parent) : null;
     const localParent = Boolean(parent && isLocalSender(contents)
       && sameOrigin(runtime?.apiBaseUrl || '', state.localOrigin || state.sidecarUrl || ''));
-    secureWebsiteAttachment({ event, webPreferences, params, localParent });
+    secureWebsiteAttachment({ event, webPreferences, params, localParent, enterpriseBlocked: isEnterpriseMode() });
   });
 };
 
@@ -5673,7 +5675,7 @@ app.whenReady().then(async () => {
   registerPackagedUiProtocol();
   hardenBrowserPanelSession();
   void grantComputerAccess();
-  hardenWebsiteSessions(partition => session.fromPartition(partition));
+  hardenWebsiteSessions(partition => session.fromPartition(partition), isEnterpriseMode);
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     void meetingBoundary.displayMedia(request, callback);
   }, { useSystemPicker: false });

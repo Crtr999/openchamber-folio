@@ -1,3 +1,4 @@
+import './HomeFriendAvatar.css';
 import React from 'react';
 import { friendColorVariable, type FriendColor, type FriendBody } from '@/lib/friends';
 import { cn } from '@/lib/utils';

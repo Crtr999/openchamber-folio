@@ -205,6 +205,73 @@
 }
 
 /* ── Chat: tool rows, activity, output, code ──────────────────────────── */
+/* Compact bordered pills for thinking, worked-for rollups, and tool rows. */
+:is(.oc-thinking-pill, .oc-worked-pill, .oc-tool-pill) {
+    border-color: var(--oc-hairline-strong, var(--interactive-border));
+    background-color: color-mix(in srgb, var(--surface-elevated) 62%, transparent);
+    transition: background-color 120ms ease-out, border-color 120ms ease-out;
+}
+:is(.oc-thinking-pill, .oc-worked-pill, .oc-tool-pill[role="button"]):hover {
+    background-color: var(--interactive-hover);
+    border-color: var(--oc-hairline-strong, var(--interactive-border));
+}
+
+/* Framed auto-scrolling thinking card with top and bottom alpha fade masks. */
+.oc-thinking-card {
+    border-color: var(--oc-hairline-strong, var(--interactive-border));
+    background-color: color-mix(in srgb, var(--surface-elevated) 46%, transparent);
+    box-shadow: var(--oc-shadow-card);
+}
+.oc-thinking-scroll-wrapper.max-h-80 {
+    max-height: 15.5rem;
+}
+.oc-thinking-scroller[data-scroll-shadow="true"][data-orientation="vertical"]:is([data-top-scroll="true"], [data-top-bottom-scroll="true"]) {
+    mask-image: linear-gradient(
+        to bottom,
+        transparent 0%,
+        #000 32px,
+        #000 calc(100% - 24px),
+        transparent 100%
+    );
+    -webkit-mask-image: linear-gradient(
+        to bottom,
+        transparent 0%,
+        #000 32px,
+        #000 calc(100% - 24px),
+        transparent 100%
+    );
+}
+.oc-thinking-scroller[data-scroll-shadow="true"][data-orientation="vertical"][data-bottom-scroll="true"] {
+    mask-image: linear-gradient(
+        to bottom,
+        #000 0%,
+        #000 calc(100% - 28px),
+        transparent 100%
+    );
+    -webkit-mask-image: linear-gradient(
+        to bottom,
+        #000 0%,
+        #000 calc(100% - 28px),
+        transparent 100%
+    );
+}
+.oc-thinking-card .markdown-content.markdown-reasoning {
+    font-size: var(--text-meta);
+    line-height: round(1.55em, 1px);
+}
+.oc-thinking-card .markdown-content.markdown-reasoning p + p,
+.oc-thinking-card .markdown-content.markdown-reasoning > [data-md-block] + [data-md-block] > p {
+    margin-top: 0.6em;
+}
+.oc-thinking-card .markdown-content.markdown-reasoning :not(pre) > code {
+    color: var(--syntax-keyword, var(--primary-text, var(--primary-base))) !important;
+    background-color: color-mix(in srgb, var(--surface-foreground) 7%, transparent);
+    box-shadow: inset 0 0 0 1px var(--oc-hairline, var(--interactive-border));
+    border-radius: 5px;
+    padding: 0.1em 0.38em;
+    font-size: 0.9em;
+}
+
 /* Tool output prints on a paper card with a hairline and no grey mud. */
 :root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-oc-personal-interactions] :is(.tool-output-surface, .tool-input-surface) {
     background-color: color-mix(in srgb, var(--surface-elevated) 70%, transparent);

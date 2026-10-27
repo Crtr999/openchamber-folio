@@ -79,6 +79,7 @@ type Project = {
 };
 
 type SessionProjectCollectionProps = {
+  leadingContent?: React.ReactNode;
   topology: {
     projects: Project[];
     availableWorktreesByProject: Map<string, WorktreeMetadata[]>;
@@ -145,7 +146,7 @@ type SessionProjectCollectionProps = {
   };
 };
 
-const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topology, view, actions }) => {
+const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topology, view, actions, leadingContent }) => {
   const { alwaysShowActions, notifyOnSubtasks, projectViewActions, rowActions, ...scrollerActions } = actions;
   const foldersMap = useSessionFoldersStore((state) => state.foldersMap);
   const collapsedFolderIds = useSessionFoldersStore((state) => state.collapsedFolderIds);
@@ -839,7 +840,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
         isInlineEditing={editingId !== null}
         startFolderRename={startFolderRename}
       />
-      <SessionProjectScroller model={scrollerModel} view={scrollerView} actions={scrollerActionSet} />
+      <SessionProjectScroller leadingContent={leadingContent} model={scrollerModel} view={scrollerView} actions={scrollerActionSet} />
     </SessionRowOrderProvider>
   </>;
 };

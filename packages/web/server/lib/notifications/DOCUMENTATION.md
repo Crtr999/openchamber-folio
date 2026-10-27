@@ -184,3 +184,5 @@ Both web entrypoints now use `packages/web/src/pwaRegistration.ts` to register t
 ### Companion completion filtering
 
 The trigger runtime accepts `shouldNotifyCompletion`, defaulting to true for existing consumers. The companion policy checks enrolled result sessions before ready notifications. Goal completion uses the same policy before every delivery channel; blocked/budget/error/question/permission paths retain their existing behavior. The companion module owns enrollment, exact unchanged markers, complete-result comparison and failure semantics.
+
+When `sessionGoalEnabled` is false, persisted active goal metadata cannot suppress the turn completion gate. The disabled goal loop will never settle that flag; completed companion results must still reach their durable inbox and quiet-hours delivery policy. With goal mode enabled, active-goal suppression remains unchanged.

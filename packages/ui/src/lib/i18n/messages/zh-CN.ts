@@ -1,3 +1,6 @@
+import { geminiI18n } from './gemini.i18n';
+import { veniceI18n } from './venice.i18n';
+import { healthI18n } from './health.i18n';
 import { companionI18n } from './companion.i18n';
 import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
@@ -25,6 +28,9 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 import { notionPickerI18n } from './notion-picker.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...healthI18n["zh-CN"],
+  'activity.title': '动态',
+  'activity.needsYou': '需要你处理',
   ...companionI18n['zh-CN'],
   ...notionPickerI18n['zh-CN'],
   ...friendsI18n['zh-CN'],
@@ -32,6 +38,8 @@ export const dict: Record<I18nKey, string> = {
   'workspace.officePreview': '仅显示文本和嵌入图像，不呈现原始布局、图表、动画或实时计算。',
   ...chatgptI18n['zh-CN'],
   ...claudeI18n['zh-CN'],
+  ...veniceI18n['zh-CN'],
+  ...geminiI18n['zh-CN'],
   ...meetingsI18n['zh-CN'],
   'meeting.quickStart': '开始会议',
   'meeting.partial': '部分已保存会议无法读取。列表不完整，损坏文件保持不变。',
@@ -351,6 +359,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.dialog.actions.runNow': '立即运行',
   'sessions.scheduledTasks.dialog.actions.edit': '编辑',
   'sessions.scheduledTasks.dialog.actions.editAria': '编辑 {taskName}',
+  'sessions.scheduledTasks.dialog.actions.delete': "删除",
   'sessions.scheduledTasks.dialog.actions.deleteAria': '删除 {taskName}',
   'sessions.scheduledTasks.dialog.loading': '正在加载任务...',
   'sessions.scheduledTasks.dialog.empty.noTasks': '暂无计划任务。',
@@ -413,7 +422,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.editor.scheduleType.daily': '每天',
   'sessions.scheduledTasks.editor.scheduleType.weekly': '每周',
   'sessions.scheduledTasks.editor.scheduleType.once': '一次性',
-  'sessions.scheduledTasks.editor.scheduleType.cron': 'Cron',
+  'sessions.scheduledTasks.editor.scheduleType.cron': "自定义计划（高级）",
   'sessions.scheduledTasks.editor.date.label': '日期',
   'sessions.scheduledTasks.editor.date.placeholder': '选择日期',
   'sessions.scheduledTasks.editor.date.previousMonth': '上个月',
@@ -460,6 +469,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.editor.validation.timezoneRequired': '时区为必填项',
   'sessions.scheduledTasks.editor.validation.cronRequired': 'Cron 表达式为必填项',
   'sessions.scheduledTasks.editor.validation.cronInvalid': 'Cron 表达式无效',
+  'sessions.scheduledTasks.editor.cronExpression.help': "用简短代码编写的重复计划。普通提醒请选择每天或每周。例如，0 9 * * 1 表示在所选时区每周一的 9:00 运行。",
   'sessions.scheduledTasks.editor.cronExpression.label': 'Cron 表达式',
   'sessions.scheduledTasks.editor.cronExpression.placeholder': '*/5 * * * *',
   'sessions.scheduledTasks.editor.cronExpression.nextRuns': '下次运行',
@@ -3571,6 +3581,8 @@ export const dict: Record<I18nKey, string> = {
   'multirun.overview.bar.waiting': '等待你处理的运行：{count}。你回复之前，这次运行不会结束。',
   'multirun.overview.prompt.expand': '展开全部',
   'multirun.overview.prompt.collapse': '收起',
+  'computer.start': "启动计算机",
+  'computer.connectionError': "计算机连接不可用",
   'computer.title': "代理的电脑",
   'computer.hint': "选择一个屏幕来观看它工作。",
   'computer.noScreens': "电脑上没有打开任何屏幕。",

@@ -81,6 +81,24 @@ if [ ! -x "$DST/Contents/MacOS/Open Carter" ]; then
   exit 1
 fi
 
+# 6b. Guard the code signature. macOS will not persist privacy grants (screen
+# recording, system audio, microphone) for a bundle whose seal does not verify,
+# which shows up as "Allow" never sticking. The build itself verifies; this only
+# repairs the case where the installed bundle was hand-patched after signing.
+if codesign --verify --strict "$DST" >/dev/null 2>&1; then
+  log "signature verified after install"
+else
+  log "WARN: installed bundle failed signature verification, re-sealing"
+  ENTS="$HOME/Developer/openchamber/.open-carter-entitlements.plist"
+  if codesign -d --entitlements :- "$DST" > "$ENTS" 2>/dev/null && [ -s "$ENTS" ] \
+     && codesign --force --sign - --options runtime --generate-entitlement-der --entitlements "$ENTS" "$DST" >> "$LOG" 2>&1; then
+    log "re-signed installed bundle ad hoc with the bundled entitlements"
+  else
+    log "WARN: re-sign failed; privacy grants may not persist"
+  fi
+  rm -f "$ENTS"
+fi
+
 # 7. Relaunch.
 open -a "$DST"
 log "relaunched"

@@ -1,3 +1,4 @@
+import { createHealthDataAPI } from '@openchamber/ui/lib/api/native-health';
 import type { RuntimeAPIs } from '@openchamber/ui/lib/api/types';
 import { createDesktopThemeFileAPI } from '@openchamber/ui/lib/desktop';
 import {
@@ -39,6 +40,7 @@ export const createWebAPIs = (options: WebAPIsOptions = {}): RuntimeAPIs => {
   const activeUrls = createActiveRuntimeUrlResolver();
 
   return {
+   healthData: createHealthDataAPI(),
    themeFiles: createDesktopThemeFileAPI(),
   runtime: { platform: 'web', isDesktop: false, isVSCode: false, label: 'web' },
   terminal: createWebTerminalAPI(),

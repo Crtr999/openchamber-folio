@@ -1,5 +1,7 @@
+import { GeminiFolder } from '../shell/GeminiFolder';
 import React from 'react';
 import { ChatGPTFolder } from '../shell/ChatGPTFolder';
+import { VeniceFolder } from '../shell/VeniceFolder';
 import { ClaudeFolder } from '../shell/ClaudeFolder';
 import { cn } from '@/lib/utils';
 import {
@@ -113,13 +115,24 @@ type Actions = {
   setSingleProjectId: (id: string) => void;
 };
 
-type Props = { model: SessionProjectScrollerModel; view: View; actions: Actions };
+type Props = { leadingContent?: React.ReactNode; model: SessionProjectScrollerModel; view: View; actions: Actions };
 
 const getProjectLabel = (project: ProjectSection['project'], homeDirectory: string | null): string => formatProjectLabel(
   project.label?.trim() || formatDirectoryName(project.normalizedPath, homeDirectory) || project.normalizedPath,
 );
 
-function SessionProjectScrollerComponent({ model, view, actions }: Props): React.ReactNode {
+function SessionProjectScrollerComponent({ model, view, actions, leadingContent }: Props): React.ReactNode {
+  const leadingRef = React.useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = React.useState(0);
+  React.useLayoutEffect(() => {
+    const element = leadingRef.current;
+    if (!element) return;
+    const measure = () => setScrollMargin(element.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   streamPerfCount('ui.sidebar_projects_list.render');
   const { t } = useI18n();
   const childStores = useChildStoreManager();
@@ -448,6 +461,7 @@ function SessionProjectScrollerComponent({ model, view, actions }: Props): React
         ref={setScrollContainer} useScrollShadow hideTopScrollShadow={!view.timelineView} scrollShadowSize={40}
         outerClassName="flex-1 min-h-0" className="oc-sidebar-scroller pb-1 pl-2.5 pr-2 [overflow-anchor:none]"
       >
+        <div ref={leadingRef}>{leadingContent}</div>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => {
           setIsProjectDragging(projectDragIds.has(String(event.active.id)));
         }} onDragCancel={() => setIsProjectDragging(false)} onDragEnd={(event) => {
@@ -490,11 +504,13 @@ function SessionProjectScrollerComponent({ model, view, actions }: Props): React
           actions.setGroupOrderByProject((current) => new Map(current).set(projectId, arrayMove(section.groups, from, to).map((group) => group.id)));
         }}>
           <SortableContext items={structuralIds} strategy={verticalListSortingStrategy}>
-            <SessionSidebarRows model={model.rowModel} scrollElement={scrollElement} pinnedRowIndexes={pinnedRowIndexes} renderRow={renderRow} onFirstVisibleIndexChange={handleFirstVisibleIndexChange} />
+            <SessionSidebarRows scrollMargin={scrollMargin} model={model.rowModel} scrollElement={scrollElement} pinnedRowIndexes={pinnedRowIndexes} renderRow={renderRow} onFirstVisibleIndexChange={handleFirstVisibleIndexChange} />
           </SortableContext>
         </DndContext>
         <ChatGPTFolder />
         <ClaudeFolder />
+        <VeniceFolder />
+        <GeminiFolder />
       </ScrollableOverlay>
     </CrossfadeZoneHeaders>
     <FolderDeleteConfirmDialog value={folderDeleteConfirm} setValue={setFolderDeleteConfirm} onConfirm={() => {

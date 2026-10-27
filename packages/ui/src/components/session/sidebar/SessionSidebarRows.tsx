@@ -8,6 +8,7 @@ import {
 } from './sessionSidebarVirtualization';
 
 type Props = {
+  scrollMargin?: number;
   model: SessionSidebarRowModel;
   scrollElement: HTMLElement | null;
   pinnedRowIndexes: ReadonlySet<number>;
@@ -24,6 +25,7 @@ function sectionSpacingAfter(row: SessionSidebarRow, nextRow: SessionSidebarRow 
 
 export function SessionSidebarRows({
   model,
+  scrollMargin = 0,
   scrollElement,
   pinnedRowIndexes,
   renderRow,
@@ -44,12 +46,13 @@ export function SessionSidebarRows({
     estimateSize,
     getItemKey,
     overscan: 8,
+    scrollMargin,
     rangeExtractor,
   });
   const virtualItems = virtualizer.getVirtualItems();
   const totalSize = scrollElement ? virtualizer.getTotalSize() : 0;
   const maximumScrollOffset = scrollElement
-    ? Math.max(totalSize - scrollElement.clientHeight, 0)
+    ? Math.max(totalSize + scrollMargin - scrollElement.clientHeight, 0)
     : 0;
   const scrollOffset = scrollElement
     ? Math.min(scrollElement.scrollTop, maximumScrollOffset)
@@ -88,7 +91,7 @@ export function SessionSidebarRows({
           top: 0,
           left: 0,
           width: '100%',
-          transform: `translateY(${item.start}px)`,
+          transform: `translateY(${item.start - scrollMargin}px)`,
         }}
       >
         {renderRow(row, item.index)}

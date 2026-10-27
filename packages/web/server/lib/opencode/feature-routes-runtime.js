@@ -17,6 +17,7 @@ import { registerProjectContextRoutes } from '../project-context/routes.js';
 import { registerProjectSetupRoutes } from '../projects/routes.js';
 import { registerAgentMemoryRoutes } from '../agent-memory/routes.js';
 import { registerSessionKnowledgeRoutes } from '../session-knowledge/routes.js';
+import { registerHealthRoutes } from '../health/routes.js';
 import { registerComputerRoutes } from '../computer/routes.js';
 import { fetchComputerState, resolveComputerEndpoint, sendComputerClipboard } from '../computer/endpoint.js';
 import { registerPermissionAutoAcceptRoutes } from '../permission-auto-accept/runtime.js';
@@ -368,6 +369,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     registerAgentMemoryRoutes(app, { agentMemoryRuntime, isAgentMemoryEnabled });
     registerSessionKnowledgeRoutes(app, { sessionKnowledgeRuntime });
     // The agent's computer, when a tool brings one: the app shows its screens.
+    registerHealthRoutes(app, { dataDir: openchamberDataDir });
     registerComputerRoutes(app, {
       resolveEndpoint: () => resolveComputerEndpoint(),
       fetchState: (endpoint) => fetchComputerState(endpoint),

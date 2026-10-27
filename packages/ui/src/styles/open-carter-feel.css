@@ -67,7 +67,7 @@
 /* ── Sidebar ───────────────────────────────────────────────────────────── */
 /* Clear hierarchy: section headings are firm, rows a step quieter, the
    current chat fully lit with a marker that grows in. */
-[data-oc-personal-interactions] :is([data-sidebar-sticky-header] .typography-ui-label, [data-sidebar-scheduled] .typography-ui-label, .group\/chats .typography-ui-label, .group\/website span.truncate) {
+[data-oc-personal-interactions] :is([data-sidebar-sticky-header] .typography-ui-label, [data-sidebar-scheduled] [aria-expanded] .typography-ui-label, .group\/chats .typography-ui-label, .group\/website span.truncate) {
     font-weight: 620;
     color: var(--surface-foreground);
 }
@@ -259,3 +259,5 @@
     [data-oc-personal-interactions] .session-tab-slot > *,
     .oc-empty-badge { animation: none; }
 }
+
+[data-sidebar-scheduled] [data-scheduled-task-name] { font-weight: 400; }

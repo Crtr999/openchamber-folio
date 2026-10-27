@@ -58,3 +58,17 @@ describe('commitment actions', () => {
     expect((await store.read()).items).toHaveLength(0);
   });
 });
+
+
+it('pins personal-source obligations to approved OpenAI, prevents web research, and updates a duplicate date', async () => {
+  const actions = createCommitmentActions({ store, guard: allow, getReviewModel: async () => ({ providerID: 'openai', id: 'approved' }) });
+  await run(actions, 'commitment.add', { title: 'Submit assignment', due: '2026-10-30', research: true });
+  await run(actions, 'commitment.add', { title: 'submit assignment', due: '2026-11-02', research: true });
+  const items = (await store.read()).items;
+  expect(items).toHaveLength(1);
+  expect(items[0].reviewModel).toEqual({ providerID: 'openai', id: 'approved' });
+  expect(items[0].research).toBe(false);
+  expect((await run(actions, 'commitment.list')).commitments[0].due).toBe('2026-11-02');
+  await run(actions, 'commitment.update', { commitmentId: items[0].id, research: true });
+  expect((await store.read()).items[0].research).toBe(false);
+});

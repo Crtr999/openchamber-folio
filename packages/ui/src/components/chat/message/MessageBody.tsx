@@ -48,8 +48,10 @@ import { ToolRevealOnMount } from './parts/ToolRevealOnMount';
 import { StaticToolRow } from './parts/ProgressiveGroup';
 import { isExpandableTool, isStandaloneTool } from './parts/toolRenderUtils';
 import TurnActivity from '../components/TurnActivity';
+import { WorkingStepGroup } from '../components/WorkingStepGroup';
 import { LiveActivityCollapse } from '../components/LiveActivityCollapse';
 import { LiveFinalActivityContext } from '../components/liveActivityContext';
+import { getMessagePartKey, projectWorkingStepBatches } from '../lib/turns/workingStepBatches';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
 import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
@@ -1710,6 +1712,47 @@ const AssistantMessageBody = React.memo(({
 
     const shouldRenderStandaloneActionsAfterContent = shouldShowStandaloneMessageActions && lastRenderableTextPartIndex < 0;
 
+    const useWorkingStepGroups = !isSortedRenderMode && collapsibleThinkingBlocks && !liveFinalActivity;
+
+    const effectiveWorkingStepBatches = React.useMemo(() => {
+        if (!useWorkingStepGroups) {
+            return undefined;
+        }
+        if (turnGroupingContext?.workingStepBatches) {
+            return turnGroupingContext.workingStepBatches;
+        }
+        const isLiveStream = effectiveStreamPhase === 'streaming' || effectiveStreamPhase === 'cooldown';
+        return projectWorkingStepBatches({
+            assistantMessages: [
+                {
+                    info: {
+                        id: messageId,
+                        time: {
+                            created: messageCreatedAt ?? 0,
+                            completed: messageCompletedAt ?? undefined,
+                        },
+                    },
+                    parts: visibleParts,
+                },
+            ],
+            showReasoningTraces: Boolean(showReasoningTraces),
+            isTurnWorking: Boolean(turnGroupingContext?.isWorking) || isLiveStream,
+            streamingMessageId: isLiveStream ? messageId : null,
+            turnStartedAt: turnGroupingContext?.userMessageCreatedAt ?? messageCreatedAt,
+        });
+    }, [
+        effectiveStreamPhase,
+        messageCompletedAt,
+        messageCreatedAt,
+        messageId,
+        showReasoningTraces,
+        turnGroupingContext?.isWorking,
+        turnGroupingContext?.userMessageCreatedAt,
+        turnGroupingContext?.workingStepBatches,
+        useWorkingStepGroups,
+        visibleParts,
+    ]);
+
     const renderedParts = React.useMemo(() => {
         const answerRendered: React.ReactNode[] = [];
         const activityRendered: React.ReactNode[] = [];
@@ -1726,6 +1769,21 @@ const AssistantMessageBody = React.memo(({
             }
             return (activity.kind !== 'reasoning' || showReasoningTraces) && !isEmptyTextPart(activity.part);
         }));
+
+        const workingBatchByAnchorKey = new Map<string, NonNullable<typeof effectiveWorkingStepBatches>[number]>();
+        const absorbedWorkingStepKeys = new Set<string>();
+        if (useWorkingStepGroups && effectiveWorkingStepBatches) {
+            effectiveWorkingStepBatches.forEach((batch) => {
+                if (batch.anchorMessageId === messageId) {
+                    workingBatchByAnchorKey.set(batch.anchorPartKey, batch);
+                }
+                batch.steps.forEach((step) => {
+                    if (step.messageId === messageId) {
+                        absorbedWorkingStepKeys.add(step.key);
+                    }
+                });
+            });
+        }
 
         const renderSegmentBlock = (segment: TurnActivityGroup): React.ReactNode | null => {
             if (!shouldRenderActivityGroup || !toggleActivityGroup) {
@@ -1806,6 +1864,33 @@ const AssistantMessageBody = React.memo(({
         while (i < visibleParts.length) {
             const part = visibleParts[i];
             rendered = splitLiveActivity && part.type !== 'text' ? activityRendered : answerRendered;
+            const partKey = getMessagePartKey(messageId, part, i);
+
+            if (useWorkingStepGroups) {
+                const anchoredBatch = workingBatchByAnchorKey.get(partKey);
+                if (anchoredBatch) {
+                    rendered.push(
+                        <WorkingStepGroup
+                            key={anchoredBatch.id}
+                            batch={anchoredBatch}
+                            isMobile={isMobile}
+                            alwaysShowActions={alwaysShowMessageActions}
+                            expandedTools={expandedTools}
+                            onToggleTool={onToggleTool}
+                            onShowPopup={onShowPopup}
+                            animatedToolIds={animatedToolIdsLookup}
+                        />
+                    );
+                }
+                if (absorbedWorkingStepKeys.has(partKey)) {
+                    if (part.type === 'tool') {
+                        const toolPartId = part.id || `${messageId}-part-${i}-${part.type}`;
+                        flushSegmentsAfterTool(toolPartId);
+                    }
+                    i += 1;
+                    continue;
+                }
+            }
 
             if (part.type === 'text') {
                 const activity = activityByPart.get(part);
@@ -1817,7 +1902,7 @@ const AssistantMessageBody = React.memo(({
                     i += 1;
                     continue;
                 }
-                if (isFinalLiveAnswer && !hasRenderedAnswerText && (rendered.length > 0 || activityRendered.length > 0 || hasEarlierVisibleActivity || turnGroupingContext?.hasEarlierAssistantText)) {
+                if (!useWorkingStepGroups && isFinalLiveAnswer && !hasRenderedAnswerText && (rendered.length > 0 || activityRendered.length > 0 || hasEarlierVisibleActivity || turnGroupingContext?.hasEarlierAssistantText)) {
                     rendered.push(
                         <div
                             key={`final-answer-divider-${messageId}`}
@@ -1994,6 +2079,7 @@ const AssistantMessageBody = React.memo(({
         chatRenderMode,
         collapsibleThinkingBlocks,
         collapsedPreviewCount,
+        effectiveWorkingStepBatches,
         expandedTools,
         isMobile,
         isActivityOwnerMessage,
@@ -2016,6 +2102,7 @@ const AssistantMessageBody = React.memo(({
         shouldDeferSortedInlineText,
         toggleActivityGroup,
         turnGroupingContext,
+        useWorkingStepGroups,
         visibleParts,
     ]);
 

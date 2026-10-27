@@ -5,7 +5,10 @@ import { useI18n } from '@/lib/i18n';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { ModelSelector } from '@/components/sections/agents/ModelSelector';
+import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { markSessionViewed } from '@/sync/notification-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -14,6 +17,7 @@ import { MobileFullscreenSurface } from './MobileFullscreenSurface';
 
 const taskSchema = z.object({
   id: z.string(), name: z.string(), enabled: z.boolean(),
+  execution: z.object({ providerID: z.string(), modelID: z.string() }).optional(),
   state: z.object({ lastStatus: z.string().optional(), lastError: z.string().optional(), nextRunAt: z.number().optional(), lastSessionId: z.string().optional() }),
 });
 const tasksSchema = z.object({ tasks: z.array(taskSchema) });
@@ -35,8 +39,11 @@ export function CompanionPanel({ onClose }: { onClose: () => void }) {
   const setProject = useProjectsStore((state) => state.setActiveProject);
   const projectId = useProjectsStore((state) => state.activeProjectId);
   const project = useProjectsStore((state) => state.projects.find((entry) => entry.id === state.activeProjectId));
-  const providerID = useConfigStore((state) => state.currentProviderId);
-  const modelID = useConfigStore((state) => state.currentModelId);
+  const initialProviderID = useConfigStore((state) => state.currentProviderId);
+  const initialModelID = useConfigStore((state) => state.currentModelId);
+  const [providerID, setProviderID] = React.useState(initialProviderID);
+  const [modelID, setModelID] = React.useState(initialModelID);
+  const isMobile = useUIStore(state => state.isMobile);
   const [name, setName] = React.useState('');
   const [prompt, setPrompt] = React.useState('');
   const [time, setTime] = React.useState('09:00');
@@ -63,7 +70,11 @@ export function CompanionPanel({ onClose }: { onClose: () => void }) {
       const result = tasksSchema.parse(await response.json());
       if (sequence === generation.current) {
         setTasks(result.tasks); setInbox(companion.inbox);
-        if (!settingsDirty.current) setSettings(companion.settings);
+        if (!settingsDirty.current) {
+          setSettings(companion.settings);
+          const execution = result.tasks.find(task => task.id === 'companion:project-monitor')?.execution;
+          if (execution) { setProviderID(execution.providerID); setModelID(execution.modelID); }
+        }
       }
     } catch {
       if (sequence === generation.current) setFailed(true);
@@ -114,21 +125,38 @@ export function CompanionPanel({ onClose }: { onClose: () => void }) {
     } catch { if (runtime === getRuntimeKey() && scope === owner.current) setFailed(true); }
     finally { if (runtime === getRuntimeKey() && scope === owner.current) { busyRef.current = false; setBusy(false); } }
   };
-  const openResult = async (id: string, markSeen = false) => {
+  const openResult = async (id: string, markSeen = true) => {
     const scope = owner.current;
     const runtime = getRuntimeKey();
+    markSessionViewed(id);
     if (markSeen && projectId) {
       try {
         const response = await runtimeFetch(`/api/projects/${encodeURIComponent(projectId)}/companion/inbox/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seen: true }) });
-        if (!response.ok) throw new Error('mark seen');
+        if (!response.ok && response.status !== 404) throw new Error('mark seen');
       } catch { setFailed(true); }
     }
     if (scope !== owner.current || runtime !== getRuntimeKey()) return;
     await useSessionUIStore.getState().setCurrentSession(id, project?.path ?? null);
     onClose();
   };
+  const closePanel = React.useCallback(() => {
+    if (projectId) {
+      for (const entry of inbox) {
+        markSessionViewed(entry.id);
+        if (!entry.seen) {
+          void runtimeFetch(`/api/projects/${encodeURIComponent(projectId)}/companion/inbox/${encodeURIComponent(entry.id)}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seen: true }),
+          }).catch(() => { /* ignore */ });
+        }
+      }
+      for (const task of tasks ?? []) {
+        if (task.state.lastSessionId) markSessionViewed(task.state.lastSessionId);
+      }
+    }
+    onClose();
+  }, [inbox, onClose, projectId, tasks]);
   const editSettings = (patch: Partial<Settings>) => { settingsDirty.current = true; setSettings((current) => ({ ...current, ...patch })); };
-  return <MobileFullscreenSurface open title={t('companion.title')} onClose={onClose}>
+  return <MobileFullscreenSurface open title={t('companion.title')} onClose={closePanel} variant={isMobile ? 'fullscreen' : 'dialog'} dialogAlign="app">
     <div className="h-full space-y-4 overflow-y-auto p-4">
       <p className="text-sm text-muted-foreground">{t('companion.hint')}</p>
       <Select value={projectId ?? ''} onValueChange={setProject} disabled={busy}>
@@ -146,12 +174,13 @@ export function CompanionPanel({ onClose }: { onClose: () => void }) {
             <p className="whitespace-pre-wrap break-words text-sm">{entry.excerpt}</p>
             <p className="text-sm text-muted-foreground">{new Date(entry.createdAt).toLocaleString()}</p>
             <Button variant="outline" size="sm" onClick={() => void openResult(entry.id, true)}>{t('companion.result')}</Button>
-            <Button variant="ghost" size="sm" disabled={busy} onClick={() => void mutate(`/inbox/${encodeURIComponent(entry.id)}`, 'PATCH', { dismissed: true })}>{t('companion.dismiss')}</Button>
+            <Button variant="ghost" size="sm" disabled={busy} onClick={() => { markSessionViewed(entry.id); void mutate(`/inbox/${encodeURIComponent(entry.id)}`, 'PATCH', { dismissed: true }); }}>{t('companion.dismiss')}</Button>
           </article>)}
         </section>
         <form className="space-y-3 rounded-lg border border-border p-3" onSubmit={(event) => { event.preventDefault(); void mutate('/settings', 'PUT', { ...settings, providerID, modelID }); }}>
           <label className="flex items-center gap-2"><Checkbox checked={settings.activityEnabled} onChange={(value) => editSettings({ activityEnabled: value })} />{t('companion.monitor')}</label>
           <p className="text-sm text-muted-foreground">{t('companion.monitorHint')}</p>
+          <ModelSelector providerId={providerID} modelId={modelID} directory={project?.path} onChange={(provider, model) => { settingsDirty.current = true; setProviderID(provider); setModelID(model); }} />
           <label className="block text-sm">{t('sessions.scheduledTasks.editor.timezone.label')}<input required className="ml-2 max-w-full rounded-md border border-input bg-background p-2" value={settings.timezone} onChange={(event) => editSettings({ timezone: event.target.value })} /></label>
           <div className="flex flex-wrap gap-3">
             <label className="text-sm">{t('companion.quietStart')}<input type="time" required className="ml-2 rounded-md border border-input bg-background p-2" value={settings.quietStart} onChange={(event) => editSettings({ quietStart: event.target.value })} /></label>
@@ -164,7 +193,7 @@ export function CompanionPanel({ onClose }: { onClose: () => void }) {
           <p>{task.name}</p>
           {task.state.lastStatus === 'error' ? <p role="alert">{task.state.lastError || t('companion.error')}</p> : null}
           {task.state.nextRunAt ? <p className="text-sm text-muted-foreground">{new Date(task.state.nextRunAt).toLocaleString()}</p> : null}
-          {task.state.lastSessionId ? <Button variant="link" size="sm" onClick={() => void openResult(task.state.lastSessionId || '')}>{t('companion.result')}</Button> : null}
+          {task.state.lastSessionId ? <Button variant="link" size="sm" onClick={() => void openResult(task.state.lastSessionId || '', true)}>{t('companion.result')}</Button> : null}
           <Button className="ml-2" variant="outline" size="sm" disabled={busy} onClick={() => void mutate(`/${encodeURIComponent(task.id)}`, 'PATCH', { enabled: !task.enabled })}>{t(task.enabled ? 'companion.pause' : 'companion.resume')}</Button>
         </section>)}
         <form className="space-y-3" onSubmit={(event) => {

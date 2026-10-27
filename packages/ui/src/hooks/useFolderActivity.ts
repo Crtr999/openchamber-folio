@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 
 import { normalizeProjectPath } from '@/lib/projectResolution';
 import { normalizeFolderKeyPath } from '@/lib/friends';
+import { useGlobalBlockingRequestsStore } from '@/sync/global-blocking-requests';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 
 export type FolderActivity = {
@@ -11,9 +12,10 @@ export type FolderActivity = {
   workingCount: number;
   /** One of them is retrying, so this folder wants attention rather than patience. */
   retrying: boolean;
+  waiting: boolean;
 };
 
-const IDLE: FolderActivity = { working: false, workingCount: 0, retrying: false };
+const IDLE: FolderActivity = { working: false, workingCount: 0, retrying: false, waiting: false };
 
 /**
  * What a folder is doing right now.
@@ -38,19 +40,30 @@ export const useFolderActivity = (
   options?: { includeNested?: boolean },
 ): FolderActivity => {
   const statusById = useGlobalSessionStatusStore((state) => state.statusById);
+  const pending = useGlobalBlockingRequestsStore(state => state.bySession);
   const includeNested = options?.includeNested === true;
   return useMemo(() => {
     const scope = normalizeProjectPath(directory ?? '');
     if (!scope) return IDLE;
     const nestedPrefix = includeNested ? `${normalizeFolderKeyPath(scope).replace(/\/+$/, '')}/` : null;
+    const belongs = (raw: string) => {
+      const normalized = normalizeProjectPath(raw);
+      return normalized === scope || Boolean(nestedPrefix && normalizeFolderKeyPath(normalized ?? '').startsWith(nestedPrefix));
+    };
     let workingCount = 0;
+    let waiting = false;
     let retrying = false;
-    for (const entry of statusById.values()) {
+    for (const request of pending.values()) {
+      if (belongs(request.directory) && (request.permissions.length || request.forms.length)) { waiting = true; break; }
+    }
+    for (const [sessionId, entry] of statusById) {
       const entryDirectory = normalizeProjectPath(entry.directory);
       if (entryDirectory !== scope) {
         if (!nestedPrefix) continue;
         if (!normalizeFolderKeyPath(entryDirectory ?? '').startsWith(nestedPrefix)) continue;
       }
+      const request = pending.get(sessionId);
+      if (request && (request.permissions.length || request.forms.length)) { waiting = true; continue; }
       if (entry.status.type === 'retry') {
         retrying = true;
         workingCount += 1;
@@ -58,6 +71,6 @@ export const useFolderActivity = (
       }
       if (entry.status.type === 'busy') workingCount += 1;
     }
-    return { working: workingCount > 0, workingCount, retrying };
-  }, [statusById, directory, includeNested]);
+    return { working: workingCount > 0, workingCount, retrying, waiting };
+  }, [statusById, pending, directory, includeNested]);
 };

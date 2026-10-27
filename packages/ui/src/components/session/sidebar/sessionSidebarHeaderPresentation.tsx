@@ -72,7 +72,7 @@ export const SessionSidebarActivityHeader: React.FC<{
     >
       {/* A friend replaces the area's own mark: the face is the mark. */}
       {friendLook ? (
-        <span className="oc-friend-activity relative inline-flex size-5 shrink-0 items-center justify-center" data-working={activityWorking ? 'true' : undefined} data-retrying={chats && activity.retrying ? 'true' : undefined}>
+        <span className="oc-friend-activity relative inline-flex size-5 shrink-0 items-center justify-center" data-working={activityWorking ? 'true' : undefined} data-waiting={chats && activity.waiting ? 'true' : undefined} data-retrying={chats && activity.retrying ? 'true' : undefined}>
           <HomeFriendAvatar body={friendLook.body} color={friendLook.color} className="size-5" />
         </span>
       ) : (

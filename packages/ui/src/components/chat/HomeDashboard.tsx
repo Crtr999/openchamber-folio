@@ -1,3 +1,4 @@
+import { useGlobalBlockingRequestsStore } from '@/sync/global-blocking-requests';
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
@@ -42,7 +43,8 @@ const greetingKey = (now = new Date()) => {
 export const HomeGreeting: React.FC = () => {
     const { t, locale } = useI18n();
     const statuses = useAllSessionStatuses();
-    const running = React.useMemo(() => Object.values(statuses).filter((status) => status && status.type !== 'idle').length, [statuses]);
+    const pending = useGlobalBlockingRequestsStore(state => state.bySession);
+    const running = React.useMemo(() => Object.entries(statuses).filter(([id, status]) => status && status.type !== 'idle' && !pending.get(id)?.permissions.length && !pending.get(id)?.forms.length).length, [statuses, pending]);
     const [now, setNow] = React.useState(() => new Date());
     React.useEffect(() => {
         const timer = setInterval(() => setNow(new Date()), 60_000);
@@ -69,7 +71,7 @@ const HomeScenePicker: React.FC = () => {
         <Button
             size="sm"
             variant="ghost"
-            className="oc-press oc-home-scene-button mt-2 h-7 rounded-full px-3 text-[12px] font-medium text-muted-foreground hover:text-foreground"
+            className="oc-press oc-home-scene-button mt-2 h-7 rounded-full px-3 text-[12px] font-medium text-foreground hover:text-foreground"
             aria-label={t('home.scene.change', { scene: sceneName })}
             title={t('home.scene.change', { scene: sceneName })}
             onClick={() => cycleHomeScene(scene.id)}
@@ -95,14 +97,14 @@ export const HomeQuickActions: React.FC<{ className?: string; stacked?: boolean 
     };
     return (
         <div className={cn(stacked ? 'flex-col items-start gap-0.5' : 'items-center gap-1', className)}>
-            <Button size="sm" variant="ghost" className="oc-press h-7 rounded-full px-3 text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
+            {<Button size="sm" variant="ghost" className="oc-press h-7 rounded-full px-3 text-[12.5px] font-medium text-foreground hover:text-foreground"
                 onClick={() => openMeetingWorkspace({ title: '', autoStart: true, directory: resolveActiveProjectDir() })}>
                 {t('meeting.quickStart')}
-            </Button>
-            <Button size="sm" variant="ghost" className="oc-press h-7 rounded-full px-3 text-[12px] text-muted-foreground/85 hover:text-foreground"
+            </Button>}
+            {<Button size="sm" variant="ghost" className="oc-press h-7 rounded-full px-3 text-[12px] text-foreground hover:text-foreground"
                 onClick={() => openMeetingWorkspace({ title: '', openLog: true })}>
                 {t('meeting.ui.log')}
-            </Button>
+            </Button>}
         </div>
     );
 };
@@ -113,6 +115,7 @@ export const HomeDashboard: React.FC = () => {
     const loadStatus = useGlobalSessionsStore((state) => state.status);
     const liveSessions = useAllLiveSessions();
     const statuses = useAllSessionStatuses();
+    const pending = useGlobalBlockingRequestsStore(state => state.bySession);
     const ranks = useSessionOrderingStore((state) => state.rankById);
     const pinnedIds = useSessionPinnedStore((state) => state.ids);
     const projects = useProjectsStore((state) => state.projects);
@@ -140,15 +143,15 @@ export const HomeDashboard: React.FC = () => {
             working: { label: t('home.working'), content: <section>
                 <h2 className="oc-home-card-heading">
                     <Icon name="flashlight" className="size-3.5" />
-                    {t('home.working')}
+                    {t('activity.title')}
                     <span className="oc-home-count ml-auto">{working.length}</span>
                 </h2>
                 {working.length ? working.slice(0, 4).map((session) => (
                     <Button key={session.id} variant="ghost" size="sm" className="oc-home-row oc-home-context-row"
                         onClick={() => useSessionUIStore.getState().setCurrentSession(session.id, session.directory)}>
-                        <span className={statuses[session.id].type === 'retry' ? 'oc-home-dot oc-home-dot-retry' : 'oc-home-dot'} />
+                        <span className={cn('oc-home-dot', pending.get(session.id)?.forms.length || pending.get(session.id)?.permissions.length ? 'oc-home-dot-waiting' : statuses[session.id].type === 'retry' ? 'oc-home-dot-retry' : '')} />
                         <span className="oc-home-row-context"><span className="truncate">{session.title}</span>
-                            <span className="oc-home-row-detail">{formatDirectoryName(session.directory)}</span></span>
+                            <span className="oc-home-row-detail">{pending.get(session.id)?.forms.length || pending.get(session.id)?.permissions.length ? t('activity.needsYou') : formatDirectoryName(session.directory)}</span></span>
                         <Icon name="arrow-right" className="ml-auto size-3.5 opacity-40" />
                     </Button>
                 )) : <p className="oc-home-empty">{t('home.noWorking')}</p>}
@@ -161,7 +164,7 @@ export const HomeDashboard: React.FC = () => {
                         onClick={() => useSessionUIStore.getState().setCurrentSession(session.id, session.directory)}>
                         <Icon name="chat-3" className="size-3.5 text-muted-foreground" />
                         <span className="oc-home-row-context"><span className="truncate">{session.title}</span>
-                            <span className="oc-home-row-detail">{formatDirectoryName(session.directory)}</span></span>
+                            <span className="oc-home-row-detail">{pending.get(session.id)?.forms.length || pending.get(session.id)?.permissions.length ? t('activity.needsYou') : formatDirectoryName(session.directory)}</span></span>
                         <Icon name="arrow-right" className="ml-auto size-3.5 opacity-40" />
                     </Button><HomeChatExport session={session} /></div>
                 ))}

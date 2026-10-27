@@ -1,5 +1,6 @@
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
+import { ClaudeLogo } from '@/components/ui/ClaudeLogo';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { cn } from '@/lib/utils';
 import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
@@ -62,7 +63,9 @@ const ProjectImageIcon: React.FC<{ project: TimelineRowProject; fallback: React.
 export const TimelineProjectIcon: React.FC<{ project: TimelineRowProject | null }> = ({ project }) => {
   const iconName = project?.icon ? PROJECT_ICON_MAP[project.icon] : null;
   const iconColor = project?.color ? (PROJECT_COLOR_MAP[project.color] ?? null) : null;
-  const glyph = project?.icon === 'chatgpt'
+  const glyph = project?.icon === 'claude'
+    ? <ClaudeLogo className="h-3.5 w-3.5 text-[#D97757]" />
+    : project?.icon === 'chatgpt'
     ? <ProviderLogo providerId="chatgpt" className="h-3.5 w-3.5" alt="ChatGPT" />
     : iconName
     ? <Icon name={iconName} className={cn('h-3.5 w-3.5', !iconColor && 'text-muted-foreground/75')} style={iconColor ? { color: iconColor } : undefined} />

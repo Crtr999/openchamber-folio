@@ -27,4 +27,6 @@ export const QUOTA_PROVIDERS: QuotaProviderMeta[] = [
   { id: 'hyper', name: 'Charm Hyper' },
   { id: 'neuralwatt', name: 'NeuralWatt' },
   { id: 'xai', name: 'xAI' },
+  { id: 'gemini-website', name: 'Gemini' },
+  { id: 'venice-website', name: 'Venice' },
 ];

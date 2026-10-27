@@ -144,7 +144,9 @@ its own manual worktree order (`useWorktreeOrderStore`).
 Hosted mobile and Capacitor use their separate `MobileSessionsSheet` renderer.
 The shared directory-cache rules apply there, but this sidebar virtualizer does not.
 
-Both project display modes use `projects/CrossfadeZoneHeaders.tsx` for sticky
+Project headers now scroll with their rows; sticky zone headers are disabled. Follow-ups and Scheduled share the project scroller, with their measured height supplied as the virtualizer scroll margin. This keeps absolute row positions and viewport ranges aligned when Scheduled expands or collapses.
+
+The optional `projects/CrossfadeZoneHeaders.tsx` supports sticky
 zone headers. The live header keeps one portal host as it moves between its
 virtual row placeholder and a stationary layer inside the native scroller,
 preserving its controls and menu state. The global virtualizer keeps the current
@@ -267,10 +269,10 @@ renders `projects`.
   and status dot on the right beside the time; the goal glyph and badges ride
   in the same cluster. Collapsing a zone header resets its
   Show more state.
-- Zone headers are sticky in the projects view and never in the timeline; there
+- Zone headers scroll in both projects and timeline; there
   is no user toggle. Timeline zone headers drop the leading icon and use a
   taller band.
-- Below Chats it renders one `timeline` activity header (a sticky zone header
+- Below Chats it renders one `timeline` activity header (a scrolling zone header
   like `chats` and `active-now`) followed by every non-archived root project
   session from all projects and worktrees in one flat list, in the shared
   lifecycle order, with pinned sessions floating first. There is no reveal
@@ -446,3 +448,22 @@ The sidebar Search chats panel performs rolling message-content searches. See th
 Local Electron windows show the expandable ChatGPT website history folder with conversation rows, new-chat actions and tools. Its snapshot is loaded sidebar navigation, not an account-wide inventory. Pins persist locally and do not change website pins. Native ChatGPT remains a separate OpenCode project. Web, VS Code, hosted mobile, Capacitor and remote desktop do not expose these entries.
 
 The native ChatGPT workspace uses its local `AGENTS.md` for app identity and a named `opencarter` reference for the canonical source. `OPEN_CARTER.md` at that source root maps personal additions and inspection paths. OpenCode V2 currently accepts but does not resolve the config `instructions` array, so active context belongs in `AGENTS.md`. References retain normal external-directory and edit permissions.
+
+## Scheduled task deletion
+
+Opening a scheduled sidebar task opens its editor with a labeled Delete action.
+The editor closes only after the caller confirms deletion and the existing API
+succeeds; cancellation or failure keeps it open. The task list also labels its
+delete button. Loop-file tasks use the separate loop-file deletion endpoint
+and its file-deletion confirmation, not ordinary task deletion. New schedules
+still default to Daily; the existing cron kind is labeled Custom schedule
+(advanced), with an explanation in the editor. Stored schedules are unchanged.
+
+## Scheduled task activity and follow-ups
+
+The persistent Follow-ups entry opens the existing project manager, preferring a companion monitor with unread results. It is available on supported web, Electron and mobile surfaces; VS Code retains its unsupported boundary. Scheduled rows derive running from the live session index, waiting from pending requests, and unread from notifications. Dispatch success alone never means a finished agent turn. Attention rows open the actual result session; ordinary settled rows open their schedule editor. Task labels use normal weight below the section heading.
+
+Friend animation uses current activity, not historical messages. Pending requests use an attention pose instead of the execution dance. Directory refreshes must never assign globally active sessions from other projects to the directory being refreshed.
+
+
+Scheduled task buttons use the shared right-side tooltip for the full task name, project, current status and schedule on hover or keyboard focus. Gemini and Venice have separate website folders; saved links contain exact observed same-origin URLs without credentials, queries or fragments, not mirrored native sessions.

@@ -21,7 +21,9 @@ export type QuotaProviderId =
   | 'exe-dev'
   | 'hyper'
   | 'neuralwatt'
-  | 'xai';
+  | 'xai'
+  | 'gemini-website'
+  | 'venice-website';
 
 export interface UsageWindow {
   usedPercent: number | null;

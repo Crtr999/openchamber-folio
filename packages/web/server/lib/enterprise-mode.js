@@ -48,6 +48,9 @@ import { z } from 'zod';
  *   are off (`personal-teaching.js`, `teaching-skills.js`).
  *   Stopping already-owned capture remains allowed and sends no user content.
  *   Meeting capture, local transcription and private local notes stay available.
+ * - The integrated Venice/Gemini account views and website model providers are off (`packages/electron/website-guest-security.mjs`).
+ * - WHOOP OAuth, token refresh and source synchronization are off (`health/whoop.js`).
+ *   Saved local health records and normal approved-provider questions remain available.
  * - Native OpenRouter credit refresh and added billing keys are off
  *   (`packages/electron/openrouter-credits.mjs`).
  *   Previously fetched values are marked stale, not replaced with zero.

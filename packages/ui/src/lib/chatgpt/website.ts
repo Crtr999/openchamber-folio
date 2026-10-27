@@ -12,7 +12,7 @@ export type WebsiteSnapshot = z.infer<typeof websiteSnapshotSchema>;
 export type ChatGPTEntry = z.infer<typeof entrySchema>;
 type WebsiteAction =
   | { kind: 'snapshot'; integrated: boolean }
-  | { kind: 'shortcut'; label: 'Library' | 'Plugins' | 'Explore' | 'Projects' | 'Scheduled' }
+  | { kind: 'shortcut'; label: 'Library' | 'Plugins' | 'Explore' | 'Projects' | 'Scheduled' | 'Health' }
   | { kind: 'older' }
   | { kind: 'navigate'; path: string };
 
@@ -26,7 +26,7 @@ export const isChatGPTOrigin = (raw: string): boolean => {
 function operateWebsite(action: WebsiteAction) {
   if (location.origin !== 'https://chatgpt.com') return { kind: 'unavailable' };
   const styleId = 'open-carter-chatgpt-layout';
-  if (action.kind === 'snapshot' && !action.integrated) {
+  if ((action.kind === 'snapshot' && !action.integrated) || (action.kind === 'shortcut' && action.label === 'Health')) {
     document.getElementById(styleId)?.remove();
     for (const el of document.querySelectorAll('[data-open-carter-sidebar]')) {
       el.removeAttribute('data-open-carter-sidebar'); el.removeAttribute('aria-hidden'); el.removeAttribute('inert');
@@ -57,6 +57,7 @@ function operateWebsite(action: WebsiteAction) {
   if (action.kind === 'shortcut') {
     const control = Array.from(sidebar.querySelectorAll('button, a, [role="button"]'))
       .find(el => (el.textContent || '').trim() === action.label || el.getAttribute('aria-label') === action.label);
+    if (control instanceof HTMLAnchorElement && new URL(control.href, location.origin).origin !== location.origin) return false;
     if (!(control instanceof HTMLElement)) {
       if (action.label !== 'Projects') return false;
       const heading = Array.from(sidebar.querySelectorAll('[role="button"], h2, h3, span, div')).find(el => (el.textContent || '').trim() === 'Projects');

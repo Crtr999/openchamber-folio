@@ -33,7 +33,7 @@ import { selectSkillsForDirectory, useSkillsStore } from "@/stores/useSkillsStor
 import { getDeferredSafeStorage } from "@/stores/utils/safeStorage"
 import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
 import { normalizePath } from "@/lib/pathNormalization"
-import { CHAT_DRAFT_PROJECT_ID, createChatDirectory, deleteChatDirectory, getChatsRootFromDirectory, isChatDirectoryPath, warmChatsRootDirectory } from "@/lib/chatDirectories"
+import { CHAT_DRAFT_PROJECT_ID, createChatDirectory, deleteChatDirectory, getChatsRootFromDirectory, getChatsRootForHome, ensureChatsRootDirectory, isChatDirectoryPath, warmChatsRootDirectory } from "@/lib/chatDirectories"
 import { isVSCodeRuntime } from "@/lib/desktop"
 import { composeForkSessionMessage } from "@/lib/messages/executionMeta"
 import { findLatestUserModelChoice } from "@/lib/messages/userModelChoice"
@@ -757,7 +757,17 @@ const applyDraftTargetSelectionDefaults = (
       projectDefaultVariant: currentProject?.defaultVariant,
     })
   }
-  const activation = activateConfigForDirectory(configDirectory, { preserveManualModel: !projectChanged && draft.target === 'project' })
+  const activation = draft.target === 'chat'
+    ? ensureChatsRootDirectory().then(async () => {
+      const current = useSessionUIStore.getState()
+      if (revision !== draftDefaultsRevision || getRuntimeKey() !== runtimeKey || current.currentSessionId
+        || !current.newSessionDraft.open || current.newSessionDraft.draftId !== draft.draftId
+        || current.newSessionDraft.target !== 'chat') return
+      const root = getChatsRootForHome(null)
+      if (!root) throw new Error('General chat configuration directory is unavailable')
+      await activateConfigForDirectory(root)
+    })
+    : activateConfigForDirectory(configDirectory, { preserveManualModel: !projectChanged })
   applyDefaults()
   void activation.then(() => {
     const current = useSessionUIStore.getState()
@@ -770,6 +780,8 @@ const applyDraftTargetSelectionDefaults = (
       || useConfigStore.getState().agentSelectionSource === 'manual'
       || useConfigStore.getState().currentVariantSelection.override !== undefined) return
     applyDefaults()
+  }).catch(error => {
+    if (revision === draftDefaultsRevision && getRuntimeKey() === runtimeKey) useSessionUIStore.setState({ error: error instanceof Error ? error.message : 'Could not load chat configuration' })
   })
 }
 

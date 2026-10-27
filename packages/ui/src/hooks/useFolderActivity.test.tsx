@@ -1,3 +1,4 @@
+import { seedGlobalBlockingRequests, resetGlobalBlockingRequests } from '@/sync/global-blocking-requests';
 import React, { act } from 'react';
 import { expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
@@ -125,5 +126,20 @@ test('All Chats is busy when a conversation under its root is busy', async () =>
     // conversations under the root do not count.
     expect(seen.exact?.working).toBe(false);
     unmount();
+  });
+});
+
+test('a blocked session waits for the user instead of making the friend dance as working', async () => {
+  await withDom(async ({ render, unmount }) => {
+    resetGlobalBlockingRequests();
+    replaceGlobalSessionStatusById(new Map([['blocked', { status: { type: 'busy' }, directory: '/business' }]]));
+    seedGlobalBlockingRequests([{ sessionId: 'blocked', directory: '/business', permissions: [], forms: [{ id: 'question', sessionID: 'blocked', title: 'Returns' }] }]);
+    let activity: ReturnType<typeof useFolderActivity> | undefined;
+    function Probe() { activity = useFolderActivity('/business'); return null; }
+    render(<Probe />);
+    expect(activity?.waiting).toBe(true);
+    expect(activity?.working).toBe(false);
+    expect(activity?.workingCount).toBe(0);
+    resetGlobalBlockingRequests(); unmount();
   });
 });

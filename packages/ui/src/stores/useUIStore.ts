@@ -859,6 +859,8 @@ interface UIStore {
   isArchivePageOpen: boolean;
   isChatGPTPageOpen: boolean;
   isClaudePageOpen: boolean;
+  isVenicePageOpen: boolean;
+  isGeminiPageOpen: boolean;
   isUsageStatsPageOpen: boolean;
   openGuestPageId: string | null;
   worktreesPageProjectId: string | null;
@@ -1130,6 +1132,8 @@ interface UIStore {
   setArchivePageOpen: (open: boolean) => void;
   setChatGPTPageOpen: (open: boolean) => void;
   setClaudePageOpen: (open: boolean) => void;
+  setVenicePageOpen: (open: boolean) => void;
+  setGeminiPageOpen: (open: boolean) => void;
   setUsageStatsPageOpen: (open: boolean) => void;
   setOpenGuestPage: (id: string | null) => void;
   setWorktreesPageProjectId: (projectId: string | null) => void;
@@ -1341,7 +1345,7 @@ export const useUIStore = create<UIStore>()(
         isArchivePageOpen: false,
         isChatGPTPageOpen: false,
        
-        isClaudePageOpen: false,
+        isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false,
         isUsageStatsPageOpen: false,
         openGuestPageId: null,
         worktreesPageProjectId: null,
@@ -2121,48 +2125,60 @@ export const useUIStore = create<UIStore>()(
 
         setScheduledTasksDialogOpen: (open) => {
           set(open
-            ? { isScheduledTasksDialogOpen: true, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false }
+            ? { isScheduledTasksDialogOpen: true, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false }
             : { isScheduledTasksDialogOpen: false });
         },
 
         setArchivePageOpen: (open) => {
           set(open
-            ? { isArchivePageOpen: true, isUsageStatsPageOpen: false, isScheduledTasksDialogOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false }
+            ? { isArchivePageOpen: true, isUsageStatsPageOpen: false, isScheduledTasksDialogOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false }
             : { isArchivePageOpen: false });
         },
 
         setUsageStatsPageOpen: (open) => {
           set(open
-            ? { isUsageStatsPageOpen: true, isArchivePageOpen: false, isScheduledTasksDialogOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false }
+            ? { isUsageStatsPageOpen: true, isArchivePageOpen: false, isScheduledTasksDialogOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false }
             : { isUsageStatsPageOpen: false });
         },
 
         setWorktreesPageProjectId: (projectId) => {
           set(projectId
-            ? { worktreesPageProjectId: projectId, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false }
+            ? { worktreesPageProjectId: projectId, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false }
             : { worktreesPageProjectId: null });
         },
 
         setOpenGuestPage: (id) => {
-          set(id ? { openGuestPageId: id, isChatGPTPageOpen: false, isClaudePageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null }
-            : { openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false });
+          set(id ? { openGuestPageId: id, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null }
+            : { openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false });
         },
 
         setChatGPTPageOpen: (open) => {
           set(open
-            ? { isChatGPTPageOpen: true, isClaudePageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
+            ? { isChatGPTPageOpen: true, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
             : { isChatGPTPageOpen: false });
         },
 
         setClaudePageOpen: (open) => {
           set(open
-            ? { isClaudePageOpen: true, isChatGPTPageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
+            ? { isClaudePageOpen: true, isVenicePageOpen: false, isGeminiPageOpen: false, isChatGPTPageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
             : { isClaudePageOpen: false });
+        },
+
+        setVenicePageOpen: (open) => {
+          set(open
+            ? { isVenicePageOpen: true, isGeminiPageOpen: false, isClaudePageOpen: false, isChatGPTPageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
+            : { isVenicePageOpen: false });
+        },
+
+        setGeminiPageOpen: (open) => {
+          set(open
+            ? { isGeminiPageOpen: true, isVenicePageOpen: false, isClaudePageOpen: false, isChatGPTPageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
+            : { isGeminiPageOpen: false });
         },
 
         closeMainSurfaces: () => {
           const state = get();
-          if (!state.isScheduledTasksDialogOpen && !state.isArchivePageOpen && !state.isUsageStatsPageOpen && !state.worktreesPageProjectId && !state.runOverviewKey && !state.openGuestPageId && !state.isChatGPTPageOpen && !state.isClaudePageOpen) {
+          if (!state.isScheduledTasksDialogOpen && !state.isArchivePageOpen && !state.isUsageStatsPageOpen && !state.worktreesPageProjectId && !state.runOverviewKey && !state.openGuestPageId && !state.isChatGPTPageOpen && !state.isClaudePageOpen && !state.isVenicePageOpen && !state.isGeminiPageOpen) {
             return;
           }
           set({
@@ -2174,7 +2190,7 @@ export const useUIStore = create<UIStore>()(
             openGuestPageId: null,
             isChatGPTPageOpen: false,
            
-            isClaudePageOpen: false,
+            isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false,
           });
         },
 
@@ -2753,7 +2769,7 @@ export const useUIStore = create<UIStore>()(
         // opening it closes the other surfaces and vice versa.
         setRunOverviewKey: (runKey) => {
           set(runKey
-            ? { runOverviewKey: runKey, isSessionSwitcherOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false }
+            ? { runOverviewKey: runKey, isSessionSwitcherOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false }
             : { runOverviewKey: null });
         },
 

@@ -1,3 +1,6 @@
+import { geminiI18n } from './gemini.i18n';
+import { veniceI18n } from './venice.i18n';
+import { healthI18n } from './health.i18n';
 import { companionI18n } from './companion.i18n';
 import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
@@ -24,6 +27,9 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 import { notionPickerI18n } from './notion-picker.i18n';
 export const dict = {
+  ...healthI18n["de"],
+  'activity.title': 'Aktivität',
+  'activity.needsYou': 'Benötigt deine Aufmerksamkeit',
   ...companionI18n["de"],
   ...notionPickerI18n['de'],
   ...friendsI18n['de'],
@@ -31,6 +37,8 @@ export const dict = {
   'workspace.officePreview': 'Nur Text und eingebettete Bilder. Originallayout, Diagramme, Animationen und laufende Berechnungen werden nicht dargestellt.',
   ...chatgptI18n['de'],
   ...claudeI18n.de,
+  ...veniceI18n.de,
+  ...geminiI18n.de,
   ...meetingsI18n.de,
   'meeting.quickStart': 'Meeting starten',
   'meeting.partial': 'Einige gespeicherte Meetings konnten nicht gelesen werden. Die Liste ist unvollständig; beschädigte Dateien bleiben unverändert.',
@@ -309,6 +317,7 @@ export const dict = {
   'sessions.scheduledTasks.dialog.actions.runNow': 'Jetzt ausführen',
   'sessions.scheduledTasks.dialog.actions.edit': 'Bearbeiten',
   'sessions.scheduledTasks.dialog.actions.editAria': 'Bearbeite {taskName}',
+  'sessions.scheduledTasks.dialog.actions.delete': "Löschen",
   'sessions.scheduledTasks.dialog.actions.deleteAria': 'Lösche {taskName}',
   'sessions.scheduledTasks.dialog.loading': 'Aufgaben werden geladen...',
   'sessions.scheduledTasks.dialog.empty.noTasks': 'Noch keine geplanten Aufgaben.',
@@ -371,7 +380,7 @@ export const dict = {
   'sessions.scheduledTasks.editor.scheduleType.daily': 'Täglich',
   'sessions.scheduledTasks.editor.scheduleType.weekly': 'Wöchentlich',
   'sessions.scheduledTasks.editor.scheduleType.once': 'Einmalig',
-  'sessions.scheduledTasks.editor.scheduleType.cron': 'Cron',
+  'sessions.scheduledTasks.editor.scheduleType.cron': "Eigener Zeitplan (erweitert)",
   'sessions.scheduledTasks.editor.date.label': 'Datum',
   'sessions.scheduledTasks.editor.date.placeholder': 'Datum auswählen',
   'sessions.scheduledTasks.editor.date.previousMonth': 'Vorheriger Monat',
@@ -416,6 +425,7 @@ export const dict = {
   'sessions.scheduledTasks.editor.validation.timezoneRequired': 'Zeitzone ist erforderlich',
   'sessions.scheduledTasks.editor.validation.cronRequired': 'Cron-Ausdruck ist erforderlich',
   'sessions.scheduledTasks.editor.validation.cronInvalid': 'Ungültiger Cron-Ausdruck',
+  'sessions.scheduledTasks.editor.cronExpression.help': "Ein wiederkehrender Zeitplan als kurzer Code. Für normale Erinnerungen genügt täglich oder wöchentlich. Zum Beispiel bedeutet 0 9 * * 1 jeden Montag um 9:00 Uhr in der gewählten Zeitzone.",
   'sessions.scheduledTasks.editor.cronExpression.label': 'Cron-Ausdruck',
   'sessions.scheduledTasks.editor.cronExpression.placeholder': '*/5 * * * *',
   'sessions.scheduledTasks.editor.cronExpression.nextRuns': 'Nächste Ausführungen',
@@ -3568,6 +3578,8 @@ export const dict = {
   'multirun.overview.bar.waiting': 'Läufe, die auf dich warten: {count}. Der Lauf endet erst, wenn du antwortest.',
   'multirun.overview.prompt.expand': 'Alles zeigen',
   'multirun.overview.prompt.collapse': 'Weniger zeigen',
+  'computer.start': "Computer starten",
+  'computer.connectionError': "Computerverbindung nicht verfügbar",
   'computer.title': "Der Computer des Agenten",
   'computer.hint': "Wähle einen Bildschirm, um zuzusehen.",
   'computer.noScreens': "Auf dem Computer ist kein Bildschirm geöffnet.",

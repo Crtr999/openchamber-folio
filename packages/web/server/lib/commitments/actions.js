@@ -32,7 +32,7 @@ const parseDay = (value, timezone) => {
 
 const text = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
 
-export const createCommitmentActions = ({ store, guard, onChanged = () => {}, now = () => Date.now() }) => {
+export const createCommitmentActions = ({ store, guard, onChanged = () => {}, getReviewModel = async () => null, now = () => Date.now() }) => {
   const resolve = (items, reference) => {
     const wanted = text(reference);
     if (!wanted) throw new OpenChamberControlError('commitmentId is required (an id from commitment.list, or words from its title)', 400);
@@ -53,6 +53,7 @@ export const createCommitmentActions = ({ store, guard, onChanged = () => {}, no
     if (!verdict.ok) throw new OpenChamberControlError('Commitments are not available in this folder', 403);
     const state = await store.read();
     const { timezone } = state.settings;
+    const reviewModel = options.contextSessionId ? await getReviewModel(options.contextSessionId) : null;
 
     if (action === 'commitment.list') {
       const items = state.items.filter((item) => item.status === 'active' || item.status === 'snoozed')
@@ -65,12 +66,23 @@ export const createCommitmentActions = ({ store, guard, onChanged = () => {}, no
       const watch = text(input.watch);
       if (!title) throw new OpenChamberControlError('title is required', 400);
       if (!text(input.due) && !watch) throw new OpenChamberControlError('Give a due date (YYYY-MM-DD) or something to watch', 400);
+      const same = reviewModel && state.items.find((item) => item.status === 'active' && item.title.toLowerCase() === title.slice(0, 160).toLowerCase());
+      if (same) {
+        const changes = { research: false, reviewModel };
+        if (text(input.due)) changes.dueAt = parseDay(input.due, timezone);
+        if (text(input.notes)) changes.notes = text(input.notes).slice(0, 400);
+        return { commitment: view(await store.patch(same.id, changes), timezone), updated: true };
+      }
+      const addition = {
+        reviewModel: reviewModel || undefined,
+      };
       const item = await store.add({
+        ...addition,
         title: title.slice(0, 160),
         dueAt: text(input.due) ? parseDay(input.due, timezone) : null,
         watches: watch ? [watch.slice(0, 200)] : [],
         notes: (text(input.notes) ?? '').slice(0, 400),
-        research: input.research !== false,
+        research: reviewModel ? false : input.research !== false,
         origin: 'manual',
         confirmedAt: now(),
         sourceDirectory: text(contextDirectory) ?? undefined,
@@ -88,10 +100,11 @@ export const createCommitmentActions = ({ store, guard, onChanged = () => {}, no
     }
     if (action === 'commitment.update') {
       const changes = { confirmed: true };
+      if (reviewModel) { changes.reviewModel = reviewModel; changes.research = false; }
       if (text(input.title)) changes.title = text(input.title).slice(0, 160);
       if (text(input.due)) changes.dueAt = parseDay(input.due, timezone);
       if (text(input.watch)) changes.watches = [text(input.watch).slice(0, 200)];
-      if (typeof input.research === 'boolean') changes.research = input.research;
+      if (!reviewModel && typeof input.research === 'boolean') changes.research = input.research;
       if (text(input.notes)) changes.notes = text(input.notes).slice(0, 400);
       if (input.status !== undefined) {
         if (!['active', 'done', 'snoozed'].includes(input.status)) throw new OpenChamberControlError('status must be active, done or snoozed', 400);

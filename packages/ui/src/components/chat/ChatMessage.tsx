@@ -149,15 +149,17 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }
 
     const providers = useConfigStore((state) => state.providers);
-    const { showReasoningTraces, stickyUserHeader, chatRenderMode, showExpandedBashTools, showExpandedEditTools } = useUIStore(
+    const { showReasoningTraces, collapsibleThinkingBlocks, stickyUserHeader, chatRenderMode, showExpandedBashTools, showExpandedEditTools } = useUIStore(
         useShallow((state) => ({
             showReasoningTraces: state.showReasoningTraces,
+            collapsibleThinkingBlocks: state.collapsibleThinkingBlocks,
             stickyUserHeader: state.stickyUserHeader,
             chatRenderMode: state.chatRenderMode,
             showExpandedBashTools: state.showExpandedBashTools,
             showExpandedEditTools: state.showExpandedEditTools,
         }))
     );
+    const effectiveShowReasoningTraces = showReasoningTraces || collapsibleThinkingBlocks;
 
     const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
     const [copiedMessage, setCopiedMessage] = React.useState(false);
@@ -328,9 +330,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const visibleParts = React.useMemo(
         () =>
             filterVisibleParts(normalizedParts, {
-                includeReasoning: showReasoningTraces,
+                includeReasoning: effectiveShowReasoningTraces,
             }),
-        [normalizedParts, showReasoningTraces]
+        [normalizedParts, effectiveShowReasoningTraces]
     );
 
     const displayParts = React.useMemo(() => {
@@ -800,7 +802,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                                 hasTextContent={hasTextContent}
                                                 onCopyMessage={handleCopyMessage}
                                                 copiedMessage={copiedMessage}
-                                                showReasoningTraces={showReasoningTraces}
+                                                showReasoningTraces={effectiveShowReasoningTraces}
                                                 agentMention={agentMention}
                                                 onRevert={handleRevert}
                                                 onFork={isUser ? handleFork : undefined}
@@ -835,7 +837,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                                 hasTextContent={hasTextContent}
                                                 onCopyMessage={handleCopyMessage}
                                                 copiedMessage={copiedMessage}
-                                                showReasoningTraces={showReasoningTraces}
+                                                showReasoningTraces={effectiveShowReasoningTraces}
                                                 agentMention={agentMention}
                                                 onRevert={handleRevert}
                                                 onFork={isUser ? handleFork : undefined}
@@ -880,7 +882,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                 hasTextContent={hasTextContent}
                                 onCopyMessage={handleCopyMessage}
                                 copiedMessage={copiedMessage}
-                                showReasoningTraces={showReasoningTraces}
+                                showReasoningTraces={effectiveShowReasoningTraces}
                                 agentMention={agentMention}
                                 turnGroupingContext={turnGroupingContext}
                                 errorMessage={assistantErrorText}

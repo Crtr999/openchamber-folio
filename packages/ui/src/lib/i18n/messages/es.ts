@@ -1,3 +1,6 @@
+import { geminiI18n } from './gemini.i18n';
+import { veniceI18n } from './venice.i18n';
+import { healthI18n } from './health.i18n';
 import { companionI18n } from './companion.i18n';
 import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
@@ -25,6 +28,9 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 import { notionPickerI18n } from './notion-picker.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...healthI18n["es"],
+  'activity.title': 'Actividad',
+  'activity.needsYou': 'Necesita tu atención',
   ...companionI18n['es'],
   ...notionPickerI18n['es'],
   ...friendsI18n['es'],
@@ -32,6 +38,8 @@ export const dict: Record<I18nKey, string> = {
   'workspace.officePreview': 'Solo texto e imágenes incrustadas. No se muestran el diseño original, gráficos, animaciones ni cálculos en vivo.',
   ...chatgptI18n['es'],
   ...claudeI18n.es,
+  ...veniceI18n.es,
+  ...geminiI18n.es,
   ...meetingsI18n.es,
   'meeting.quickStart': 'Iniciar reunión',
   'meeting.partial': 'No se pudieron leer algunas reuniones guardadas. La lista está incompleta; los archivos dañados no se modificaron.',
@@ -351,6 +359,7 @@ export const dict: Record<I18nKey, string> = {
   "sessions.scheduledTasks.dialog.actions.runNow": "Ejecutar ahora",
   "sessions.scheduledTasks.dialog.actions.edit": "Editar",
   "sessions.scheduledTasks.dialog.actions.editAria": "Editar {taskName}",
+  'sessions.scheduledTasks.dialog.actions.delete': "Eliminar",
   "sessions.scheduledTasks.dialog.actions.deleteAria": "Eliminar {taskName}",
   "sessions.scheduledTasks.dialog.loading": "Cargando tareas...",
   "sessions.scheduledTasks.dialog.empty.noTasks": "No hay tareas programadas aún.",
@@ -413,7 +422,7 @@ export const dict: Record<I18nKey, string> = {
   "sessions.scheduledTasks.editor.scheduleType.daily": "Diario",
   "sessions.scheduledTasks.editor.scheduleType.weekly": "Semanal",
   "sessions.scheduledTasks.editor.scheduleType.once": "Una vez",
-  "sessions.scheduledTasks.editor.scheduleType.cron": "Cron",
+  'sessions.scheduledTasks.editor.scheduleType.cron': "Horario personalizado (avanzado)",
   "sessions.scheduledTasks.editor.date.label": "Fecha",
   "sessions.scheduledTasks.editor.date.placeholder": "Seleccionar fecha",
   "sessions.scheduledTasks.editor.date.previousMonth": "Mes anterior",
@@ -460,6 +469,7 @@ export const dict: Record<I18nKey, string> = {
   "sessions.scheduledTasks.editor.validation.timezoneRequired": "Se requiere zona horaria",
   "sessions.scheduledTasks.editor.validation.cronRequired": "Se requiere una expresión cron",
   "sessions.scheduledTasks.editor.validation.cronInvalid": "Expresión cron no válida",
+  'sessions.scheduledTasks.editor.cronExpression.help': "Un horario recurrente escrito como un código breve. Usa Diario o Semanal para los recordatorios habituales. Por ejemplo, 0 9 * * 1 significa cada lunes a las 9:00 en la zona horaria seleccionada.",
   "sessions.scheduledTasks.editor.cronExpression.label": "Expresión cron",
   "sessions.scheduledTasks.editor.cronExpression.placeholder": "*/5 * * * *",
   "sessions.scheduledTasks.editor.cronExpression.nextRuns": "Próximas ejecuciones",
@@ -3571,6 +3581,8 @@ export const dict: Record<I18nKey, string> = {
   'multirun.overview.bar.waiting': 'Ejecuciones que te esperan: {count}. La ejecución no termina hasta que respondas.',
   'multirun.overview.prompt.expand': 'Ver todo',
   'multirun.overview.prompt.collapse': 'Ver menos',
+  'computer.start': "Iniciar ordenador",
+  'computer.connectionError': "Conexión del ordenador no disponible",
   'computer.title': "El ordenador del agente",
   'computer.hint': "Elige una pantalla para verlo trabajar.",
   'computer.noScreens': "No hay ninguna pantalla abierta en el ordenador.",

@@ -126,7 +126,7 @@
 [data-oc-personal-interactions] { isolation: isolate; }
 /* The shell shows the window-wide copy; the in-content one is for other runtimes. */
 [data-oc-personal-interactions] .oc-home-landscape { display: none; }
-[data-oc-personal-interactions] .oc-home-content { padding-top: clamp(150px, 24vh, 250px); }
+[data-oc-personal-interactions] .oc-home-content { padding-top: clamp(140px, 21vh, 220px); }
 
 .oc-scene-backdrop {
     position: fixed;
@@ -141,18 +141,23 @@
     inset: 0;
     isolation: isolate;
     background: var(--surface-background);
-    /* Off Home the scene is only a quiet tint through the frosted panels. */
-    opacity: 0.4;
+    /* In individual chats the scene stays present as a soft atmospheric backdrop. */
+    opacity: 0.25;
     transition: opacity 520ms var(--oc-ease-settle, ease-out);
-    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 42%, rgb(0 0 0 / 0.8) 58%, rgb(0 0 0 / 0.5) 72%, rgb(0 0 0 / 0.22) 86%, rgb(0 0 0 / 0.08) 100%);
-    mask-image: linear-gradient(to bottom, #000 0%, #000 42%, rgb(0 0 0 / 0.8) 58%, rgb(0 0 0 / 0.5) 72%, rgb(0 0 0 / 0.22) 86%, rgb(0 0 0 / 0.08) 100%);
+    -webkit-mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.9) 0%, rgb(0 0 0 / 0.72) 38%, rgb(0 0 0 / 0.42) 70%, rgb(0 0 0 / 0.16) 100%);
+    mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.9) 0%, rgb(0 0 0 / 0.72) 38%, rgb(0 0 0 / 0.42) 70%, rgb(0 0 0 / 0.16) 100%);
+}
+:root.dark .oc-scene-art {
+    opacity: 0.28;
 }
 html[data-oc-home] .oc-scene-art {
     opacity: 1;
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 42%, rgb(0 0 0 / 0.8) 58%, rgb(0 0 0 / 0.5) 72%, rgb(0 0 0 / 0.22) 86%, rgb(0 0 0 / 0.08) 100%);
+    mask-image: linear-gradient(to bottom, #000 0%, #000 42%, rgb(0 0 0 / 0.8) 58%, rgb(0 0 0 / 0.5) 72%, rgb(0 0 0 / 0.22) 86%, rgb(0 0 0 / 0.08) 100%);
     animation: oc-scene-arrive 1100ms var(--oc-ease-settle, ease-out) both;
 }
 @keyframes oc-scene-arrive {
-    from { opacity: 0.4; transform: scale(1.035); }
+    from { opacity: 0.28; transform: scale(1.035); }
     to { opacity: 1; transform: none; }
 }
 .oc-scene-art img {
@@ -214,38 +219,77 @@ html:not(.dark) .oc-scene-backdrop[data-scene="stipple-night"] .oc-scene-art::be
     mix-blend-mode: lighten;
 }
 
-/* On Home the canvas layers between the window and the Home content step
-   aside, so the scene runs edge to edge behind the composer and cards. */
-html[data-oc-home] [data-oc-personal-interactions] :is(.bg-background, main[data-main-chat-pane]):has(.oc-home-content) {
+/* Both Home and individual chats step their opaque wrapper canvases aside so
+   the scene artwork carries into every conversation. */
+[data-oc-personal-interactions] :is(.bg-background, main[data-main-chat-pane]):has(:is(.oc-home-content, [data-composer-bound], .oc-draft-center)),
+[data-oc-personal-interactions] [data-composer-bound],
+[data-oc-personal-interactions] [data-composer-bound] > [data-composer-slot],
+[data-oc-personal-interactions] [data-chat-hydration-skeleton] > .bg-background,
+[data-oc-personal-interactions] main[data-main-chat-pane] > .bg-background {
     background-color: transparent;
 }
 
-/* Sidebar, header and context rail are frosted panes over the scene: a
-   cream or ink wash plus blur keeps their text on a near-solid ground. */
+/* A soft radial reading veil behind active chat transcripts keeps long code
+   and prose effortless to read while letting the scene breathe around it. */
+[data-oc-personal-interactions] .chat-scroll {
+    background: radial-gradient(
+        ellipse 78% 88% at 50% 54%,
+        color-mix(in srgb, var(--surface-background) 52%, transparent) 0%,
+        color-mix(in srgb, var(--surface-background) 24%, transparent) 68%,
+        transparent 100%
+    );
+}
+
+/* Sidebar, header and context rail float amicably over the scene with a soft
+   frosted wash and feather-light depth instead of protruding 1px hard lines. */
 [data-oc-personal-interactions] :is(aside.bg-background, .header-safe-area.bg-background, nav.w-11.bg-background, [data-chat-area] > .contents > .bg-background) {
-    --oc-pane-wash: 88%;
+    --oc-pane-wash: 56%;
     background-color: color-mix(in srgb, var(--surface-background) var(--oc-pane-wash), transparent);
-    -webkit-backdrop-filter: blur(22px) saturate(1.25);
-    backdrop-filter: blur(22px) saturate(1.25);
+    -webkit-backdrop-filter: blur(28px) saturate(1.22);
+    backdrop-filter: blur(28px) saturate(1.22);
 }
 html[data-oc-home] [data-oc-personal-interactions] :is(aside.bg-background, nav.w-11.bg-background, [data-chat-area] > .contents > .bg-background) {
-    --oc-pane-wash: 62%;
+    --oc-pane-wash: 46%;
 }
 html[data-oc-home] [data-oc-personal-interactions] .header-safe-area.bg-background {
-    --oc-pane-wash: 62%;
+    --oc-pane-wash: 46%;
 }
 /* The cobalt night-coast duotone is the one dark sky on cream paper: its
-   panes keep a heavier wash so muted labels stay above 4.5:1. */
+   panes keep a slightly richer wash so muted labels stay above 4.5:1. */
 html:not(.dark)[data-oc-home] [data-oc-personal-interactions]:has(> .oc-scene-backdrop[data-scene="night-coast"]) :is(aside.bg-background, .header-safe-area.bg-background, nav.w-11.bg-background, [data-chat-area] > .contents > .bg-background) {
-    --oc-pane-wash: 82%;
+    --oc-pane-wash: 68%;
 }
-/* Sticky section headers inside the sidebar keep a ground of their own. */
+/* Sticky section headers inside the sidebar blend seamlessly into the pane wash. */
 [data-oc-personal-interactions] aside.bg-background > * {
-    --sidebar: color-mix(in srgb, var(--surface-background) 86%, transparent);
+    --sidebar: transparent;
 }
-/* Hairline edges where panes meet the scene. */
-[data-oc-personal-interactions] aside.bg-background { box-shadow: inset -1px 0 0 var(--oc-hairline); }
-[data-oc-personal-interactions] [data-chat-area] > .contents > .bg-background { box-shadow: inset 1px 0 0 var(--oc-hairline); }
+[data-oc-personal-interactions] [data-sidebar-sticky-header] {
+    background-color: color-mix(in srgb, var(--surface-background) 42%, transparent) !important;
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+}
+/* Replace hard 1px borders and divider slabs with soft ambient feathering. */
+[data-oc-personal-interactions] aside.bg-background {
+    box-shadow: 10px 0 32px -22px rgb(0 0 0 / 0.14);
+}
+[data-oc-personal-interactions] [data-chat-area] > .contents > .bg-background {
+    box-shadow: -10px 0 32px -22px rgb(0 0 0 / 0.14);
+}
+[data-oc-personal-interactions] aside[data-context-panel="true"] > .w-px.bg-border {
+    opacity: 0;
+}
+[data-oc-personal-interactions] aside[data-context-panel="true"] .w-px.bg-border {
+    background-color: color-mix(in srgb, var(--oc-hairline) 40%, transparent);
+}
+/* Soften the right-side work status card in individual chats so it floats amicably. */
+[data-oc-personal-interactions] [data-composer-bound] + aside {
+    border-color: color-mix(in srgb, var(--oc-hairline) 45%, transparent);
+    border-radius: 20px;
+    background-color: color-mix(in srgb, var(--surface-background) 50%, transparent);
+    -webkit-backdrop-filter: blur(24px) saturate(1.2);
+    backdrop-filter: blur(24px) saturate(1.2);
+    box-shadow: var(--oc-shadow-card);
+}
 
 /* The greeting sits on a frosted paper plate so it reads over any scene. */
 [data-oc-personal-interactions] .oc-home-greeting {
@@ -253,19 +297,21 @@ html:not(.dark)[data-oc-home] [data-oc-personal-interactions]:has(> .oc-scene-ba
     flex-direction: column;
     align-items: center;
     max-width: 100%;
-    padding: 14px 30px 12px;
-    border: 1px solid var(--oc-hairline);
+    padding: 16px 34px 14px;
+    border: 1px solid color-mix(in srgb, var(--oc-hairline) 75%, transparent);
     border-radius: 28px;
-    background: color-mix(in srgb, var(--surface-background) 76%, transparent);
-    -webkit-backdrop-filter: blur(14px) saturate(1.15);
-    backdrop-filter: blur(14px) saturate(1.15);
+    background: color-mix(in srgb, var(--surface-background) 72%, transparent);
+    -webkit-backdrop-filter: blur(18px) saturate(1.18);
+    backdrop-filter: blur(18px) saturate(1.18);
     box-shadow: var(--oc-shadow-card);
 }
 [data-oc-personal-interactions] .oc-home-scene-button { margin-top: 6px; }
 
-/* Cards float over the scene as cream (or ink) panels. */
+/* Cards float over the scene as translucent frosted cream (or ink) panels. */
 [data-oc-personal-interactions] .oc-home-card {
-    background: color-mix(in srgb, var(--surface-elevated) 94%, transparent);
+    background: color-mix(in srgb, var(--surface-elevated) 84%, transparent);
+    -webkit-backdrop-filter: blur(22px) saturate(1.18);
+    backdrop-filter: blur(22px) saturate(1.18);
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -274,9 +320,18 @@ html:not(.dark)[data-oc-home] [data-oc-personal-interactions]:has(> .oc-scene-ba
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
     }
-    [data-oc-personal-interactions] .oc-home-card { background: var(--surface-elevated); }
+    [data-oc-personal-interactions] .oc-home-card {
+        background: var(--surface-elevated);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
     [data-oc-personal-interactions] :is(aside.bg-background, .header-safe-area.bg-background, nav.w-11.bg-background, [data-chat-area] > .contents > .bg-background) {
         --oc-pane-wash: 100% !important;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+    [data-oc-personal-interactions] [data-composer-bound] + aside {
+        background-color: var(--surface-elevated);
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
     }

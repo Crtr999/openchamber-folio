@@ -6,7 +6,7 @@ import { isChatGPTChatPath, isChatGPTPagePath, type ChatGPTEntry, type WebsiteSn
 
 type ChatGPTRequest =
   | { kind: 'navigate'; path: string }
-  | { kind: 'shortcut'; label: 'Library' | 'Plugins' | 'Explore' | 'Projects' | 'Scheduled' }
+  | { kind: 'shortcut'; label: 'Library' | 'Plugins' | 'Explore' | 'Projects' | 'Scheduled' | 'Health' }
   | { kind: 'older' }
   | { kind: 'refresh' };
 let requestSequence = 0;

@@ -86,6 +86,22 @@ describe('ready notification on v2 step events', () => {
     expect(emitDesktopNotification).not.toHaveBeenCalled();
   });
 
+  it('indexes a companion result when goal mode is disabled despite stale active metadata', async () => {
+    const considerCompletion = vi.fn(async () => false);
+    const { runtime, emitDesktopNotification } = makeRuntime({
+      settings: { sessionGoalEnabled: false },
+      metadata: { openchamber: { goal: { id: 'g', status: 'active' }, companion: { taskId: 'companion:project-monitor' } } },
+      shouldNotifyCompletion: considerCompletion,
+    });
+    await runtime.maybeSendPushForTrigger(stepStarted('ses_monitor', 'msg_monitor'));
+    await runtime.maybeSendPushForTrigger(stepEnded('ses_monitor', 'msg_monitor'));
+    expect(considerCompletion).not.toHaveBeenCalled();
+    await runtime.maybeSendPushForTrigger(turnEnded('ses_monitor'));
+    expect(considerCompletion).toHaveBeenCalledWith('ses_monitor');
+    // The coordinator persists it and defers the alert through quiet hours.
+    expect(emitDesktopNotification).not.toHaveBeenCalled();
+  });
+
   it('stays quiet while a goal from OpenChamber\'s own metadata is active', async () => {
     const { runtime, emitDesktopNotification } = makeRuntime({
       metadata: { openchamber: { goal: { id: 'g', status: 'active', objective: 'x' } } },

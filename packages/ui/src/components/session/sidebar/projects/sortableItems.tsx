@@ -1,5 +1,6 @@
 import { DirectoryActionIndicator } from '../sessions/DirectoryActionIndicator';
 import React from 'react';
+import { ClaudeLogo } from '@/components/ui/ClaudeLogo';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { HomeFriendAvatar } from '@/components/chat/HomeFriendAvatar';
 import { useSortable } from '@dnd-kit/sortable';
@@ -21,14 +22,12 @@ import {
   folderFriendAppearance,
   folderFriendName,
   openFolderFriendStudio,
-  readFriendProfiles,
   type FriendProfiles,
 } from '@/lib/friends';
 import { providerBindingFromFolderName } from '@/lib/projectProviderBinding';
 import { useFolderActivity } from '@/hooks/useFolderActivity';
 import { useFriendProfiles } from '@/hooks/useFriendProfiles';
 import './friendActivity.css';
-import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { CrossfadeZoneHeader } from './CrossfadeZoneHeaders';
 import { useProjectFolderMissing } from './useProjectFolderMissing';
 
@@ -96,6 +95,7 @@ const ProjectHeaderIdentity: React.FC<ProjectHeaderIdentityProps> = ({
       <span
         className="oc-friend-activity relative inline-flex size-5 flex-shrink-0 items-center justify-center"
         data-working={activity.working ? 'true' : undefined}
+        data-waiting={activity.waiting ? 'true' : undefined}
         data-retrying={activity.retrying ? 'true' : undefined}
       >
         {hasCollapseControl ? (
@@ -129,6 +129,8 @@ const ProjectHeaderIdentity: React.FC<ProjectHeaderIdentityProps> = ({
               )}
             />
           </span>
+        ) : projectIcon === 'claude' ? (
+          <ClaudeLogo className={cn('h-4 w-4 text-[#D97757]', iconVisibilityClassName)} />
         ) : projectIcon === 'chatgpt' ? (
           <ProviderLogo providerId="chatgpt" className={cn('h-4 w-4', iconVisibilityClassName)} alt="ChatGPT" />
         ) : friendLook ? (
@@ -215,7 +217,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   const friendProfiles = useSidebarFriendProfiles();
   const folderMissing = useProjectFolderMissing(projectDirectory);
   // Project headers only exist in the projects view, which always pins them.
-  const stickyZoneHeaders = true;
+  const stickyZoneHeaders = false;
   const {
     attributes,
     listeners,

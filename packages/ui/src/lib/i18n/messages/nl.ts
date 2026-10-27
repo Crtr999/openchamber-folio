@@ -1,3 +1,6 @@
+import { geminiI18n } from './gemini.i18n';
+import { veniceI18n } from './venice.i18n';
+import { healthI18n } from './health.i18n';
 import { companionI18n } from './companion.i18n';
 import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
@@ -24,6 +27,9 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 import { notionPickerI18n } from './notion-picker.i18n';
 export const dict = {
+  ...healthI18n["nl"],
+  'activity.title': 'Activiteit',
+  'activity.needsYou': 'Heeft je aandacht nodig',
   ...companionI18n["nl"],
   ...notionPickerI18n['nl'],
   ...personalWorkspaceI18n.nl,
@@ -31,6 +37,8 @@ export const dict = {
   ...friendsI18n['nl'],
   ...chatgptI18n['nl'],
   ...claudeI18n.nl,
+  ...veniceI18n.nl,
+  ...geminiI18n.nl,
   ...meetingsI18n.nl,
   'meeting.quickStart': 'Vergadering starten',
   'meeting.partial': 'Sommige opgeslagen vergaderingen konden niet worden gelezen. De lijst is onvolledig; beschadigde bestanden zijn niet aangepast.',
@@ -350,6 +358,7 @@ export const dict = {
   'sessions.scheduledTasks.dialog.actions.runNow': 'Nu uitvoeren',
   'sessions.scheduledTasks.dialog.actions.edit': 'Bewerken',
   'sessions.scheduledTasks.dialog.actions.editAria': '{taskName} bewerken',
+  'sessions.scheduledTasks.dialog.actions.delete': "Verwijderen",
   'sessions.scheduledTasks.dialog.actions.deleteAria': '{taskName} verwijderen',
   'sessions.scheduledTasks.dialog.loading': 'Taken laden...',
   'sessions.scheduledTasks.dialog.empty.noTasks': 'Nog geen geplande taken.',
@@ -412,7 +421,7 @@ export const dict = {
   'sessions.scheduledTasks.editor.scheduleType.daily': 'Dagelijks',
   'sessions.scheduledTasks.editor.scheduleType.weekly': 'Wekelijks',
   'sessions.scheduledTasks.editor.scheduleType.once': 'Eenmalig',
-  'sessions.scheduledTasks.editor.scheduleType.cron': 'Cron',
+  'sessions.scheduledTasks.editor.scheduleType.cron': "Aangepast schema (geavanceerd)",
   'sessions.scheduledTasks.editor.date.label': 'Datum',
   'sessions.scheduledTasks.editor.date.placeholder': 'Selecteer datum',
   'sessions.scheduledTasks.editor.date.previousMonth': 'Vorige maand',
@@ -459,6 +468,7 @@ export const dict = {
   'sessions.scheduledTasks.editor.validation.timezoneRequired': 'Tijdzone is verplicht',
   'sessions.scheduledTasks.editor.validation.cronRequired': 'Cron-expressie is verplicht',
   'sessions.scheduledTasks.editor.validation.cronInvalid': 'Ongeldige cron-expressie',
+  'sessions.scheduledTasks.editor.cronExpression.help': "Een herhalend schema als korte code. Gebruik Dagelijks of Wekelijks voor gewone herinneringen. Bijvoorbeeld: 0 9 * * 1 betekent elke maandag om 9:00 in de gekozen tijdzone.",
   'sessions.scheduledTasks.editor.cronExpression.label': 'Cron-expressie',
   'sessions.scheduledTasks.editor.cronExpression.placeholder': '*/5 * * * *',
   'sessions.scheduledTasks.editor.cronExpression.nextRuns': 'Volgende uitvoeringen',
@@ -3570,6 +3580,8 @@ export const dict = {
   'multirun.overview.bar.waiting': 'Runs die op u wachten: {count}. De runs kunnen niet klaar zijn voordat u antwoord geeft.',
   'multirun.overview.prompt.expand': 'Alles tonen',
   'multirun.overview.prompt.collapse': 'Minder tonen',
+  'computer.start': "Computer starten",
+  'computer.connectionError': "Computerverbinding niet beschikbaar",
   'computer.title': "De computer van de agent",
   'computer.hint': "Kies een scherm om het te volgen.",
   'computer.noScreens': "Er is geen scherm geopend op de computer.",

@@ -333,13 +333,13 @@ export function ScheduledTasksDialog() {
 
   const handleDeleteTask = React.useCallback(async (task: ScheduledTask) => {
     if (!selectedProjectID) {
-      return;
+      return false;
     }
     const confirmed = window.confirm(task.loopFile
       ? t('sessions.scheduledTasks.dialog.confirm.deleteLoopFile', { taskName: task.name })
       : t('sessions.scheduledTasks.dialog.confirm.deleteTask', { taskName: task.name }));
     if (!confirmed) {
-      return;
+      return false;
     }
 
     setMutatingTaskID(task.id);
@@ -351,8 +351,10 @@ export function ScheduledTasksDialog() {
       }
       await reloadTasks(selectedProjectID, { silent: true });
       toast.success(t('sessions.scheduledTasks.dialog.toast.deleted'));
+      return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('sessions.scheduledTasks.dialog.toast.deleteFailed'));
+      return false;
     } finally {
       setMutatingTaskID(null);
     }
@@ -598,7 +600,7 @@ export function ScheduledTasksDialog() {
                       disabled={isBusy}
                       aria-label={t('sessions.scheduledTasks.dialog.actions.deleteAria', { taskName: task.name })}
                     >
-                      <Icon name="delete-bin" className="h-4 w-4" />
+                      <Icon name="delete-bin" className="h-4 w-4" /> {t('sessions.scheduledTasks.dialog.actions.delete')}
                     </Button>
                   </div>
                 </div>
@@ -701,6 +703,7 @@ export function ScheduledTasksDialog() {
         task={editorTask}
         onOpenChange={setEditorOpen}
         onSave={handleSaveTask}
+        onDelete={editorTask ? () => handleDeleteTask(editorTask) : undefined}
       />
     </>
   );

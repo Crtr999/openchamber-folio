@@ -11,7 +11,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { MarkdownRenderer } from '../../MarkdownRenderer';
 import type { MarkdownVariant } from '../../MarkdownRendererImpl';
 import { useStreamingTextThrottle } from '../../hooks/useStreamingTextThrottle';
-import { commitStreamedText } from '../../lib/streamTextCommit';
 import type { StreamPhase } from '../types';
 
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-5 sm:!leading-6 tracking-normal';
@@ -344,9 +343,8 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     }, []);
 
     // While genuinely streaming, the busy header must appear as soon as
-    // reasoning starts even before the block-level reveal (commitStreamedText)
-    // has committed a first complete line — otherwise "Thinking…" never shows
-    // for the first moments of a short, single-paragraph response.
+    // reasoning starts even before the first token arrives — otherwise
+    // "Thinking…" never shows for the first moments of a response.
     if (!isStreaming && (!text || text.trim().length === 0)) {
         return null;
     }
@@ -373,7 +371,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     );
 
     return (
-        <div data-reasoning-block-id={blockId} data-message-text-export-root="true">
+        <div data-reasoning-block-id={blockId} data-message-text-export-root="true" className="my-1">
             <div
                 role="button"
                 tabIndex={0}
@@ -381,37 +379,18 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                 aria-controls={contentId}
                 aria-label={toggleAriaLabel}
                 className={cn(
-                    'group/tool flex gap-1.5 pr-2 pl-px py-1.5 rounded-xl cursor-pointer items-center',
+                    'oc-thinking-pill group/tool inline-flex max-w-full items-center gap-2 rounded-lg border px-2.5 py-1 cursor-pointer',
                 )}
                 onClick={handleToggle}
                 onKeyDown={handleKeyDown}
             >
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <div className="relative h-3.5 w-3.5 flex-shrink-0 cursor-pointer">
-                        <div
-                            className={cn(
-                                'absolute inset-0 transition-opacity',
-                                isExpanded && 'opacity-0',
-                                !isExpanded && 'group-hover/tool:opacity-0',
-                            )}
-                            style={{ color: 'var(--tools-icon)' }}
-                        >
-                            <Icon name={presentation?.icon ?? 'brain-ai-3'} className={cn('h-3.5 w-3.5', presentation?.iconClassName)} />
-                        </div>
-                        <div
-                            className={cn(
-                                'absolute inset-0 transition-opacity flex items-center justify-center',
-                                isExpanded && 'opacity-100',
-                                !isExpanded && 'opacity-0 group-hover/tool:opacity-100',
-                            )}
-                            style={{ color: 'var(--tools-icon)' }}
-                        >
-                            {isExpanded ? <Icon name="arrow-down-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-right-s" className="h-3.5 w-3.5" />}
-                        </div>
+                    <div className="flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center" style={{ color: 'var(--tools-icon)' }}>
+                        <Icon name={presentation?.icon ?? 'list-unordered'} className={cn('h-3.5 w-3.5', presentation?.iconClassName)} />
                     </div>
 
                     {isStreaming ? (
-                        <span className={cn('flex items-center gap-1', TOOL_ROW_TITLE_CLASS)} style={{ color: 'var(--tools-title)' }}>
+                        <span className={cn('flex items-center gap-0.5', TOOL_ROW_TITLE_CLASS)} style={{ color: 'var(--tools-title)' }}>
                             <span>{title}</span>
                             <BusyDots />
                         </span>
@@ -425,19 +404,23 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                     )}
                 </div>
 
-                <div className={cn('flex items-center gap-1 flex-1 min-w-0', TOOL_ROW_DESCRIPTION_CLASS)} style={{ color: 'var(--tools-description)' }}>
-                    {!isStreaming && !isExpanded && summary ? (
-                        <span
-                            className={cn('min-w-0 truncate', TOOL_ROW_DESCRIPTION_CLASS)}
-                            style={{ color: 'var(--tools-description)' }}
-                            title={summary}
-                        >
-                            {summary}
-                        </span>
-                    ) : (
-                        <span className="min-w-0 flex-1" />
-                    )}
-                </div>
+                {!isStreaming && !isExpanded && summary ? (
+                    <span
+                        className={cn('min-w-0 max-w-[36ch] sm:max-w-[54ch] truncate', TOOL_ROW_DESCRIPTION_CLASS)}
+                        style={{ color: 'var(--tools-description)' }}
+                        title={summary}
+                    >
+                        {summary}
+                    </span>
+                ) : null}
+
+                <span
+                    aria-hidden="true"
+                    className="flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center"
+                    style={{ color: 'var(--tools-icon)' }}
+                >
+                    {isExpanded ? <Icon name="arrow-down-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-right-s" className="h-3.5 w-3.5" />}
+                </span>
             </div>
 
             {shouldRenderExpandedContent ? (
@@ -452,25 +435,20 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                     }}
                 >
                     <div
-                        className="relative ml-2 pl-3 pb-1 pt-0.5"
+                        className="oc-thinking-card relative mt-1.5 mb-1 overflow-hidden rounded-xl border"
                         style={{
                             opacity: isExpanded ? 1 : 0,
                             transform: isExpanded ? 'translateY(0)' : 'translateY(-4px)',
                             transition: 'opacity 180ms ease-out, transform 180ms ease-out',
                         }}
                     >
-                        <span
-                            aria-hidden="true"
-                            className="pointer-events-none absolute left-0 top-0 bottom-0 w-px"
-                            style={{ backgroundColor: 'var(--tools-border)' }}
-                        />
                         <ScrollableOverlay
                             ref={scrollBoxRef}
                             as="div"
-                            outerClassName={presentation?.maxHeightClassName ?? 'max-h-80'}
-                            className="p-0"
+                            outerClassName={cn('oc-thinking-scroll-wrapper', presentation?.maxHeightClassName ?? 'max-h-80')}
+                            className="oc-thinking-scroller px-4 py-3"
                             useScrollShadow
-                            scrollShadowSize={36}
+                            scrollShadowSize={40}
                             userIntentOnly
                             data-scrollable="true"
                             onWheel={handleBoxWheel}
@@ -509,19 +487,15 @@ const ReasoningPart = React.memo(({
     // never streaming, even while the rest of the message still streams.
     const isLiveStreamPhase = streamPhase === 'streaming' || streamPhase === 'cooldown';
     const isStreaming = chatRenderMode === 'live' && isLiveStreamPhase && typeof time?.end !== 'number';
-    const throttledTextRaw = useStreamingTextThrottle({
+    const throttledText = useStreamingTextThrottle({
         text: textContent,
         isStreaming,
         identityKey: `${messageId}:${part.id ?? 'reasoning'}`,
     });
-    // Same block-level reveal as assistant text: a shown reasoning paragraph
-    // never mutates in place.
-    const throttledText = isStreaming ? commitStreamedText(throttledTextRaw) : throttledTextRaw;
 
     // Show reasoning even if time.end isn't set yet (during streaming).
     // While genuinely streaming, keep the block mounted even before the
-    // block-level reveal commits a first line, so the busy header appears
-    // immediately instead of waiting on committed text.
+    // first token arrives, so the busy header appears immediately.
     if (!isStreaming && (!throttledText || throttledText.trim().length === 0)) {
         return null;
     }
@@ -538,3 +512,4 @@ const ReasoningPart = React.memo(({
 });
 
 export default ReasoningPart;
+

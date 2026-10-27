@@ -653,6 +653,7 @@ const CronScheduleSection: React.FC<{
 
   return (
     <div className="flex flex-col gap-3">
+      <p className="typography-meta text-muted-foreground">{t('sessions.scheduledTasks.editor.cronExpression.help')}</p>
       <div className="flex flex-col gap-1">
         <FieldLabel htmlFor="sched-cron" required>{t('sessions.scheduledTasks.editor.cronExpression.label')}</FieldLabel>
         <Input
@@ -729,8 +730,9 @@ export function ScheduledTaskEditorDialog(props: {
   task: ScheduledTask | null;
   onOpenChange: (open: boolean) => void;
   onSave: (draft: Partial<ScheduledTask>) => Promise<void>;
+  onDelete?: () => Promise<boolean>;
 }) {
-  const { open, task, onOpenChange, onSave } = props;
+  const { open, task, onOpenChange, onSave, onDelete } = props;
   const { t, locale } = useI18n();
   const loadProviders = useConfigStore((state) => state.loadProviders);
   const loadAgents = useConfigStore((state) => state.loadAgents);
@@ -1668,8 +1670,18 @@ export function ScheduledTaskEditorDialog(props: {
     </div>
   );
 
+  const handleDelete = async () => {
+    if (!onDelete || saving) return;
+    setSaving(true);
+    try {
+      if (await onDelete()) onOpenChange(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const footerRow = (
-    <div className="flex items-center justify-between gap-3">
+    <div className="flex flex-wrap items-center justify-between gap-3">
       <label className="inline-flex items-center gap-2">
         <Checkbox
           checked={draft.enabled}
@@ -1679,7 +1691,13 @@ export function ScheduledTaskEditorDialog(props: {
         <span className="typography-meta">{t('sessions.scheduledTasks.editor.enabled.label')}</span>
       </label>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {task && onDelete ? (
+          <Button type="button" variant="destructive" size="sm" onClick={() => void handleDelete()} disabled={saving}>
+            <Icon name="delete-bin" className="h-4 w-4" />
+            {t('sessions.scheduledTasks.dialog.actions.delete')}
+          </Button>
+        ) : null}
         <Tooltip>
           <TooltipTrigger asChild>
             <button

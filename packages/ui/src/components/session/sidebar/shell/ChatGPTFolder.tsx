@@ -26,7 +26,7 @@ export function ChatGPTFolder(): React.ReactNode {
       <DropdownMenu>
         <DropdownMenuTrigger asChild><Button variant="ghost" size="xs" aria-label={t('chatgpt.tools')}><Icon name="more" className="size-3.5" /></Button></DropdownMenuTrigger>
         <DropdownMenuContent side="right" align="start">
-          {(['Library', 'Plugins', 'Explore', 'Projects', 'Scheduled'] as const).map(label => <DropdownMenuItem key={label} onSelect={() => useChatGPTStore.getState().open({ kind: 'shortcut', label }, 'full')}>{t(`chatgpt.${label}`)}</DropdownMenuItem>)}
+          {(['Health', 'Library', 'Plugins', 'Explore', 'Projects', 'Scheduled'] as const).map(label => <DropdownMenuItem key={label} onSelect={() => useChatGPTStore.getState().open({ kind: 'shortcut', label }, 'full')}>{t(`chatgpt.${label}`)}</DropdownMenuItem>)}
           <DropdownMenuItem onSelect={() => useChatGPTStore.getState().open(undefined, 'full')}>{t('chatgpt.full')}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => useChatGPTStore.getState().open({ kind: 'refresh' })}>{t('openrouter.credits.refresh')}</DropdownMenuItem>
         </DropdownMenuContent>

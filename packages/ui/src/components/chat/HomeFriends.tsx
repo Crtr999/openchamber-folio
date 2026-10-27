@@ -1,3 +1,4 @@
+import { useGlobalBlockingRequestsStore } from '@/sync/global-blocking-requests';
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -21,7 +22,6 @@ import {
     folderFriendKey,
     folderFriendName,
     folderFriendRole,
-    normalizeFolderKeyPath,
     readFriendLink,
     readFriendProfiles,
     resolveFolderPrimaryAgent,
@@ -47,7 +47,7 @@ type FolderCatalog = {
     /** Undefined when the folder's configuration could not be read. */
     configuration?: Awaited<ReturnType<typeof opencodeClient.getRulesConfiguration>>;
 };
-type FriendStatus = { kind: 'working' | 'retrying' | 'active' | 'unconfirmed' | 'about'; text: string };
+type FriendStatus = { kind: 'working' | 'retrying' | 'waiting' | 'active' | 'unconfirmed' | 'about'; text: string };
 export type FriendCard = {
     agent: string;
     name: string;
@@ -96,6 +96,7 @@ export function HomeFriendCards({ friends, busyAgent, onOpen, onNew, onDetails }
         const busy = Boolean(busyAgent);
         return <li key={friend.agent} className="oc-friend-card" data-friend={friend.agent} data-busy={busyAgent === friend.agent ? 'true' : undefined}
             data-working={friend.status.kind === 'working' || friend.status.kind === 'retrying' ? 'true' : undefined}
+            data-waiting={friend.status.kind === 'waiting' ? 'true' : undefined}
             ref={element => { if (element) cards.current.set(friend.agent, element); else cards.current.delete(friend.agent); }}>
             <Button type="button" variant="ghost" className="oc-friend-card-main" disabled={busy}
                 aria-label={friend.specialist ? t('friends.openDetails', { name: friend.name }) : t('friends.openChat', { name: friend.name })}
@@ -118,7 +119,7 @@ export function HomeFriendCards({ friends, busyAgent, onOpen, onNew, onDetails }
                         </span>
                     )}
                     <span id={`friend-status-${friend.agent}`} className="oc-friend-card-status" data-kind={friend.status.kind}>
-                        {(friend.status.kind === 'working' || friend.status.kind === 'retrying') && <span className="oc-friend-status-dot" aria-hidden="true" />}
+                        {(friend.status.kind === 'working' || friend.status.kind === 'retrying' || friend.status.kind === 'waiting') && <span className="oc-friend-status-dot" aria-hidden="true" />}
                         <span className="truncate">{busyAgent === friend.agent ? t('friends.opening') : friend.status.text}</span>
                     </span>
                 </span>
@@ -206,6 +207,7 @@ export function HomeFriends() {
         return allChats ? [...projects, allChats] : projects;
     }, [projects, chatsRoot]);
     const statuses = useAllSessionStatuses();
+    const pending = useGlobalBlockingRequestsStore(state => state.bySession);
     const liveSessions = useAllLiveSessions();
     const cachedSessions = useGlobalSessionsStore(s => s.activeSessions);
     const [runtime, setRuntime] = React.useState(getRuntimeKey);
@@ -349,7 +351,8 @@ export function HomeFriends() {
             const link = links.get(project.id);
             const folderSessions = sessionsByFolder.byFolder.get(project.id) ?? [];
             const linkedSession = link?.state === 'ready' ? sessionsByFolder.byId.get(link.sessionId) : undefined;
-            const activeSession = folderSessions.find(s => statuses[s.id] && statuses[s.id].type !== 'idle')
+            const waitingSession = folderSessions.find(session => { const request = pending.get(session.id); return request && (request.permissions.length || request.forms.length); });
+            const activeSession = waitingSession ?? folderSessions.find(s => statuses[s.id] && statuses[s.id].type !== 'idle')
                 ?? linkedSession
                 ?? folderSessions[0];
             const live = activeSession ? statuses[activeSession.id] : undefined;
@@ -357,6 +360,8 @@ export function HomeFriends() {
             const countSuffix = chatCount > 1 ? ` · ${chatCount} chats` : '';
             const status: FriendStatus = link?.state === 'creating'
                 ? { kind: 'unconfirmed', text: t('friends.status.unconfirmed') }
+                : waitingSession
+                    ? { kind: 'waiting', text: t('activity.needsYou') }
                 : live && live.type === 'retry'
                     ? { kind: 'retrying', text: `${t('friends.status.retrying')}${countSuffix}` }
                     : live && live.type !== 'idle'
@@ -374,7 +379,7 @@ export function HomeFriends() {
                 badges: guardrails.badges,
             };
         });
-    }, [friendProjects, resolveProjectFriend, links, sessionsByFolder, statuses, locale, t]);
+    }, [friendProjects, resolveProjectFriend, links, sessionsByFolder, pending, statuses, locale, t]);
 
     const manage = (agentName: string, project?: ProjectEntry) => {
         const targetProject = project ?? (details ? friendProjects.find(p => p.id === details.projectId) : friendProjects[0]);

@@ -364,7 +364,10 @@ export const createNotificationTriggerRuntime = (deps) => {
   // A session with an ACTIVE goal suppresses per-turn ready notifications;
   // the session-goal runtime sends its own notification when the goal
   // settles. Fetch failures fall through to normal notification behavior.
-  const hasActiveSessionGoal = async (sessionId) => {
+  const hasActiveSessionGoal = async (sessionId, settings) => {
+    // Disabled goal mode cannot settle a stored active goal. Its stale flag
+    // must not suppress ordinary completion or companion inbox persistence.
+    if (settings.sessionGoalEnabled === false) return false;
     if (!sessionId || typeof readSessionMetadata !== 'function') return false;
     try {
       const metadata = await readSessionMetadata(sessionId);
@@ -447,7 +450,7 @@ export const createNotificationTriggerRuntime = (deps) => {
         // While a goal drives the session, per-turn "ready" notifications are
         // noise produced by the goal loop itself — the goal's own settle
         // notification (complete/blocked/budget) is the final word instead.
-        if (await hasActiveSessionGoal(sessionId)) {
+        if (await hasActiveSessionGoal(sessionId, settings)) {
           return;
         }
 

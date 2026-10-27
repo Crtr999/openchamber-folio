@@ -319,6 +319,9 @@ export const applyGlobalSessionStatusSnapshot = (
     }
 
     for (const [sessionId, status] of Object.entries(raw)) {
+      // OpenCode v2's active list is global. Only owned IDs establish this
+      // directory's membership; otherwise a refresh makes unrelated friends dance.
+      if (knownSessionIds !== undefined && !known.has(sessionId)) continue;
       const type = normalizeStatusType(status.type);
       const observed = state.observedById.get(sessionId);
       if (type !== 'idle' && observed?.outcome) {

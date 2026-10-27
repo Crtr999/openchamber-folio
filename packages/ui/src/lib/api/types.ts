@@ -1492,6 +1492,8 @@ export interface ClientAuthAPI {
 }
 
 export interface RuntimeAPIs {
+  /** iPhone HealthKit only. Other runtimes return unavailable or omit it. */
+  healthData?: import('../health/client').HealthDataAPI;
   /** Native local picker. Web/mobile fall back to their browser file input; VS Code does not import themes. */
   themeFiles?: {
     pick(): Promise<{ status: 'unsupported' } | { status: 'picked'; file: { name: string; size: number; text: string } | null }>;

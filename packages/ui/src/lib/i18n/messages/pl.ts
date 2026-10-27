@@ -1,3 +1,6 @@
+import { geminiI18n } from './gemini.i18n';
+import { veniceI18n } from './venice.i18n';
+import { healthI18n } from './health.i18n';
 import { companionI18n } from './companion.i18n';
 import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
@@ -25,6 +28,9 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 import { notionPickerI18n } from './notion-picker.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...healthI18n["pl"],
+  'activity.title': 'Aktywność',
+  'activity.needsYou': 'Wymaga Twojej uwagi',
   ...companionI18n['pl'],
   ...notionPickerI18n['pl'],
   ...friendsI18n['pl'],
@@ -32,6 +38,8 @@ export const dict: Record<I18nKey, string> = {
   'workspace.officePreview': 'Tylko tekst i osadzone obrazy. Oryginalny układ, wykresy, animacje i bieżące obliczenia nie są odtwarzane.',
   ...chatgptI18n['pl'],
   ...claudeI18n.pl,
+  ...veniceI18n.pl,
+  ...geminiI18n.pl,
   ...meetingsI18n.pl,
   'meeting.quickStart': 'Rozpocznij spotkanie',
   'meeting.partial': 'Nie można odczytać części zapisanych spotkań. Lista jest niepełna; uszkodzone pliki pozostawiono bez zmian.',
@@ -508,6 +516,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.dialog.actions.runNow': 'Uruchom teraz',
   'sessions.scheduledTasks.dialog.actions.edit': 'Edytuj',
   'sessions.scheduledTasks.dialog.actions.editAria': 'Edytuj {taskName}',
+  'sessions.scheduledTasks.dialog.actions.delete': "Usuń",
   'sessions.scheduledTasks.dialog.actions.deleteAria': 'Usuń {taskName}',
   'sessions.scheduledTasks.dialog.loading': 'Ładowanie zadań...',
   'sessions.scheduledTasks.dialog.empty.noTasks': 'Brak zaplanowanych zadań.',
@@ -570,7 +579,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.editor.scheduleType.daily': 'Codziennie',
   'sessions.scheduledTasks.editor.scheduleType.weekly': 'Co tydzień',
   'sessions.scheduledTasks.editor.scheduleType.once': 'Jednorazowo',
-  'sessions.scheduledTasks.editor.scheduleType.cron': 'Cron',
+  'sessions.scheduledTasks.editor.scheduleType.cron': "Własny harmonogram (zaawansowany)",
   'sessions.scheduledTasks.editor.date.label': 'Data',
   'sessions.scheduledTasks.editor.date.placeholder': 'Wybierz datę',
   'sessions.scheduledTasks.editor.date.previousMonth': 'Poprzedni miesiąc',
@@ -617,6 +626,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.editor.validation.timezoneRequired': 'Strefa czasowa jest wymagana',
   'sessions.scheduledTasks.editor.validation.cronRequired': 'Wyrażenie cron jest wymagane',
   'sessions.scheduledTasks.editor.validation.cronInvalid': 'Nieprawidłowe wyrażenie cron',
+  'sessions.scheduledTasks.editor.cronExpression.help': "Powtarzający się harmonogram zapisany krótkim kodem. Do zwykłych przypomnień wybierz codziennie lub co tydzień. Na przykład 0 9 * * 1 oznacza każdy poniedziałek o 9:00 w wybranej strefie czasowej.",
   'sessions.scheduledTasks.editor.cronExpression.label': 'Wyrażenie cron',
   'sessions.scheduledTasks.editor.cronExpression.placeholder': '*/5 * * * *',
   'sessions.scheduledTasks.editor.cronExpression.nextRuns': 'Następne uruchomienia',
@@ -3575,6 +3585,8 @@ export const dict: Record<I18nKey, string> = {
   'multirun.overview.bar.waiting': 'Uruchomienia czekające na Ciebie: {count}. Uruchomienie nie skończy się, dopóki nie odpowiesz.',
   'multirun.overview.prompt.expand': 'Pokaż wszystko',
   'multirun.overview.prompt.collapse': 'Zwiń',
+  'computer.start': "Uruchom komputer",
+  'computer.connectionError': "Połączenie z komputerem jest niedostępne",
   'computer.title': "Komputer agenta",
   'computer.hint': "Wybierz ekran, aby obserwować pracę.",
   'computer.noScreens': "Na komputerze nie otwarto żadnego ekranu.",

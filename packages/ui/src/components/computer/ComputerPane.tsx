@@ -1,4 +1,6 @@
 import React from 'react';
+import { z } from 'zod';
+import { getRuntimeKey } from '@/lib/runtime-switch';
 
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
@@ -25,29 +27,20 @@ import {
  * the key never reaches the renderer.
  */
 
-type ComputerState = {
-  available: boolean;
-  baseUrl: string | null;
-  screens: Array<{ name: string; since: string }>;
-};
-
+const computerStateSchema = z.object({
+  available: z.boolean(), baseUrl: z.string().nullable(),
+  screens: z.array(z.object({ name: z.string(), since: z.string().default('') })),
+  connection: z.object({ state: z.string(), chatGPTAppRequired: z.literal(false) }).optional(),
+});
+type ComputerState = z.infer<typeof computerStateSchema>;
 const readComputerState = async (signal?: AbortSignal): Promise<ComputerState> => {
-  try {
-    const response = await runtimeFetch('/api/computer/state', { cache: 'no-store', signal });
-    if (!response.ok) return { available: false, baseUrl: null, screens: [] };
-    const payload = await response.json() as Partial<ComputerState> | null;
-    return {
-      available: payload?.available === true,
-      baseUrl: typeof payload?.baseUrl === 'string' ? payload.baseUrl : null,
-      screens: Array.isArray(payload?.screens) ? payload.screens : [],
-    };
-  } catch {
-    return { available: false, baseUrl: null, screens: [] };
-  }
+  const response = await runtimeFetch('/api/computer/state', { cache: 'no-store', signal });
+  if (!response.ok) throw new Error('Computer connection unavailable');
+  return computerStateSchema.parse(await response.json());
 };
 
 const sendClipboardToComputer = async (screen: string, text: string, paste: boolean): Promise<boolean> => {
-  if (!screen || typeof text !== 'string') return false;
+  if (!screen) return false;
   try {
     const response = await runtimeFetch('/api/computer/clipboard', {
       method: 'POST',
@@ -63,6 +56,9 @@ const sendClipboardToComputer = async (screen: string, text: string, paste: bool
 export function ComputerPane({ directory, requestedScreen }: { directory: string | null; requestedScreen?: string | null }) {
   const { t } = useI18n();
   const [state, setState] = React.useState<ComputerState | null>(null);
+  const [readFailed, setReadFailed] = React.useState(false);
+  const [starting, setStarting] = React.useState(false);
+  const reading = React.useRef(false);
   const [selected, setSelected] = React.useState<string | null>(requestedScreen ?? null);
   const [webviewElement, setWebviewElement] = React.useState<WebviewElement | null>(null);
   const webviewRef = React.useRef<WebviewElement | null>(null);
@@ -79,13 +75,28 @@ export function ComputerPane({ directory, requestedScreen }: { directory: string
   }, [requestedScreen]);
 
   const refresh = React.useCallback(async (signal?: AbortSignal) => {
-    const next = await readComputerState(signal);
-    setState(next);
-    setSelected((current) => {
-      if (current && next.screens.some((screen) => screen.name === current)) return current;
-      return next.screens[0]?.name ?? null;
-    });
+    if (reading.current) return;
+    reading.current = true;
+    const owner = getRuntimeKey();
+    try {
+      const next = await readComputerState(signal);
+      if (signal?.aborted || owner !== getRuntimeKey()) return;
+      setReadFailed(false); setState(next);
+      setSelected(current => current && next.screens.some(screen => screen.name === current) ? current : next.screens[0]?.name ?? null);
+    } catch {
+      if (!signal?.aborted && owner === getRuntimeKey()) setReadFailed(true);
+    } finally { reading.current = false; }
   }, []);
+  const start = async () => {
+    if (starting) return;
+    const owner = getRuntimeKey(); setStarting(true); setReadFailed(false);
+    try {
+      const response = await runtimeFetch('/api/computer/start', { method: 'POST' });
+      if (!response.ok) throw new Error('Computer startup failed');
+      if (owner === getRuntimeKey()) await refresh();
+    } catch { if (owner === getRuntimeKey()) setReadFailed(true); }
+    finally { if (owner === getRuntimeKey()) setStarting(false); }
+  };
 
   React.useEffect(() => {
     const controller = new AbortController();
@@ -93,7 +104,7 @@ export function ComputerPane({ directory, requestedScreen }: { directory: string
     // The computer changes while the app is open, so the list is read again
     // when the user comes back to it, and while they are watching it: a screen
     // a bot opens has to appear on its own, not on the next click.
-    const onVisible = () => { if (document.visibilityState === 'visible') void refresh(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') void refresh(controller.signal); };
     document.addEventListener('visibilitychange', onVisible);
     const timer = window.setInterval(onVisible, 2000);
     return () => {
@@ -117,8 +128,8 @@ export function ComputerPane({ directory, requestedScreen }: { directory: string
     };
 
     const onConsoleMessage = (event: Event) => {
-      const detail = event as unknown as { message?: string };
-      const message = typeof detail.message === 'string' ? detail.message : '';
+      const detail = z.object({ message: z.string() }).safeParse(event);
+      const message = detail.success ? detail.data.message : '';
       const payload = parseComputerClipboardConsoleMessage(message);
       if (!payload) return;
 
@@ -128,14 +139,14 @@ export function ComputerPane({ directory, requestedScreen }: { directory: string
       }
 
       if (payload.action === 'paste' || payload.action === 'sync') {
-        if (typeof payload.text === 'string' && payload.text.length > 0) {
+        if (payload.text && payload.text.length > 0) {
           void sendClipboardToComputer(payload.screen, payload.text, payload.action === 'paste');
         }
         return;
       }
 
       if (payload.action === 'paste-from-host') {
-        if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
+        if (navigator.clipboard?.readText) {
           void navigator.clipboard.readText()
             .then((text) => {
               if (text) void sendClipboardToComputer(payload.screen, text, true);
@@ -201,15 +212,16 @@ export function ComputerPane({ directory, requestedScreen }: { directory: string
   }, [selected]);
 
   if (!state) {
-    return <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">{t('common.loading')}</div>;
+    return <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">{t(readFailed ? 'computer.connectionError' : 'common.loading')}</div>;
   }
 
   if (!state.available || !state.baseUrl) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
         <span className="oc-empty-badge" aria-hidden="true"><Icon name="window" className="size-5 text-muted-foreground" /></span>
-        <p className="text-sm font-medium">{t('computer.unavailable')}</p>
+        <p className="text-sm font-medium">{t(readFailed ? 'computer.connectionError' : 'computer.unavailable')}</p>
         <p className="max-w-xs text-xs text-muted-foreground">{t('computer.unavailableHint')}</p>
+        <Button size="sm" disabled={starting} onClick={() => void start()}>{t(starting ? 'common.loading' : 'computer.start')}</Button>
       </div>
     );
   }

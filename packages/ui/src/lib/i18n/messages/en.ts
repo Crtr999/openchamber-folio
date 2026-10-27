@@ -1,3 +1,6 @@
+import { geminiI18n } from './gemini.i18n';
+import { veniceI18n } from './venice.i18n';
+import { healthI18n } from './health.i18n';
 import { companionI18n } from './companion.i18n';
 import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
@@ -24,6 +27,9 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 import { notionPickerI18n } from './notion-picker.i18n';
 export const dict = {
+  ...healthI18n["en"],
+  'activity.title': 'Activity',
+  'activity.needsYou': 'Needs your attention',
   ...companionI18n["en"],
   ...notionPickerI18n['en'],
   ...friendsI18n['en'],
@@ -31,6 +37,8 @@ export const dict = {
   'workspace.officePreview': 'Text and embedded images only. Original layout, charts, animations, and live calculations are not rendered.',
   ...chatgptI18n['en'],
   ...claudeI18n.en,
+  ...veniceI18n.en,
+  ...geminiI18n.en,
   ...meetingsI18n.en,
   'meeting.quickStart': 'Start meeting',
   'meeting.screenPermission': 'Screen-sharing permission is requested only to capture system audio. No screen frames are read, saved or transmitted.',
@@ -350,6 +358,7 @@ export const dict = {
   'sessions.scheduledTasks.dialog.actions.runNow': 'Run now',
   'sessions.scheduledTasks.dialog.actions.edit': 'Edit',
   'sessions.scheduledTasks.dialog.actions.editAria': 'Edit {taskName}',
+  'sessions.scheduledTasks.dialog.actions.delete': "Delete",
   'sessions.scheduledTasks.dialog.actions.deleteAria': 'Delete {taskName}',
   'sessions.scheduledTasks.dialog.loading': 'Loading tasks...',
   'sessions.scheduledTasks.dialog.empty.noTasks': 'No scheduled tasks yet.',
@@ -412,7 +421,7 @@ export const dict = {
   'sessions.scheduledTasks.editor.scheduleType.daily': 'Daily',
   'sessions.scheduledTasks.editor.scheduleType.weekly': 'Weekly',
   'sessions.scheduledTasks.editor.scheduleType.once': 'One-time',
-  'sessions.scheduledTasks.editor.scheduleType.cron': 'Cron',
+  'sessions.scheduledTasks.editor.scheduleType.cron': "Custom schedule (advanced)",
   'sessions.scheduledTasks.editor.date.label': 'Date',
   'sessions.scheduledTasks.editor.date.placeholder': 'Select date',
   'sessions.scheduledTasks.editor.date.previousMonth': 'Previous month',
@@ -459,6 +468,7 @@ export const dict = {
   'sessions.scheduledTasks.editor.validation.timezoneRequired': 'Timezone is required',
   'sessions.scheduledTasks.editor.validation.cronRequired': 'Cron expression is required',
   'sessions.scheduledTasks.editor.validation.cronInvalid': 'Invalid cron expression',
+  'sessions.scheduledTasks.editor.cronExpression.help': "A repeating schedule written as a short code. Use Daily or Weekly for ordinary reminders. For example, 0 9 * * 1 means every Monday at 9:00 in the selected time zone.",
   'sessions.scheduledTasks.editor.cronExpression.label': 'Cron expression',
   'sessions.scheduledTasks.editor.cronExpression.placeholder': '*/5 * * * *',
   'sessions.scheduledTasks.editor.cronExpression.nextRuns': 'Next runs',
@@ -3570,6 +3580,8 @@ export const dict = {
   'multirun.overview.bar.waiting': 'Runs waiting for you: {count}. The run can\'t finish until you answer them.',
   'multirun.overview.prompt.expand': 'Show all',
   'multirun.overview.prompt.collapse': 'Show less',
+  'computer.start': "Start computer",
+  'computer.connectionError': "Computer connection unavailable",
   'computer.title': "The agent's computer",
   'computer.hint': "Pick a screen to watch it work.",
   'computer.noScreens': "No screen is open on the computer.",

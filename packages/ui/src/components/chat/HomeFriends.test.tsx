@@ -155,3 +155,13 @@ test('a save conflict keeps the draft and tells the user why', async () => {
         expect(readFriendProfiles(store, 'local').friends.map(item => item.agent)).toEqual(['build']);
     } finally { await view.cleanup(); }
 });
+
+test('a waiting friend has an attention pose rather than the working dance', async () => {
+    const view = await mount(<HomeFriendCards friends={[{ ...cards[0], status: { kind: 'waiting', text: 'Needs your attention' } }]} busyAgent="" onOpen={() => {}} onNew={() => {}} onDetails={() => {}} />);
+    try {
+        const friend = view.host.querySelector('li[data-friend="build"]');
+        expect(friend?.getAttribute('data-waiting')).toBe('true');
+        expect(friend?.getAttribute('data-working')).toBeNull();
+        expect(friend?.textContent).toContain('Needs your attention');
+    } finally { await view.cleanup(); }
+});

@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { resolveComputerEndpoint } from '../computer/endpoint.js';
+import { readComputerConnection, startComputerConnection } from '../computer/connection.js';
 import { OpenCode } from '@opencode/client';
 import { OpenChamberControlError, asControlError } from './error.js';
 import { OPENCHAMBER_ALL_ACTIONS } from './actions.js';
@@ -157,6 +159,7 @@ export const createOpenChamberControlService = (dependencies) => {
     notifyUser = null,
     agentMemoryActions = null,
     commitmentActions = null,
+    healthActions = null,
     // True for a follow-up conversation. It may use the commitment actions and
     // nothing else of the control surface.
     isFollowUpSession = async () => false,
@@ -512,6 +515,12 @@ export const createOpenChamberControlService = (dependencies) => {
       }
       if (options.contextSessionId && !action.startsWith('commitment.') && await isFollowUpSession(options.contextSessionId)) {
         throw new OpenChamberControlError('A follow-up conversation can only manage commitments', 403);
+      }
+      if (action === 'computer.status') return readComputerConnection(resolveComputerEndpoint({ workingDirectory: contextDirectory }));
+      if (action === 'computer.start') return startComputerConnection(resolveComputerEndpoint({ workingDirectory: contextDirectory }));
+      if (action.startsWith('health.')) {
+        if (!healthActions) throw new OpenChamberControlError('Health data is unavailable on this server', 503);
+        return healthActions.execute(action, input, contextDirectory, options);
       }
       if (action.startsWith('commitment.')) {
         if (!commitmentActions) {

@@ -4,6 +4,9 @@ import { useProviderLogo } from '@/hooks/useProviderLogo';
 import { cn } from '@/lib/utils';
 import { getProviderLogoFallbackIcon, getProviderLogoInitials } from './providerLogoFallback';
 
+// Full-color marks must not be inverted in dark themes.
+const KEEP_COLOR_LOGOS = new Set(['gemini', 'gemini-cli', 'opencarter-gemini-website', 'gemini-website']);
+
 interface ProviderLogoProps {
     providerId: string;
     alt?: string;
@@ -34,7 +37,7 @@ export const ProviderLogo: React.FC<ProviderLogoProps> = ({
         <img
             src={src}
             alt={alt || `${providerId} logo`}
-            className={cn('dark:invert object-contain', className)}
+            className={cn(!KEEP_COLOR_LOGOS.has(providerId) && 'dark:invert', 'object-contain', className)}
             loading="eager"
             decoding="async"
             fetchPriority="high"

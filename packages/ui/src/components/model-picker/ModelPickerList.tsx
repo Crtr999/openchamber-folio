@@ -120,7 +120,7 @@ const ModelPickerRowTooltip: React.FC<{
   ].filter(Boolean);
 
   return (
-    <Tooltip delayDuration={0} open={active && delayedActive} onOpenChange={() => {}}>
+    <Tooltip delayDuration={0} disableHoverablePopup open={active && delayedActive} onOpenChange={() => {}}>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
       {active && delayedActive ? (
         <TooltipContent side="right" sideOffset={8} className="max-w-xs text-left transition-none data-[starting-style]:opacity-100 data-[starting-style]:scale-100 data-[ending-style]:opacity-100 data-[ending-style]:scale-100">
@@ -854,6 +854,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
           aria-selected={false}
           aria-disabled={disabled || undefined}
           tabIndex={-1}
+          onMouseDown={(event) => { event.preventDefault(); }}
           onClick={() => { if (!disabled) action.onSelect(); }}
           onMouseEnter={(event) => highlightOnPointer(event, rowIndex)}
           onMouseMove={(event) => highlightOnPointer(event, rowIndex)}
@@ -887,6 +888,11 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
               aria-selected={isSelected}
               aria-disabled={disabled || undefined}
               tabIndex={-1}
+              onMouseDown={(event) => {
+                if (!(event.target instanceof Element && event.target.closest('button'))) {
+                  event.preventDefault();
+                }
+              }}
               onClick={() => { if (!disabled) onSelect(entry); }}
               onKeyDown={(event) => {
                 if (disabled) return;

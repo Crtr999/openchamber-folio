@@ -1,3 +1,6 @@
+import { geminiI18n } from './gemini.i18n';
+import { veniceI18n } from './venice.i18n';
+import { healthI18n } from './health.i18n';
 import { companionI18n } from './companion.i18n';
 import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
@@ -25,6 +28,9 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 import { notionPickerI18n } from './notion-picker.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...healthI18n["zh-TW"],
+  'activity.title': '動態',
+  'activity.needsYou': '需要你處理',
   ...companionI18n['zh-TW'],
   ...notionPickerI18n['zh-TW'],
   ...friendsI18n['zh-TW'],
@@ -32,6 +38,8 @@ export const dict: Record<I18nKey, string> = {
   'workspace.officePreview': '僅顯示文字及嵌入影像，不呈現原始版面配置、圖表、動畫或即時計算。',
   ...chatgptI18n['zh-TW'],
   ...claudeI18n['zh-TW'],
+  ...veniceI18n['zh-TW'],
+  ...geminiI18n['zh-TW'],
   ...meetingsI18n['zh-TW'],
   'meeting.quickStart': '開始會議',
   'meeting.partial': '部分已儲存會議無法讀取。清單不完整，損壞檔案保持不變。',
@@ -364,6 +372,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.dialog.actions.runNow': '立即執行',
   'sessions.scheduledTasks.dialog.actions.edit': '編輯',
   'sessions.scheduledTasks.dialog.actions.editAria': '編輯 {taskName}',
+  'sessions.scheduledTasks.dialog.actions.delete': "刪除",
   'sessions.scheduledTasks.dialog.actions.deleteAria': '刪除 {taskName}',
   'sessions.scheduledTasks.dialog.loading': '正在載入任務...',
   'sessions.scheduledTasks.dialog.empty.noTasks': '暫無排程任務。',
@@ -426,7 +435,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.editor.scheduleType.daily': '每天',
   'sessions.scheduledTasks.editor.scheduleType.weekly': '每週',
   'sessions.scheduledTasks.editor.scheduleType.once': '一次性',
-  'sessions.scheduledTasks.editor.scheduleType.cron': 'Cron',
+  'sessions.scheduledTasks.editor.scheduleType.cron': "自訂排程（進階）",
   'sessions.scheduledTasks.editor.date.label': '日期',
   'sessions.scheduledTasks.editor.date.placeholder': '選擇日期',
   'sessions.scheduledTasks.editor.date.previousMonth': '上個月',
@@ -473,6 +482,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.editor.validation.timezoneRequired': '時區為必填項',
   'sessions.scheduledTasks.editor.validation.cronRequired': 'Cron 表達式為必填項',
   'sessions.scheduledTasks.editor.validation.cronInvalid': 'Cron 表達式無效',
+  'sessions.scheduledTasks.editor.cronExpression.help': "以簡短代碼編寫的重複排程。一般提醒請選擇每天或每週。例如，0 9 * * 1 表示在所選時區每週一的 9:00 執行。",
   'sessions.scheduledTasks.editor.cronExpression.label': 'Cron 表達式',
   'sessions.scheduledTasks.editor.cronExpression.placeholder': '*/5 * * * *',
   'sessions.scheduledTasks.editor.cronExpression.nextRuns': '下次執行',
@@ -3570,6 +3580,8 @@ export const dict: Record<I18nKey, string> = {
   'multirun.overview.bar.waiting': '等待你處理的執行：{count}。你回覆之前，這次執行不會結束。',
   'multirun.overview.prompt.expand': '展開全部',
   'multirun.overview.prompt.collapse': '收合',
+  'computer.start': "啟動電腦",
+  'computer.connectionError': "電腦連線無法使用",
   'computer.title': "代理的電腦",
   'computer.hint': "選擇一個螢幕來觀看它工作。",
   'computer.noScreens': "電腦上沒有開啟任何螢幕。",

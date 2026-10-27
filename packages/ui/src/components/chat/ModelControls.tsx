@@ -8,7 +8,7 @@ import { focusChatInput } from './composer/editor/dom';
 import { MobileModelButton } from './MobileModelButton';
 import type { EditPermissionMode } from '@/stores/types/sessionTypes';
 import type { ModelMetadata } from '@/types';
-import type { Agent, PermissionRuleset } from '@/lib/opencode/model';
+import { findCatalogModel, type Agent, type PermissionRuleset } from '@/lib/opencode/model';
 import type { PermissionEffect } from '@opencode/client';
 import {
     DropdownMenu,
@@ -91,7 +91,7 @@ const AgentDescriptionTooltip: React.FC<{
     }
 
     return (
-        <Tooltip delayDuration={450}>
+        <Tooltip delayDuration={450} disableHoverablePopup>
             <TooltipTrigger asChild>{children}</TooltipTrigger>
             <TooltipContent
                 side="right"
@@ -345,7 +345,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const { isReady, isUnavailable } = useOpenCodeReadiness();
     const { isReady: canSelectAgent } = useOpenCodeReadiness('agents');
     const readinessLabel = isUnavailable ? t('common.unavailable') : t('common.loading');
-    const providers = useConfigStore((state) => state.providers);
+    const rawProviders = useConfigStore((state) => state.providers);
+    const providers = React.useMemo(() => rawProviders.map(provider => /venice/i.test(provider.id) && !provider.id.endsWith('-website') ? { ...provider, name: t('venice.apiLabel') } : provider), [rawProviders, t]);
     const getAgentColor = useAgentColors();
     const currentProviderId = useConfigStore((state) => selection ? selection.model?.providerId ?? '' : state.currentProviderId);
     const currentModelId = useConfigStore((state) => selection ? selection.model?.modelId ?? '' : state.currentModelId);
@@ -817,27 +818,28 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             }
 
             const providerModels = Array.isArray(provider?.models) ? provider.models : [];
-            const modelExists = isAuto || providerModels.find((m: ProviderModel) => m.id === modelId);
-            if (!modelExists) {
+            const matchedModel = isAuto ? null : findCatalogModel(providerModels, modelId);
+            if (!isAuto && !matchedModel) {
                 return 'model-missing';
             }
+            const canonicalModelId = matchedModel?.id ?? modelId;
 
             // Read the live pair: a `setAgent` just before this call may have
             // moved the model to the agent's default since this render.
             const liveConfig = useConfigStore.getState();
             const providerMatches = (liveConfig.currentProviderId ?? currentProviderId) === providerId;
-            const modelMatches = (liveConfig.currentModelId ?? currentModelId) === modelId;
+            const modelMatches = (liveConfig.currentModelId ?? currentModelId) === canonicalModelId;
             if (providerMatches && modelMatches) {
                 return 'applied';
             }
 
             setProvider(providerId);
-            setModel(modelId);
+            setModel(canonicalModelId);
 
             if (currentSessionId) {
-                saveSessionModelSelection(currentSessionId, providerId, modelId);
+                saveSessionModelSelection(currentSessionId, providerId, canonicalModelId);
                 if (agentName) {
-                    saveAgentModelForSession(currentSessionId, agentName, providerId, modelId);
+                    saveAgentModelForSession(currentSessionId, agentName, providerId, canonicalModelId);
                 }
             }
 
@@ -850,7 +852,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         const provider = providers.find((entry) => entry.id === providerId);
         // SAFETY: the catalog model's `variants` is v2's `{ id, settings }[]`
         // (or the v1 keyed object on an older record); only the ids are read.
-        const model = provider?.models.find((entry) => entry.id === modelId) as { variants?: ModelVariantSource } | undefined;
+        const model = findCatalogModel(provider?.models, modelId) as { variants?: ModelVariantSource } | undefined;
         return listModelVariantIds(model?.variants);
     }, [providers]);
 

@@ -21,13 +21,14 @@ const isInside = (directory, parent) => {
  * extra on top of it.
  */
 export const createFolderGuard = ({ resolveAllowedProviders, readExcludedDirectories = async () => [] }) => {
-  const check = async (directory) => {
+  const check = async (directory, providerID) => {
     if (typeof directory !== 'string' || !directory.trim()) return { ok: false, reason: 'no-directory' };
     if (isZdrNamed(directory)) return { ok: false, reason: 'zdr-name' };
     let providers;
     try { providers = await resolveAllowedProviders(directory); }
     catch { return { ok: false, reason: 'binding-unreadable' }; }
     if (!Array.isArray(providers)) return { ok: false, reason: 'binding-unreadable' };
+    if (providerID && providers.some((provider) => provider !== providerID)) return { ok: false, reason: 'provider-bound' };
     if (providers.includes(ZDR_PROVIDER)) return { ok: false, reason: 'zdr-bound' };
     let excluded;
     try { excluded = await readExcludedDirectories(); }

@@ -523,3 +523,16 @@ documented in `packages/ui/src/lib/meetings/DOCUMENTATION.md`.
 `meeting-integration.test.mjs` exercises the real private service and storage with
 synthetic worker/provider fixtures. These do not prove OS dialogs, live system
 audio, sherpa inference or UI interaction. Those checks remain native QA.
+
+
+The private `personalHome.readAwareness` callback is available only in process to the server's approved personal-review job. It reads bounded Notion excerpts and calendar data without exposing credentials or write-capable MCP access. The server verifies persisted source-review consent and exact OpenAI selection before calling it. Enterprise policy refuses the personal review and the underlying Notion reads. This is separate from renderer IPC and grants nothing to remote pages. Outlook has no background reader yet and reports `needs-connection`, never an empty successful mailbox.
+
+Venice uses the isolated `persist:open-carter-venice` partition. Initial attachment requires the exact official origin and a local parent. The guest has no app preload, Node integration or controller access. Enterprise mode refuses attachment and cancels partition network requests at use time. Media/device/location permissions remain denied; no broad privilege is inherited from the browser controller.
+
+The Venice partition permits only its own HTTPS origin to request persistent storage, so its local chats and memory are protected from browser storage-pressure eviction. This permission does not grant access to other sites, app files, devices, media or notifications. Enterprise policy also denies the storage request.
+
+
+Gemini uses persist:open-carter-gemini and the exact https://gemini.google.com initial origin. Its guest has no app preload, Node integration, controller, media, device or notification permissions. Enterprise mode blocks both attachment and network requests. Google sign-in remains the normal website flow in this separate account profile. Venice free-account actions explicitly use Classic Chat, never the paid API catalog.
+
+
+The desktop host enables website model providers through startWebUiServer's desktopWebsiteModels option. The existing per-child local callback token authenticates model completions; it is not a Venice or Gemini API key. Managed provider settings point only to the app's loopback server and are written privately with the existing managed config. The local renderer worker owns short-lived website guests; account pages and native conversations stay separate. No new listener, credential forwarding, native permission, API purchase or per-agent MCP process is added.

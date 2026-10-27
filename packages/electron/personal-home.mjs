@@ -733,6 +733,52 @@ export function createPersonalHome({ filePath, safeStorage, openExternal, isBloc
   };
   return {
     automation,
+    // Private in-process reader. Credentials and write-capable MCP calls never
+    // cross this boundary. The server verifies persisted consent before use.
+    readAwareness: async ({ offset = 0, accounts = [] } = {}) => {
+      checkBoundary();
+      const result = [];
+      const current = await load();
+      if (!current.token) result.push({ source: 'notion', status: 'needs-connection', records: [] });
+      else {
+        try {
+          const pages = [];
+          for (const query of ['', 'deadline', 'assignment']) {
+            for (const page of await searchPages({ query })) {
+              if (!pages.some((item) => item.id === page.id)) pages.push(page);
+            }
+          }
+          const selected = pages.slice(offset, offset + 4);
+          const records = [];
+          let failed = false;
+          for (const page of selected) {
+            try {
+              const fetched = fetchSchema.parse(await tool('fetch', { id: page.url }));
+              records.push({ id: page.id, url: page.url, title: page.title,
+                text: fetched.text.slice(0, 3000), truncated: fetched.truncated === true || fetched.text.length > 3000 });
+            } catch { failed = true; }
+          }
+          if (current.board) {
+            try {
+              const value = await board(false);
+              records.push({ id: 'daily-board', title: value.name, text: JSON.stringify(value).slice(0, 5000), truncated: JSON.stringify(value).length > 5000 });
+            } catch { failed = true; }
+          }
+          result.push({ source: 'notion', status: failed ? 'partial' : 'ready', records,
+            nextOffset: offset + 4 < pages.length ? offset + 4 : 0 });
+        } catch { result.push({ source: 'notion', status: 'error', records: [] }); }
+      }
+      try {
+        const value = await calendar({ op: 'read' });
+        result.push({ source: 'calendar', status: value.access === 'connected' ? 'ready' : 'needs-connection',
+          records: (value.events ?? []).slice(0, 50).map((event) => ({ id: event.id, title: event.title, text: JSON.stringify(event), truncated: false })) });
+      } catch { result.push({ source: 'calendar', status: 'error', records: [] }); }
+      // Native Outlook's scripting interface did not expose the requested
+      // accounts in live verification. Require supported provider connections.
+      result.push({ source: 'outlook', status: 'needs-connection', records: [],
+        accounts: accounts.map((address) => ({ address, status: 'needs-connection' })) });
+      return result;
+    },
     close: () => { pendingAuth?.close(); pendingAuth = undefined; },
     handle: async (raw) => {
       const action = z.object({ action: z.string() }).parse(raw).action;

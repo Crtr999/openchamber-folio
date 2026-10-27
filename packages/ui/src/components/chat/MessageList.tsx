@@ -9,7 +9,8 @@ import { filterVisibleParts, isEmptyTextPart } from './message/partUtils';
 import { areOptionalRenderRelevantMessagesEqual, areRelevantTurnGroupingContextsEqual, areRenderRelevantMessagesEqual } from './message/renderCompare';
 import TurnItem from './components/TurnItem';
 import { LiveTurnActivity } from './components/LiveTurnActivity';
-import { getTurnsWithLaterAssistant, hasLiveActivity } from './lib/turns/liveActivity';
+import { getLiveFinalMessage, getTurnsWithLaterAssistant, hasLiveActivity } from './lib/turns/liveActivity';
+import { projectWorkingStepBatches } from './lib/turns/workingStepBatches';
 import type { ChatMessageEntry, TurnRecord, TurnGroupingContext } from './lib/turns/types';
 import { useTurnRecords } from './hooks/useTurnRecords';
 import { applyRetryOverlay } from './lib/turns/applyRetryOverlay';
@@ -274,6 +275,8 @@ const TurnBlock = React.memo(({
 }: TurnBlockProps) => {
 
     const showReasoningTraces = useUIStore((state) => state.showReasoningTraces);
+    const collapsibleThinkingBlocks = useUIStore((state) => state.collapsibleThinkingBlocks);
+    const effectiveShowReasoningTraces = showReasoningTraces || collapsibleThinkingBlocks;
     // A hidden prompt has nothing to pin, and a subagent run opens its turn as
     // a notice row, which never sticks.
     const turnHeaderCanStick = React.useMemo(
@@ -413,6 +416,28 @@ const TurnBlock = React.memo(({
             .filter((segment): segment is NonNullable<typeof segment> => segment !== null);
     }, [chatRenderMode, visibleActivityMessageIdSet, turn.activitySegments, turn.assistantMessages.length]);
 
+    const isTurnWorking = React.useMemo(() => {
+        const hasFinalAnswer = Boolean(getLiveFinalMessage(visibleAssistantMessages));
+        if (hasFinalAnswer || hasLaterAssistant) {
+            return false;
+        }
+        return (isLastTurn && sessionIsWorking) || turn.stream.isStreaming || Boolean(streamingAssistantMessageId);
+    }, [hasLaterAssistant, isLastTurn, sessionIsWorking, streamingAssistantMessageId, turn.stream.isStreaming, visibleAssistantMessages]);
+
+    const workingStepBatches = React.useMemo(() => {
+        if (chatRenderMode !== 'live' || !collapsibleThinkingBlocks) {
+            return undefined;
+        }
+        const userCreatedAt = turn.userMessage.info.time.created;
+        return projectWorkingStepBatches({
+            assistantMessages: visibleAssistantMessages,
+            showReasoningTraces: effectiveShowReasoningTraces,
+            isTurnWorking,
+            streamingMessageId: streamingAssistantMessageId,
+            turnStartedAt: userCreatedAt > 0 ? userCreatedAt : undefined,
+        });
+    }, [chatRenderMode, collapsibleThinkingBlocks, effectiveShowReasoningTraces, isTurnWorking, streamingAssistantMessageId, turn.userMessage.info.time, visibleAssistantMessages]);
+
     const turnGroupingContextBase = React.useMemo(() => {
         const userCreatedAt = (turn.userMessage.info.time as { created?: number } | undefined)?.created;
         // The variant lives on the assistant message that ran with it, not on
@@ -432,6 +457,7 @@ const TurnBlock = React.memo(({
             summaryBody: turn.summaryText,
             activityParts: visibleActivityParts,
             activityGroupSegments: visibleActivitySegments,
+            workingStepBatches,
             headerMessageId: turn.headerMessageId,
             hasTools: turn.hasTools,
             hasReasoning: turn.hasReasoning,
@@ -440,7 +466,7 @@ const TurnBlock = React.memo(({
             userMessageCreatedAt: typeof userCreatedAt === 'number' ? userCreatedAt : undefined,
             assistantVariant,
         };
-    }, [turn.changedFiles, turn.diffStats, turn.hasReasoning, turn.hasTools, turn.headerMessageId, turn.summaryText, turn.turnId, turn.assistantMessages, turn.userMessage.info, visibleActivityParts, visibleActivitySegments]);
+    }, [turn.changedFiles, turn.diffStats, turn.hasReasoning, turn.hasTools, turn.headerMessageId, turn.summaryText, turn.turnId, turn.assistantMessages, turn.userMessage.info, visibleActivityParts, visibleActivitySegments, workingStepBatches]);
 
     const renderMessage = React.useCallback(
         (message: ChatMessageEntry) => {
@@ -455,7 +481,7 @@ const TurnBlock = React.memo(({
             const hasAnchoredActivitySegment = visibleActivitySegments.some((segment) => segment.anchorMessageId === message.info.id);
             const shouldAttachFullTurnContext = chatRenderMode === 'sorted'
                 ? isAssistantMessage
-                : (isActivityOwner || isFirstAssistant || isLastAssistant);
+                : (isActivityOwner || isFirstAssistant || isLastAssistant || Boolean(workingStepBatches && workingStepBatches.length > 0));
             const assistantHeaderMessageId = visibleAssistantMessages[0]?.info.id ?? turn.headerMessageId;
 
             const previousMessage = isUserMessage
@@ -490,6 +516,7 @@ const TurnBlock = React.memo(({
                         summaryBody: turnGroupingContextBase.summaryBody,
                         activityParts: turnGroupingContextBase.activityParts,
                         activityGroupSegments: turnGroupingContextBase.activityGroupSegments,
+                        workingStepBatches: turnGroupingContextBase.workingStepBatches,
                         headerMessageId: turnGroupingContextBase.headerMessageId,
                         diffStats: turnGroupingContextBase.diffStats,
                         changedFiles: turnGroupingContextBase.changedFiles,
@@ -533,6 +560,7 @@ const TurnBlock = React.memo(({
             turn.userMessage,
             turnUiState.isExpanded,
             turnGroupingContextBase,
+            workingStepBatches,
             streamingAssistantMessageId,
             activeStreamingPhase,
             reviewTransferDirection,
@@ -561,7 +589,7 @@ const TurnBlock = React.memo(({
             turn={renderableTurn}
             stickyUserHeader={stickyUserHeader && turnHeaderCanStick}
             renderMessage={renderMessage}
-            assistantContent={chatRenderMode === 'live' && !defaultActivityExpanded && hasLiveActivity(turn, showReasoningTraces) ? (
+            assistantContent={chatRenderMode === 'live' && !defaultActivityExpanded && !collapsibleThinkingBlocks && hasLiveActivity(turn, showReasoningTraces) ? (
                 <LiveTurnActivity
                     turn={renderableTurn}
                     hasLaterAssistant={hasLaterAssistant}

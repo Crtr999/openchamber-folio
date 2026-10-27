@@ -236,3 +236,28 @@ test('Absent or ambiguous dates are not synthesized; failed moves leave fetched 
     await assert.rejects(f.service.handle({ action: 'move', page: board.rows[0].url, status: 'Done' }), /Notion could not complete/);
   } finally { await f.clean(); }
 });
+
+test('private awareness reader uses only bounded Notion reads, exposes source health and never credentials', async () => {
+  const f = await fixture({ recentResults: Array.from({ length: 8 }, (_, i) => ({ url: `https://www.notion.so/${String(i + 1).padStart(32, '0')}`, title: `Course ${i}` })) });
+  try {
+    const value = await f.service.readAwareness({ offset: 0 });
+    assert.equal(value.find((item) => item.source === 'notion').records.filter((item) => item.id !== 'daily-board').length, 4);
+    assert.equal(value.find((item) => item.source === 'notion').nextOffset, 4);
+    assert.equal(value.find((item) => item.source === 'calendar').status, 'needs-connection');
+    assert.equal(value.find((item) => item.source === 'outlook').status, 'needs-connection');
+    assert.ok(f.calls.filter((call) => call.method === 'tools/call').every((call) => ['get_tool_access', 'fetch', 'search', 'list_recent_pages', 'query_data_sources'].includes(call.params.name)));
+    assert.ok(!JSON.stringify(value).includes('test-access'));
+    const before = f.calls.length;
+    f.block();
+    await assert.rejects(f.service.readAwareness({ offset: 0 }));
+    assert.equal(f.calls.length, before);
+  } finally { await f.clean(); }
+});
+test('private awareness reader reports disconnected Notion without trying OAuth or inventing empty success', async () => {
+  const f = await fixture({ connected: false });
+  try {
+    const value = await f.service.readAwareness();
+    assert.equal(value.find((item) => item.source === 'notion').status, 'needs-connection');
+    assert.equal(f.calls.length, 0);
+  } finally { await f.clean(); }
+});

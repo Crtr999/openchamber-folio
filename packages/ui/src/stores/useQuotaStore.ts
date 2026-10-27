@@ -67,6 +67,8 @@ interface QuotaStore extends QuotaSettingsState {
   resetForRuntimeSwitch: () => void;
 }
 
+const ALWAYS_FETCHED_PROVIDER_IDS: QuotaProviderId[] = ['gemini-website', 'venice-website'];
+
 const parseSettings = (data: DesktopSettings): QuotaSettingsState => {
   const allProviderIds = QUOTA_PROVIDERS.map((provider) => provider.id);
   const displayMode = data.usageDisplayMode === 'remaining' ? 'remaining' : 'usage';
@@ -75,6 +77,11 @@ const parseSettings = (data: DesktopSettings): QuotaSettingsState => {
         allProviderIds.some((id) => id === entry)
       )
     : allProviderIds;
+  // The header meters for the website accounts must always be fetched, even
+  // when a saved selection predates them.
+  for (const id of ALWAYS_FETCHED_PROVIDER_IDS) {
+    if (!dropdownProviderIds.includes(id)) dropdownProviderIds.push(id);
+  }
 
   return {
     displayMode,

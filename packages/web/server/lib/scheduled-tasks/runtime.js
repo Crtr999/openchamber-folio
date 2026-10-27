@@ -582,6 +582,10 @@ export const createScheduledTasksRuntime = (deps) => {
         ...(task.execution.variant ? { variant: task.execution.variant } : {}),
       },
       ...(task.execution.agent ? { agent: task.execution.agent } : {}),
+      ...(task.id === 'companion:personal-awareness' ? { permissions: [
+        { action: '*', resource: '*', effect: 'deny' },
+        { action: 'openchamber', resource: '*', effect: 'allow' },
+      ] } : {}),
     });
     const sessionID = session?.id;
     if (!sessionID) {

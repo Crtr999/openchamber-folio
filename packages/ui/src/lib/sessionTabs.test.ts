@@ -145,3 +145,25 @@ test('remote desktop cannot activate retained local website tabs and preserves t
   expect(selections).toEqual(['b']);
   expect(useSessionTabsStore.getState().tabIds).toEqual(['a', 'website:chatgpt', 'website:claude', 'b', 'unknown']);
 });
+
+test('Venice and Gemini tabs resume independently and close to their native neighbour', () => {
+  useSessionTabsStore.setState({ tabIds: ['a', 'website:venice', 'website:gemini', 'b'] });
+  expect(activateHeaderTab('website:venice')).toBe(true);
+  expect(useUIStore.getState().isVenicePageOpen).toBe(true);
+  expect(activateAdjacentSessionTab(1)).toBe(true);
+  expect(useUIStore.getState().isGeminiPageOpen).toBe(true);
+  expect(useUIStore.getState().isVenicePageOpen).toBe(false);
+  closeSessionTabAndActivateNeighbour('website:gemini');
+  expect(useUIStore.getState().isGeminiPageOpen).toBe(false);
+  expect(selections).toEqual(['b']);
+  expect(creationRequests).toBe(0);
+});
+
+test('remote and non-Electron runtimes cannot open either website account', () => {
+  useSessionTabsStore.setState({ tabIds: ['website:venice', 'website:gemini'] });
+  Object.assign(browser, { __OPENCHAMBER_API_BASE_URL__: 'https://remote.example.test' });
+  for (const id of ['website:venice', 'website:gemini']) expect(activateHeaderTab(id)).toBe(false);
+  Object.assign(browser, { __OPENCHAMBER_API_BASE_URL__: 'http://localhost:3000', __OPENCHAMBER_ELECTRON__: undefined });
+  for (const id of ['website:venice', 'website:gemini']) expect(activateHeaderTab(id)).toBe(false);
+  expect(useUIStore.getState().isVenicePageOpen || useUIStore.getState().isGeminiPageOpen).toBe(false);
+});

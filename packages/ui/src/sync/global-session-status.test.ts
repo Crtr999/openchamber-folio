@@ -20,6 +20,13 @@ beforeEach(() => {
 })
 
 describe("global session status index", () => {
+  test("a global active snapshot cannot move business activity into General Chats", () => {
+    applyGlobalSessionStatusSnapshot('/business', { business: { type: 'busy' } }, ['business']);
+    applyGlobalSessionStatusSnapshot('/chats/today', { business: { type: 'busy' } }, ['general']);
+    expect(useGlobalSessionStatusStore.getState().statusById.get('business')?.directory).toBe('/business');
+    expect([...useGlobalSessionStatusStore.getState().statusById.values()].some(entry => entry.directory === '/chats/today')).toBe(false);
+  });
+
   const activeSessionIds = (): ReadonlySet<string> => useGlobalSessionStatusStore.getState().activeSessionIds
 
   test("a parent directory snapshot cannot settle a worktree session merely contained in its list", () => {

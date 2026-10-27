@@ -1,4 +1,5 @@
 import React from 'react';
+import { ChatGPTImportDialog } from './ChatGPTImportDialog';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
@@ -13,6 +14,8 @@ const retainWebsiteNavigation = () => {};
 export function ChatGPTWorkspace({ visible }: { visible: boolean }): React.ReactNode {
   const { t } = useI18n();
   const [hasOpened, setHasOpened] = React.useState(false);
+  const [importOpen, setImportOpen] = React.useState(false);
+  const [healthUnavailable, setHealthUnavailable] = React.useState(false);
   const [webview, setWebview] = React.useState<WebviewElement | null>(null);
   const attachWebview = React.useCallback((node: WebviewElement | null) => setWebview(node), []);
   const mode = useChatGPTStore(s => s.mode);
@@ -71,6 +74,7 @@ export function ChatGPTWorkspace({ visible }: { visible: boolean }): React.React
     // Guests cannot accept loadURL before attachment. dom-ready triggers navigation.status.
     if (navigation.status.kind !== 'ready') return;
     handledRequest.current = request.sequence;
+    setHealthUnavailable(false);
     const action = request.action;
     if (action.kind === 'navigate') {
       const load = () => { if (useChatGPTStore.getState().request?.sequence === request.sequence) webview.loadURL(`${CHATGPT_URL.slice(0, -1)}${action.path}`); };
@@ -86,8 +90,8 @@ export function ChatGPTWorkspace({ visible }: { visible: boolean }): React.React
       return;
     }
     void webview.executeJavaScript(buildWebsiteScript(action), true).then((result) => {
-      if (result !== true) useChatGPTStore.getState().setMode('full');
-    }).catch(() => useChatGPTStore.getState().setMode('full'));
+      if (result !== true) { useChatGPTStore.getState().setMode('full'); if (action.kind === 'shortcut' && action.label === 'Health') setHealthUnavailable(true); }
+    }).catch(() => { useChatGPTStore.getState().setMode('full'); if (action.kind === 'shortcut' && action.label === 'Health') setHealthUnavailable(true); });
   }, [webview, visible, request, navigation.status]);
 
   if (!visible && !hasOpened) return null;
@@ -101,11 +105,14 @@ export function ChatGPTWorkspace({ visible }: { visible: boolean }): React.React
           <Button size="xs" variant="ghost" aria-label={t('gitView.common.close')} onClick={() => useChatGPTStore.getState().closeTab(path)}><Icon name="close" className="size-3" /></Button>
         </div>)}
       </div>
+      <Button size="xs" variant="ghost" onClick={() => useChatGPTStore.getState().open({ kind: 'shortcut', label: 'Health' }, 'full')}>{t('chatgpt.Health')}</Button>
+      <Button size="xs" variant="ghost" onClick={() => setImportOpen(true)}>{t('chatgpt.import')}</Button>
       <Button size="xs" variant="ghost" onClick={() => useChatGPTStore.getState().open({ kind: 'navigate', path: '/' })}><Icon name="add" className="size-3.5" />{t('chatgpt.new')}</Button>
       <Button size="xs" variant="ghost" aria-pressed={mode === 'full'} onClick={() => useChatGPTStore.getState().setMode(mode === 'full' ? 'integrated' : 'full')}>
         <Icon name="layout-left" className="size-3.5" />{t(mode === 'full' ? 'chatgpt.integrated' : 'chatgpt.full')}
       </Button>
     </div>
+    {healthUnavailable && <p role="status" className="px-3 py-2 text-sm text-muted-foreground">{t('chatgpt.healthUnavailable')}</p>}
     {status === 'unavailable' && <div className="flex shrink-0 items-center gap-2 px-3 py-1 text-xs text-muted-foreground" role="status">
       <span className="flex-1">{t('chatgpt.unavailable')}</span>
       <Button size="xs" variant="ghost" onClick={() => useChatGPTStore.getState().setMode('full')}>{t('chatgpt.full')}</Button>
@@ -117,5 +124,6 @@ export function ChatGPTWorkspace({ visible }: { visible: boolean }): React.React
         <Button variant="outline" onClick={() => webview?.reload()}>{t('contextPanel.browser.reload')}</Button>
       </div>}
     </div>
+    <ChatGPTImportDialog open={importOpen} onOpenChange={setImportOpen} />
   </section>;
 }

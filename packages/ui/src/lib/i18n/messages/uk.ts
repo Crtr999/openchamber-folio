@@ -1,3 +1,6 @@
+import { geminiI18n } from './gemini.i18n';
+import { veniceI18n } from './venice.i18n';
+import { healthI18n } from './health.i18n';
 import { companionI18n } from './companion.i18n';
 import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
@@ -25,6 +28,9 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 import { notionPickerI18n } from './notion-picker.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...healthI18n["uk"],
+  'activity.title': 'Активність',
+  'activity.needsYou': 'Потребує вашої уваги',
   ...companionI18n['uk'],
   ...notionPickerI18n['uk'],
   ...friendsI18n['uk'],
@@ -32,6 +38,8 @@ export const dict: Record<I18nKey, string> = {
   'workspace.officePreview': 'Лише текст і вбудовані зображення. Оригінальний макет, діаграми, анімація та поточні обчислення не відтворюються.',
   ...chatgptI18n['uk'],
   ...claudeI18n.uk,
+  ...veniceI18n.uk,
+  ...geminiI18n.uk,
   ...meetingsI18n.uk,
   'meeting.quickStart': 'Почати зустріч',
   'meeting.partial': 'Деякі збережені зустрічі не вдалося прочитати. Список неповний; пошкоджені файли залишено без змін.',
@@ -351,6 +359,7 @@ export const dict: Record<I18nKey, string> = {
   "sessions.scheduledTasks.dialog.actions.runNow": "Запустити зараз",
   "sessions.scheduledTasks.dialog.actions.edit": "Редагувати",
   "sessions.scheduledTasks.dialog.actions.editAria": "Редагувати {taskName}",
+  'sessions.scheduledTasks.dialog.actions.delete': "Видалити",
   "sessions.scheduledTasks.dialog.actions.deleteAria": "Видалити {taskName}",
   "sessions.scheduledTasks.dialog.loading": "Завантаження завдань...",
   "sessions.scheduledTasks.dialog.empty.noTasks": "Ще немає запланованих завдань.",
@@ -413,7 +422,7 @@ export const dict: Record<I18nKey, string> = {
   "sessions.scheduledTasks.editor.scheduleType.daily": "Щодня",
   "sessions.scheduledTasks.editor.scheduleType.weekly": "Щотижня",
   "sessions.scheduledTasks.editor.scheduleType.once": "Одноразовий",
-  "sessions.scheduledTasks.editor.scheduleType.cron": "Cron",
+  'sessions.scheduledTasks.editor.scheduleType.cron': "Власний розклад (розширений)",
   "sessions.scheduledTasks.editor.date.label": "Дата",
   "sessions.scheduledTasks.editor.date.placeholder": "Вибрати дату",
   "sessions.scheduledTasks.editor.date.previousMonth": "Попередній місяць",
@@ -460,6 +469,7 @@ export const dict: Record<I18nKey, string> = {
   "sessions.scheduledTasks.editor.validation.timezoneRequired": "Потрібно вказати часовий пояс",
   "sessions.scheduledTasks.editor.validation.cronRequired": "Потрібно вказати cron-вираз",
   "sessions.scheduledTasks.editor.validation.cronInvalid": "Недійсний cron-вираз",
+  'sessions.scheduledTasks.editor.cronExpression.help': "Повторюваний розклад, записаний коротким кодом. Для звичайних нагадувань виберіть щодня або щотижня. Наприклад, 0 9 * * 1 означає кожного понеділка о 9:00 у вибраному часовому поясі.",
   "sessions.scheduledTasks.editor.cronExpression.label": "Cron-вираз",
   "sessions.scheduledTasks.editor.cronExpression.placeholder": "*/5 * * * *",
   "sessions.scheduledTasks.editor.cronExpression.nextRuns": "Наступні запуски",
@@ -3571,6 +3581,8 @@ export const dict: Record<I18nKey, string> = {
   'multirun.overview.bar.waiting': 'Запусків чекають на вас: {count}. Запуск не завершиться, поки ви не відповісте.',
   'multirun.overview.prompt.expand': 'Показати все',
   'multirun.overview.prompt.collapse': 'Згорнути',
+  'computer.start': "Запустити комп’ютер",
+  'computer.connectionError': "З’єднання з комп’ютером недоступне",
   'computer.title': "Комп’ютер агента",
   'computer.hint': "Виберіть екран, щоб бачити роботу.",
   'computer.noScreens': "На комп’ютері не відкрито жодного екрана.",

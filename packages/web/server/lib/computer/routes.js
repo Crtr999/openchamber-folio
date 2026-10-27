@@ -7,6 +7,7 @@
  */
 
 import express from 'express';
+import { readComputerConnection, startComputerConnection } from './connection.js';
 
 const parseJsonBody = express.json({ limit: '1mb' });
 
@@ -17,15 +18,19 @@ export const registerComputerRoutes = (app, dependencies) => {
     try {
       const endpoint = resolveEndpoint();
       if (!endpoint) {
-        return res.json({ available: false, baseUrl: null, screens: [] });
+        return res.json({ available: false, baseUrl: null, screens: [], connection: { state: 'not-configured', chatGPTAppRequired: false } });
       }
       const state = await fetchState(endpoint);
-      return res.json({ ...state, baseUrl: endpoint.baseUrl });
+      return res.json({ ...state, baseUrl: endpoint.baseUrl, connection: state.available ? { state: 'ready', chatGPTAppRequired: false } : await readComputerConnection(endpoint) });
     } catch {
-      // A computer that cannot be reached is an ordinary state, not an error:
-      // the app shows "not running", which is the truth.
-      return res.json({ available: false, baseUrl: null, screens: [] });
+      // Connection failure says nothing about Mac power or the ChatGPT app.
+      return res.status(503).json({ available: false, baseUrl: null, screens: [], connection: { state: 'connection-unavailable', chatGPTAppRequired: false } });
     }
+  });
+
+  app.post('/api/computer/start', async (_req, res) => {
+    try { res.json(await startComputerConnection(resolveEndpoint())); }
+    catch { res.status(503).json({ error: 'The computer connection could not start. The ChatGPT desktop app is not required.' }); }
   });
 
   app.post('/api/computer/clipboard', parseJsonBody, async (req, res) => {

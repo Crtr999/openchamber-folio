@@ -1,3 +1,6 @@
+import { WebsiteModelRuntime } from '@/components/views/WebsiteModelRuntime';
+import { GeminiWorkspace } from '@/components/views/GeminiWorkspace';
+import { useGeminiStore } from '@/stores/useGeminiStore';
 import { useChatGPTStore } from '@/stores/useChatGPTStore';
 import { HomeSceneBackdrop } from '@/components/chat/HomeSceneBackdrop';
 import { useClaudeStore } from '@/stores/useClaudeStore';
@@ -44,6 +47,8 @@ import { useSessionListSync } from '@/components/session/sidebar/list/useSession
 
 import { ChatView } from '@/components/views/ChatView';
 import { ChatGPTWorkspace } from '@/components/views/ChatGPTWorkspace';
+import { VeniceWorkspace } from '@/components/views/VeniceWorkspace';
+import { useVeniceStore } from '@/stores/useVeniceStore';
 import { ClaudeWorkspace } from '@/components/views/ClaudeWorkspace';
 import { MeetingWorkspace } from '@/components/views/MeetingWorkspace';
 import { MeetingReminders } from '@/components/views/MeetingReminders';
@@ -137,7 +142,9 @@ export const MainLayout: React.FC = () => {
     const worktreesPageProjectId = useUIStore((state) => state.worktreesPageProjectId);
     const isChatGPTPageOpen = useUIStore((state) => state.isChatGPTPageOpen);
     const isClaudePageOpen = useUIStore((state) => state.isClaudePageOpen);
-    const isWebsiteAssistantPageOpen = isChatGPTPageOpen || isClaudePageOpen;
+    const isVenicePageOpen = useUIStore(state => state.isVenicePageOpen);
+    const isGeminiPageOpen = useUIStore(state => state.isGeminiPageOpen);
+    const isWebsiteAssistantPageOpen = isChatGPTPageOpen || isClaudePageOpen || isVenicePageOpen || isGeminiPageOpen;
     const openGuestPageId = useUIStore((state) => state.openGuestPageId);
     const guestPages = useGuestPages();
     const guestPage = guestPages.find((guest) => guest.id === openGuestPageId);
@@ -150,6 +157,10 @@ export const MainLayout: React.FC = () => {
         useChatGPTStore.getState().resetWebsite();
         useUIStore.getState().setClaudePageOpen(false);
         useClaudeStore.getState().resetWebsite();
+        useUIStore.getState().setVenicePageOpen(false);
+        useVeniceStore.getState().resetWebsite();
+        useUIStore.getState().setGeminiPageOpen(false);
+        useGeminiStore.getState().resetWebsite();
     }), []);
     // Any full-page surface replacing the chat area. While open, the chat is
     // fully hidden (not just covered) so none of its floating chrome bleeds
@@ -236,10 +247,15 @@ export const MainLayout: React.FC = () => {
                                             )}
                                             <ErrorBoundary><WorktreesView /></ErrorBoundary>
                                             {isElectronShell() && isDesktopLocalOriginActive() && <ErrorBoundary>
+                                                <WebsiteModelRuntime />
                                                 <ChatGPTWorkspace visible={isChatGPTPageOpen} />
                                             </ErrorBoundary>}
                                             {isElectronShell() && isDesktopLocalOriginActive() && <ErrorBoundary>
                                                 <ClaudeWorkspace visible={isClaudePageOpen} />
+                                            </ErrorBoundary>}
+                                            {isElectronShell() && isDesktopLocalOriginActive() && <ErrorBoundary>
+                                                <VeniceWorkspace visible={isVenicePageOpen} />
+                                                <GeminiWorkspace visible={isGeminiPageOpen} />
                                             </ErrorBoundary>}
                                             {guestPage && <div className="absolute inset-0 z-10 bg-background">
                                                 <ErrorBoundary><PluginPane mode={`plugin:${guestPage.id}`} surface="page" item={null}

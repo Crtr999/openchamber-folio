@@ -77,3 +77,27 @@ test('native navigation never clicks a third-party link with the same path', () 
   expect(clicks).toBe(0);
   window.close();
 });
+
+test('Health restores the account sidebar and activates only its actual same-origin control', () => {
+  const window = page();
+  const health = window.document.createElement('a'); health.href = '/health'; health.textContent = 'Health';
+  window.document.querySelector('nav')?.append(health);
+  let clicks = 0; health.addEventListener('click', event => { event.preventDefault(); clicks++; });
+  window.eval(buildWebsiteScript({ kind: 'snapshot', integrated: true }));
+  expect(window.eval(buildWebsiteScript({ kind: 'shortcut', label: 'Health' }))).toBe(true);
+  expect(clicks).toBe(1);
+  expect(window.document.querySelector('aside')?.hasAttribute('inert')).toBe(false);
+  expect(window.document.querySelector('[contenteditable]')?.textContent).toBe('Draft stays here');
+  health.href = 'https://evil.example/health';
+  expect(window.eval(buildWebsiteScript({ kind: 'shortcut', label: 'Health' }))).toBe(false);
+  expect(clicks).toBe(1);
+  window.close();
+});
+
+test('missing Health fails explicitly without inventing a route or reading medical content', () => {
+  const window = page();
+  expect(window.eval(buildWebsiteScript({ kind: 'shortcut', label: 'Health' }))).toBe(false);
+  expect(window.location.pathname).toBe('/c/first');
+  expect(window.document.querySelector('[contenteditable]')?.textContent).toBe('Draft stays here');
+  window.close();
+});

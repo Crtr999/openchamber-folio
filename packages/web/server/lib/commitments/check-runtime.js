@@ -131,7 +131,8 @@ export const createCommitmentChecks = ({
       if (!home) await mkdir(directory, { recursive: true });
       const client = getClient(directory);
       if (!client) throw new Error('OpenCode is not ready');
-      const model = modelSchema.parse(await client.model.default(undefined, options())).data;
+      const model = item.reviewModel ?? modelSchema.parse(await client.model.default(undefined, options())).data;
+      if (item.reviewModel && !(await guard.check(item.sourceDirectory, model.providerID)).ok) throw new Error('Review provider is no longer allowed in this folder');
       if (!model) throw new Error('no default model');
       const session = sessionSchema.parse(await client.session.create({
         title: item.title.slice(0, 120),

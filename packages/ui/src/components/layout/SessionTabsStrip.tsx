@@ -424,7 +424,9 @@ export const SessionTabsStrip: React.FC<{
   const activeSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const isChatGPTPageOpen = useUIStore((state) => state.isChatGPTPageOpen);
   const isClaudePageOpen = useUIStore((state) => state.isClaudePageOpen);
-  const activeWebsiteId = isChatGPTPageOpen ? 'website:chatgpt' : isClaudePageOpen ? 'website:claude' : null;
+  const isVenicePageOpen = useUIStore(state => state.isVenicePageOpen);
+  const isGeminiPageOpen = useUIStore(state => state.isGeminiPageOpen);
+  const activeWebsiteId = isChatGPTPageOpen ? 'website:chatgpt' : isClaudePageOpen ? 'website:claude' : isVenicePageOpen ? 'website:venice' : isGeminiPageOpen ? 'website:gemini' : null;
   const activeTabId = activeWebsiteId ?? currentSessionId;
   const websitesAvailable = isWebsiteTabAvailable();
 

@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Open Carter reads the health categories you choose so you can ask questions alongside your own lab reports. Data is sent only to your connected Open Carter server when you choose Sync.</string>
+	<key>NSHealthClinicalHealthRecordsShareUsageDescription</key>
+	<string>Open Carter reads the medical records you choose to include them in your private health conversations.</string>
 	<key>CarterAppGroup</key>
 	<string>$(CARTER_APP_GROUP)</string>
 	<key>CarterURLScheme</key>

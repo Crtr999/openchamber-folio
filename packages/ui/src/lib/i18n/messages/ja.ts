@@ -1,3 +1,6 @@
+import { geminiI18n } from './gemini.i18n';
+import { veniceI18n } from './venice.i18n';
+import { healthI18n } from './health.i18n';
 import { companionI18n } from './companion.i18n';
 import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
@@ -25,6 +28,9 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 import { notionPickerI18n } from './notion-picker.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...healthI18n["ja"],
+  'activity.title': 'アクティビティ',
+  'activity.needsYou': '確認が必要です',
   ...companionI18n['ja'],
   ...notionPickerI18n['ja'],
   ...friendsI18n['ja'],
@@ -32,6 +38,8 @@ export const dict: Record<I18nKey, string> = {
   'workspace.officePreview': 'テキストと埋め込み画像のみ表示します。元のレイアウト、グラフ、アニメーション、リアルタイムの計算は表示しません。',
   ...chatgptI18n['ja'],
   ...claudeI18n.ja,
+  ...veniceI18n.ja,
+  ...geminiI18n.ja,
   ...meetingsI18n.ja,
   'meeting.quickStart': '会議を開始',
   'meeting.partial': '一部の保存済み会議を読み込めませんでした。一覧は不完全です。破損ファイルは変更していません。',
@@ -351,6 +359,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.dialog.actions.runNow': '今すぐ実行',
   'sessions.scheduledTasks.dialog.actions.edit': '編集',
   'sessions.scheduledTasks.dialog.actions.editAria': '{taskName}を編集',
+  'sessions.scheduledTasks.dialog.actions.delete': "削除",
   'sessions.scheduledTasks.dialog.actions.deleteAria': '{taskName}を削除',
   'sessions.scheduledTasks.dialog.loading': 'タスクを読み込み中...',
   'sessions.scheduledTasks.dialog.empty.noTasks': 'まだスケジュールタスクがありません。',
@@ -413,7 +422,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.editor.scheduleType.daily': '毎日',
   'sessions.scheduledTasks.editor.scheduleType.weekly': '毎週',
   'sessions.scheduledTasks.editor.scheduleType.once': '1回限り',
-  'sessions.scheduledTasks.editor.scheduleType.cron': 'Cron',
+  'sessions.scheduledTasks.editor.scheduleType.cron': "カスタムスケジュール（詳細）",
   'sessions.scheduledTasks.editor.date.label': '日付',
   'sessions.scheduledTasks.editor.date.placeholder': '日付を選択',
   'sessions.scheduledTasks.editor.date.previousMonth': '前月',
@@ -460,6 +469,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.editor.validation.timezoneRequired': 'タイムゾーンが必要です',
   'sessions.scheduledTasks.editor.validation.cronRequired': 'Cron式が必要です',
   'sessions.scheduledTasks.editor.validation.cronInvalid': '無効なCron式です',
+  'sessions.scheduledTasks.editor.cronExpression.help': "繰り返しの予定を短いコードで指定します。通常のリマインダーには毎日または毎週を選んでください。例えば 0 9 * * 1 は、選択したタイムゾーンで毎週月曜日の9時を意味します。",
   'sessions.scheduledTasks.editor.cronExpression.label': 'Cron式',
   'sessions.scheduledTasks.editor.cronExpression.placeholder': '*/5 * * * *',
   'sessions.scheduledTasks.editor.cronExpression.nextRuns': '次の実行',
@@ -3570,6 +3580,8 @@ export const dict: Record<I18nKey, string> = {
   'multirun.overview.bar.waiting': 'あなたを待っている実行: {count}。応答するまで実行は終わりません。',
   'multirun.overview.prompt.expand': 'すべて表示',
   'multirun.overview.prompt.collapse': '折りたたむ',
+  'computer.start': "コンピューターを起動",
+  'computer.connectionError': "コンピューターに接続できません",
   'computer.title': "エージェントのコンピューター",
   'computer.hint': "画面を選んで作業の様子を見ます。",
   'computer.noScreens': "コンピューターに開いている画面はありません。",

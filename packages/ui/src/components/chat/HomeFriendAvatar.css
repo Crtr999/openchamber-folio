@@ -1,0 +1,23 @@
+/* Shared original face motion. Idle faces are still; reduced motion stays still. */
+.oc-friend-avatar-eyes { transform-box: fill-box; transform-origin: center; }
+.oc-friend-activity[data-working="true"] .oc-friend-avatar-eyes,
+.oc-friend-card[data-working="true"] .oc-friend-avatar-eyes { animation: oc-friend-looking 2.7s ease-in-out infinite; }
+.oc-friend-activity[data-waiting="true"] .oc-friend-avatar-eyes,
+.oc-friend-card[data-waiting="true"] .oc-friend-avatar-eyes { animation: oc-friend-blink 4s ease-in-out infinite; }
+@keyframes oc-friend-looking {
+    0%, 100% { transform: translateX(-1px); }
+    45%, 65% { transform: translateX(2px); }
+}
+@keyframes oc-friend-blink {
+    0%, 4%, 100% { transform: scaleY(1); }
+    2% { transform: scaleY(.15); }
+}
+@keyframes oc-friend-attention {
+    0%, 12%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+    3%, 9% { transform: translate3d(0, -2px, 0) rotate(-12deg); }
+    6% { transform: translate3d(0, -2px, 0) rotate(12deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .oc-friend-activity .oc-friend-avatar-eyes,
+    .oc-friend-card .oc-friend-avatar-eyes { animation: none; }
+}

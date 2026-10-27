@@ -1,4 +1,4 @@
-import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
+import { ensureChatsRootDirectory, getChatsRootForHome } from '@/lib/chatDirectories';
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -466,6 +466,36 @@ describe('openNewSessionDraft project binding', () => {
 
   afterEach(() => {
     getDeferredSafeStorage().removeItem(DRAFT_TARGET_KEY);
+  });
+
+
+  test('General activates the chats-root catalog instead of retaining a project catalog', async () => {
+    await ensureChatsRootDirectory();
+    const original = useConfigStore.getState();
+    const activated = [];
+    useConfigStore.setState({ activateDirectory: async directory => { activated.push(directory); }, isConnected: false });
+    try {
+      useSessionUIStore.getState().openNewSessionDraft({ selectedProjectId: projectA.id, target: 'project' });
+      useSessionUIStore.getState().setNewSessionDraftTarget({ projectId: CHAT_DRAFT_PROJECT_ID });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(activated.at(-1)).toBe(getChatsRootForHome(null));
+      expect(activated.at(-1)).not.toBe(projectA.path);
+      expect(useSessionUIStore.getState().newSessionDraft.target).toBe('chat');
+    } finally { useConfigStore.setState(original); }
+  });
+
+  test('an obsolete General activation cannot pull a newer project choice back to chats', async () => {
+    await ensureChatsRootDirectory();
+    const original = useConfigStore.getState();
+    const activated = [];
+    useConfigStore.setState({ activateDirectory: async directory => { activated.push(directory); }, isConnected: false });
+    try {
+      useSessionUIStore.getState().openNewSessionDraft({ target: 'chat' });
+      useSessionUIStore.getState().setNewSessionDraftTarget({ projectId: projectB.id, directoryOverride: projectB.path });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(activated).toEqual([projectB.path]);
+      expect(useSessionUIStore.getState().newSessionDraft.selectedProjectId).toBe(projectB.id);
+    } finally { useConfigStore.setState(original); }
   });
 
   test('defaults an implicit draft to Chat when active project differs', () => {

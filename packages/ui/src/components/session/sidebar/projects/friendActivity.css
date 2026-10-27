@@ -14,7 +14,7 @@
 }
 
 .oc-friend-activity[data-working="true"] {
-    animation: oc-friend-activity-bob 1.9s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+    animation: oc-friend-activity-bob 1.35s ease-in-out infinite;
 }
 
 .oc-friend-activity[data-retrying="true"] {
@@ -43,13 +43,18 @@
     background: radial-gradient(circle, color-mix(in srgb, var(--status-warning) 38%, transparent) 0%, transparent 70%);
 }
 
+/* Original squash/turn poses: active movement differs from the attention pose. */
 @keyframes oc-friend-activity-bob {
-    0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-    25% { transform: translate3d(0, -1.5px, 0) rotate(-4deg); }
-    50% { transform: translate3d(0, 0, 0) rotate(0deg); }
-    75% { transform: translate3d(0, -1.5px, 0) rotate(4deg); }
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1.06, .94) rotate(0deg); }
+    20% { transform: translate3d(-1px, -3px, 0) scale(.94, 1.08) rotate(-11deg); }
+    45% { transform: translate3d(0, 0, 0) scale(1.08, .92) rotate(0deg); }
+    70% { transform: translate3d(1px, -3px, 0) scale(.94, 1.08) rotate(11deg); }
 }
-
+.oc-friend-activity[data-waiting="true"] { animation: oc-friend-attention 4s ease-in-out infinite; }
+.oc-friend-activity[data-waiting="true"]::before {
+    background: radial-gradient(circle, color-mix(in srgb, var(--status-info) 38%, transparent), transparent 70%);
+    opacity: .8;
+}
 @keyframes oc-friend-activity-halo {
     0%, 100% { opacity: 0.45; }
     50% { opacity: 0.9; }

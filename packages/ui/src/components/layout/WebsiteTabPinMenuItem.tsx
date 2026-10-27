@@ -1,8 +1,10 @@
+import { useGeminiStore } from '@/stores/useGeminiStore';
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { isChatGPTChatPath } from '@/lib/chatgpt/website';
 import { useChatGPTStore } from '@/stores/useChatGPTStore';
+import { useVeniceStore } from '@/stores/useVeniceStore';
 import { useClaudeStore } from '@/stores/useClaudeStore';
 import type { SessionTabMenuComponents } from './SessionTabsStrip';
 
@@ -47,8 +49,25 @@ function ClaudePinMenuItem({ Item }: ItemProps) {
   }} />;
 }
 
+function VenicePinMenuItem({ Item }: ItemProps) {
+  const state = useVeniceStore();
+  return <SavedPagePinMenuItem Item={Item} {...state} toggleSavedPage={() => {
+    const current = useVeniceStore.getState();
+    if (current.pageUrl === state.pageUrl && current.pageTitle === state.pageTitle) current.toggleSavedPage();
+  }} />;
+}
+function GeminiPinMenuItem({ Item }: ItemProps) {
+  const state = useGeminiStore();
+  return <SavedPagePinMenuItem Item={Item} {...state} toggleSavedPage={() => {
+    const current = useGeminiStore.getState();
+    if (current.pageUrl === state.pageUrl && current.pageTitle === state.pageTitle) current.toggleSavedPage();
+  }} />;
+}
+
 export function WebsiteTabPinMenuItem({ tabId, Item }: ItemProps & { tabId: string }) {
   if (tabId === 'website:chatgpt') return <ChatGPTPinMenuItem Item={Item} />;
+  if (tabId === 'website:gemini') return <GeminiPinMenuItem Item={Item} />;
+  if (tabId === 'website:venice') return <VenicePinMenuItem Item={Item} />;
   if (tabId === 'website:claude') return <ClaudePinMenuItem Item={Item} />;
   return null;
 }

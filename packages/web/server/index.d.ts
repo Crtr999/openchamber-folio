@@ -30,6 +30,8 @@ export interface DesktopUpdater {
 }
 
 export interface StartWebUiServerOptions {
+  /** Local signed-in website accounts exposed through ordinary native model providers. */
+  desktopWebsiteModels?: boolean;
   port?: number;
   host?: string;
   attachSignals?: boolean;
@@ -40,6 +42,16 @@ export interface StartWebUiServerOptions {
   builtInExtensionsDir?: string;
   /** Optional host-approved Notion adapter. No credential transfer is performed. */
   aiTaskConnection?: AiTaskConnection;
+  /** Private in-process read adapter. Never receives or returns credentials. */
+  personalAwareness?: {
+    readSources: (input: { offset: number; accounts: string[] }) => Promise<Array<{
+      source: 'notion' | 'calendar' | 'outlook';
+      status: 'ready' | 'partial' | 'error' | 'needs-connection';
+      records: Array<{ id: string; title: string; url?: string; text: string; truncated: boolean }>;
+      accounts?: Array<{ address: string; status: 'ready' | 'partial' | 'error' | 'needs-connection' }>;
+      nextOffset?: number;
+    }>>;
+  };
   /** Optional trusted local host team state and native demand observer. No HTTP controls are installed. */
   teamConnection?: TeamConnection;
 }

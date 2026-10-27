@@ -1,3 +1,6 @@
+import { useAppleHealthSync } from '@/lib/health/apple-sync';
+import { toast } from 'sonner';
+import { openNativeChatGPT } from '@/lib/chatgpt/native';
 import { CompanionPanel } from './CompanionPanel';
 import { OpenCodeCompatibilityGate } from '@/components/update/OpenCodeCompatibilityGate';
 import React from 'react';
@@ -132,6 +135,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   // keepalive: without it, background PTYs (running project actions included)
   // are idle-reaped by the server while the workspace drawer is closed.
   useTerminalSessionKeepalive();
+  useAppleHealthSync();
   const [sessionsSheetOpen, setSessionsSheetOpen] = React.useState(false);
   const [companionOpen, setCompanionOpen] = React.useState(false);
   const closeCompanion = React.useCallback(() => setCompanionOpen(false), []);
@@ -514,6 +518,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
             compactTitle={isTabletLayout}
           />
           <div className="flex shrink-0 gap-2 px-3 pb-2">
+            <Button variant="outline" size="sm" onClick={() => void openNativeChatGPT(t('chatgpt.nativeUnavailable')).catch(() => toast.error(t('chatgpt.nativeUnavailable')))}>ChatGPT</Button>
             <Button variant="outline" size="sm" onClick={() => setCompanionOpen(true)}>{t('companion.title')}</Button>
             {quickDictation ? <Button size="sm" onClick={() => {
               window.dispatchEvent(new CustomEvent('openchamber:dictation-toggle'));

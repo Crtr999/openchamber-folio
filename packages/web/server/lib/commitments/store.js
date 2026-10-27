@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { z } from 'zod';
 
+const reviewModelSchema = z.object({ providerID: z.literal('openai'), id: z.string().min(1).max(200) }).strict();
 const clock = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
 const validZone = (zone) => {
   try { new Intl.DateTimeFormat('en', { timeZone: zone }); return true; } catch { return false; }
@@ -32,6 +33,7 @@ export const commitmentSchema = z.object({
   status: z.enum(['active', 'done', 'snoozed', 'dismissed']).default('active'),
   origin: z.enum(['auto', 'manual']),
   sourceSessionId: z.string().optional(),
+  reviewModel: reviewModelSchema.optional(),
   // Kept so a folder that later becomes excluded stops being checked.
   sourceDirectory: z.string().optional(),
   watches: z.array(z.string().trim().min(1).max(200)).max(5).default([]),
@@ -72,6 +74,7 @@ export const parseCommitmentsState = (value) => stateSchema.parse(value === unde
   : value);
 
 const userPatchSchema = z.object({
+  reviewModel: reviewModelSchema.optional(),
   title: z.string().trim().min(1).max(160).optional(),
   dueAt: z.number().int().nullable().optional(),
   watches: z.array(z.string().trim().min(1).max(200)).max(5).optional(),

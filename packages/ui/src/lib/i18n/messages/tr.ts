@@ -1,3 +1,6 @@
+import { geminiI18n } from './gemini.i18n';
+import { veniceI18n } from './venice.i18n';
+import { healthI18n } from './health.i18n';
 import { companionI18n } from './companion.i18n';
 import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
@@ -24,6 +27,9 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 import { notionPickerI18n } from './notion-picker.i18n';
 export const dict = {
+  ...healthI18n["tr"],
+  'activity.title': 'Etkinlik',
+  'activity.needsYou': 'İlginiz gerekiyor',
   ...companionI18n["tr"],
   ...notionPickerI18n['tr'],
   ...personalWorkspaceI18n.tr,
@@ -31,6 +37,8 @@ export const dict = {
   ...friendsI18n['tr'],
   ...chatgptI18n['tr'],
   ...claudeI18n.tr,
+  ...veniceI18n.tr,
+  ...geminiI18n.tr,
   ...meetingsI18n.tr,
   'meeting.quickStart': 'Toplantı başlat',
   'meeting.partial': 'Bazı kayıtlı toplantılar okunamadı. Liste eksik; bozuk dosyalar değiştirilmedi.',
@@ -336,6 +344,7 @@ export const dict = {
   'sessions.scheduledTasks.dialog.actions.runNow': 'Şimdi çalıştır',
   'sessions.scheduledTasks.dialog.actions.edit': 'Düzenle',
   'sessions.scheduledTasks.dialog.actions.editAria': '{taskName} görevini düzenle',
+  'sessions.scheduledTasks.dialog.actions.delete': "Sil",
   'sessions.scheduledTasks.dialog.actions.deleteAria': '{taskName} görevini sil',
   'sessions.scheduledTasks.dialog.loading': 'Görevler yükleniyor...',
   'sessions.scheduledTasks.dialog.empty.noTasks': 'Henüz zamanlanmış görev yok.',
@@ -398,7 +407,7 @@ export const dict = {
   'sessions.scheduledTasks.editor.scheduleType.daily': 'Günlük',
   'sessions.scheduledTasks.editor.scheduleType.weekly': 'Haftalık',
   'sessions.scheduledTasks.editor.scheduleType.once': 'Tek seferlik',
-  'sessions.scheduledTasks.editor.scheduleType.cron': 'Cron',
+  'sessions.scheduledTasks.editor.scheduleType.cron': "Özel zamanlama (gelişmiş)",
   'sessions.scheduledTasks.editor.date.label': 'Tarih',
   'sessions.scheduledTasks.editor.date.placeholder': 'Tarih seç',
   'sessions.scheduledTasks.editor.date.previousMonth': 'Önceki ay',
@@ -445,6 +454,7 @@ export const dict = {
   'sessions.scheduledTasks.editor.validation.timezoneRequired': 'Saat dilimi gerekli',
   'sessions.scheduledTasks.editor.validation.cronRequired': 'Cron ifadesi gerekli',
   'sessions.scheduledTasks.editor.validation.cronInvalid': 'Geçersiz cron ifadesi',
+  'sessions.scheduledTasks.editor.cronExpression.help': "Kısa bir kodla yazılan yinelenen zamanlama. Normal hatırlatmalar için Günlük veya Haftalık seçin. Örneğin 0 9 * * 1, seçilen saat diliminde her pazartesi saat 9:00 anlamına gelir.",
   'sessions.scheduledTasks.editor.cronExpression.label': 'Cron ifadesi',
   'sessions.scheduledTasks.editor.cronExpression.placeholder': '*/5 * * * *',
   'sessions.scheduledTasks.editor.cronExpression.nextRuns': 'Sonraki çalıştırmalar',
@@ -3568,6 +3578,8 @@ export const dict = {
   'multirun.overview.bar.waiting': 'Sizi bekleyen çalıştırmalar: {count}. Siz yanıtlayana kadar çalıştırma bitmez.',
   'multirun.overview.prompt.expand': 'Tümünü göster',
   'multirun.overview.prompt.collapse': 'Daha az göster',
+  'computer.start': "Bilgisayarı başlat",
+  'computer.connectionError': "Bilgisayar bağlantısı kullanılamıyor",
   'computer.title': "Ajancın bilgisayarı",
   'computer.hint': "Çalışmasını izlemek için bir ekran seçin.",
   'computer.noScreens': "Bilgisayarda açık bir ekran yok.",

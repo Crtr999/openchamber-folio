@@ -41,6 +41,7 @@ import { DiffViewToggle, type DiffViewMode } from '../DiffViewToggle';
 import { MinDurationShineText } from './MinDurationShineText';
 import { ToolRevealOnMount } from './ToolRevealOnMount';
 import { getToolIcon } from './toolPresentation';
+import { getEffectiveToolInput } from './toolRenderUtils';
 import { GuestToolTable } from './GuestToolTable';
 import type { JsonValue } from '@openchamber/sdk';
 import {
@@ -118,6 +119,7 @@ interface ToolPartProps {
     alwaysShowActions?: boolean;
     onShowPopup?: (content: ToolPopupContent) => void;
     animateTailText?: boolean;
+    forceActive?: boolean;
 }
 
 const formatDuration = (start: number, end?: number, now: number = Date.now()) => {
@@ -425,7 +427,7 @@ const parseQuestionOutput = (output: string): Array<{ question: string; answer: 
 
 const getToolDescriptionPath = (part: ToolPartType, state: ToolStateUnion, currentDirectory: string): string | null => {
     const stateWithData = state as ToolStateWithMetadata;
-    const described = toolDescription(part.tool, stateWithData.input, stateWithData.metadata);
+    const described = toolDescription(part.tool, getEffectiveToolInput(stateWithData), stateWithData.metadata);
     if (described?.kind !== 'path') {
         return null;
     }
@@ -462,7 +464,7 @@ const describeTool = (described: ToolDescription | null, currentDirectory: strin
 
 const getToolDescription = (part: ToolPartType, state: ToolStateUnion, currentDirectory: string, t: DescriptionTranslate): string => {
     const stateWithData = state as ToolStateWithMetadata;
-    return describeTool(toolDescription(part.tool, stateWithData.input, stateWithData.metadata), currentDirectory, t);
+    return describeTool(toolDescription(part.tool, getEffectiveToolInput(stateWithData), stateWithData.metadata), currentDirectory, t);
 };
 
 interface ToolScrollableSectionProps {
@@ -1253,7 +1255,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>('unified');
     const stateWithData = state as ToolStateWithMetadata;
     const metadata = stateWithData.metadata;
-    const input = stateWithData.input;
+    const input = getEffectiveToolInput(stateWithData);
     const rawOutput = getToolOutput(part.tool, stateWithData.output, metadata?.output, state.status);
     const hasStringOutput = typeof rawOutput === 'string' && rawOutput.length > 0;
     const rawOutputString = typeof rawOutput === 'string' ? rawOutput : '';
@@ -1740,12 +1742,13 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
     isMobile,
     onShowPopup,
     animateTailText = true,
+    forceActive = false,
 }) => {
     const { t } = useI18n();
     const state = part.state;
     const stateWithData = state as ToolStateWithMetadata;
     const metadata = stateWithData.metadata;
-    const input = stateWithData.input;
+    const input = getEffectiveToolInput(stateWithData);
     const showToolFileIcons = useUIStore((s) => s.showToolFileIcons);
     const currentDirectory = useEffectiveDirectory() ?? '';
 
@@ -1949,7 +1952,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
     ]);
 
     const effectiveTimeEnd = isFinalized ? (pinnedTime.end ?? time?.end ?? localFinalizedAt) : undefined;
-    const isActive = !isFinalized && activeLatched;
+    const isActive = (!isFinalized && activeLatched) || Boolean(forceActive);
     const shouldTreatAsFinalized = isFinalized;
 
     const taskSummaryEntries = React.useMemo<TaskToolSummaryEntry[]>(() => {
@@ -2129,11 +2132,11 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
     }
 
     return (
-        <div>
+        <div className="my-0.5">
             {}
             <div
                 className={cn(
-                    'group/tool flex gap-1.5 pr-2 pl-px py-1.5 rounded-xl',
+                    'oc-tool-pill group/tool inline-flex max-w-full gap-2 px-2.5 py-1 rounded-lg border',
                     isMultiFileApplyPatch ? 'flex-wrap items-start cursor-pointer' : 'items-center cursor-pointer',
                 )}
                 onClick={isMultiFileApplyPatch ? () => onToggle(part.id) : handleMainClick}
@@ -2150,20 +2153,8 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                     {isMultiFileApplyPatch ? (
                         <>
                             <div className="flex h-5 flex-shrink-0 items-center gap-1.5">
-                                <span className="relative h-3.5 w-3.5 flex-shrink-0">
-                                    <span className={cn(
-                                        'absolute inset-0 flex items-center justify-center transition-opacity',
-                                        isExpanded ? 'opacity-0' : 'group-hover/tool:opacity-0',
-                                    )} style={iconStyle}>
-                                        {getToolIcon(normalizedPartTool || part.tool, presentation)}
-                                    </span>
-                                    <Icon
-                                        name={isExpanded ? 'arrow-down-s' : 'arrow-right-s'}
-                                        className={cn(
-                                            'absolute inset-0 h-3.5 w-3.5 transition-opacity',
-                                            isExpanded ? 'opacity-100' : 'opacity-0 group-hover/tool:opacity-100',
-                                        )}
-                                    />
+                                <span className="flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center" style={iconStyle}>
+                                    {getToolIcon(normalizedPartTool || part.tool, presentation)}
                                 </span>
                                 <MinDurationShineText
                                     active={Boolean(isActive && !isError)}
@@ -2183,35 +2174,22 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                                 openDiffLabel={t('chat.toolPart.openFileDiff')}
                                 onFileClick={runtime?.editor ? openApplyPatchFile : undefined}
                             />
+                            <span
+                                aria-hidden="true"
+                                className="ml-auto flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center"
+                                style={{ color: 'var(--tools-icon)' }}
+                            >
+                                <Icon name={isExpanded ? 'arrow-down-s' : 'arrow-right-s'} className="h-3.5 w-3.5" />
+                            </span>
                         </>
                     ) : (
                         <>
                             <div
-                                // h-5 matches StaticToolRow's icon column, so expandable
-                                // and static rows come out the same height (the 14px
-                                // icon alone left these rows ~2px shorter).
-                                className="relative h-5 w-3.5 flex-shrink-0 cursor-pointer"
+                                className="flex h-5 w-3.5 flex-shrink-0 items-center justify-center cursor-pointer"
+                                style={iconStyle}
                                 onClick={(event) => { event.stopPropagation(); onToggle(part.id); }}
                             >
-                                <div
-                                    className={cn(
-                                        'absolute inset-0 flex items-center justify-center transition-opacity',
-                                        isExpanded && 'opacity-0',
-                                        !isExpanded && 'group-hover/tool:opacity-0'
-                                    )}
-                                    style={iconStyle}
-                                >
-                                    {getToolIcon(normalizedPartTool || part.tool, presentation)}
-                                </div>
-                                <div
-                                    className={cn(
-                                        'absolute inset-0 transition-opacity flex items-center justify-center',
-                                        isExpanded && 'opacity-100',
-                                        !isExpanded && 'opacity-0 group-hover/tool:opacity-100'
-                                    )}
-                                >
-                                    {isExpanded ? <Icon name="arrow-down-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-right-s" className="h-3.5 w-3.5" />}
-                                </div>
+                                {getToolIcon(normalizedPartTool || part.tool, presentation)}
                             </div>
                             <div className={cn('flex items-center min-w-0 flex-1', quickOpenTarget ? 'gap-1' : 'gap-2')}>
                                 <MinDurationShineText
@@ -2253,8 +2231,8 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                 </div>
 
                 {!isMultiFileApplyPatch && (
-                    <div className={cn('flex items-center gap-1 flex-1 min-w-0', TOOL_ROW_DESCRIPTION_CLASS)} style={{ color: 'var(--tools-description)' }}>
-                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                    <div className={cn('flex items-center gap-1.5 min-w-0', TOOL_ROW_DESCRIPTION_CLASS)} style={{ color: 'var(--tools-description)' }}>
+                        <div className="flex items-center gap-1 min-w-0">
                             {justificationText && (
                                 <span
                                     className={cn('min-w-0 truncate', TOOL_ROW_DESCRIPTION_CLASS)}
@@ -2291,6 +2269,13 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                                 </span>
                             )}
                         </div>
+                        <span
+                            aria-hidden="true"
+                            className="flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center"
+                            style={{ color: 'var(--tools-icon)' }}
+                        >
+                            {isExpanded ? <Icon name="arrow-down-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-right-s" className="h-3.5 w-3.5" />}
+                        </span>
                     </div>
                 )}
             </div>
@@ -2417,5 +2402,6 @@ export default React.memo(ToolPart, (prev, next) => {
         && prev.isMobile === next.isMobile
         && prev.alwaysShowActions === next.alwaysShowActions
         && prev.onShowPopup === next.onShowPopup
-        && prev.animateTailText === next.animateTailText;
+        && prev.animateTailText === next.animateTailText
+        && prev.forceActive === next.forceActive;
 });

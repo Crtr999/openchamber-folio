@@ -112,6 +112,27 @@ export interface TurnProjectionResult {
 
 export type Turn = Pick<TurnRecord, 'turnId' | 'userMessage' | 'assistantMessages'>;
 
+export interface WorkingStepRecord {
+    id: string;
+    key: string;
+    messageId: string;
+    partIndex: number;
+    part: Part;
+    kind: 'reasoning' | 'tool';
+    startedAt?: number;
+    endedAt?: number;
+    isStreaming: boolean;
+}
+
+export interface WorkingStepBatch {
+    id: string;
+    anchorMessageId: string;
+    anchorPartKey: string;
+    steps: WorkingStepRecord[];
+    settled: boolean;
+    durationSeconds?: number;
+}
+
 export interface TurnGroupingContext {
     turnId: string;
     activityOwnerMessageId?: string;
@@ -122,6 +143,7 @@ export interface TurnGroupingContext {
     summaryBody?: string;
     activityParts?: TurnActivityRecord[];
     activityGroupSegments?: TurnActivityGroup[];
+    workingStepBatches?: WorkingStepBatch[];
     headerMessageId?: string;
     hasTools: boolean;
     hasReasoning: boolean;
@@ -134,3 +156,4 @@ export interface TurnGroupingContext {
     isGroupExpanded?: boolean;
     toggleGroup?: () => void;
 }
+

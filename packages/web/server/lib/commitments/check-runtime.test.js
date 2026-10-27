@@ -170,3 +170,11 @@ describe('commitment checks', () => {
     expect(f.created).toHaveLength(0);
   });
 });
+
+
+it('keeps broad-source follow-ups on their explicitly approved model instead of the current default', async () => {
+  const f = fixture({ items: [baseItem({ reviewModel: { providerID: 'openai', id: 'approved' }, research: false, sourceDirectory: '/allowed' })], usable: true });
+  await f.checks.tick();
+  expect(f.created[0].model).toEqual({ providerID: 'openai', id: 'approved' });
+  expect(f.created[0].permissions).not.toContainEqual(expect.objectContaining({ action: 'websearch' }));
+});

@@ -8,6 +8,9 @@
  * visible in a shared schema.
  */
 export const OPENCHAMBER_CONTROL_ACTION_DEFINITIONS = Object.freeze([
+  { action: 'computer.status', title: 'Check the separate computer', description: 'Check authoritative CarterBot readiness before saying the computer is unavailable. No parameters. A sleeping VM, no open screen, or a failed connection does not mean the Mac is off. The ChatGPT desktop app is never required.' },
+  { action: 'computer.start', title: 'Wake the separate computer', description: 'Wake the existing CarterBot computer through its approved local recovery helper. Use when a computer task needs it; preserves the computer and logins. Never ask the user to open the ChatGPT desktop app.' },
+  { action: 'health.query', title: 'Read health evidence', description: 'Read the user-approved health records in the Health conversation only. Optional start/end ISO dates, metric and limit. Always check source dates, units and truncated; missing samples are unknown, never zero. Do not combine overlapping Apple Health and WHOOP totals or treat a lab result as a diagnosis.' },
   { action: 'projects.list', title: 'List configured projects', description: 'List configured projects; no parameters' },
   { action: 'models.list', title: 'Show model preferences', description: 'Show default, favorite, and recent model preferences; no parameters' },
   { action: 'session.list', title: 'List sessions', description: 'List sessions; optional directory, limit (default 10), all, or withStatus' },

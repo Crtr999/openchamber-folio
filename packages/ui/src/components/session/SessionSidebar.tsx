@@ -533,7 +533,7 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
   const sidebarViewMode = isVSCode ? 'projects' : rawSidebarViewMode;
   // Zone headers pin themselves in the grouped view, where a project can
   // scroll for a long time; the flat timeline reads better without them.
-  const stickyZoneHeaders = sidebarViewMode === 'projects';
+  const stickyZoneHeaders = false;
   const desktopHeaderActionButtonClass =
     'inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md leading-none text-foreground hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed';
   const mobileHeaderActionButtonClass =
@@ -646,14 +646,11 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
         expandAllProjects={projectView.actions.expandAllProjects}
       />
 
-      {!isVSCode && !hideDirectoryControls ? (
-        <SidebarScheduledSection
-          mobileVariant={mobileVariant}
-          onNavigate={mobileVariant ? () => setSessionSwitcherOpen(false) : undefined}
-        />
-      ) : null}
-
       <SessionProjectCollection
+        leadingContent={!isVSCode && !hideDirectoryControls ? (
+          <SidebarScheduledSection mobileVariant={mobileVariant}
+            onNavigate={mobileVariant ? () => setSessionSwitcherOpen(false) : undefined} />
+        ) : null}
         topology={{
           projects: sortedProjects,
           availableWorktreesByProject,

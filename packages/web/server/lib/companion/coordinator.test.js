@@ -79,6 +79,16 @@ describe('durable companion coordinator', () => {
     await request(f.app).patch('/api/projects/project/companion/inbox/ses_new').set('Authorization', 'Bearer fixture').send({ dismissed: true }).expect(200);
     expect((await f.config.readCompanionState('project')).inbox).toHaveLength(1);
   });
+  it('changing quiet hours preserves the saved responsibility and selected provider', async () => {
+    const f = await fixture(); await enroll(f.app).expect(200);
+    const monitor = (await f.service.list('project')).find((task) => task.id === PROJECT_MONITOR_ID);
+    await f.service.upsert('project', { ...monitor, execution: { ...monitor.execution, prompt: 'Review assignment chats only. Do not access files.' } });
+    await request(f.app).put('/api/projects/project/companion/settings').set('Authorization', 'Bearer fixture')
+      .send({ activityEnabled: true, timezone: 'America/New_York', quietStart: '20:00', quietEnd: '08:00', dailyAlertLimit: 4, providerID: 'openai', modelID: 'approved-model' }).expect(200);
+    expect((await f.service.list('project')).find((task) => task.id === PROJECT_MONITOR_ID).execution)
+      .toMatchObject({ prompt: 'Review assignment chats only. Do not access files.', providerID: 'openai', modelID: 'approved-model' });
+    expect((await f.service.list('project')).find((task) => task.id === PROJECT_MONITOR_ID).execution.permissionAutoAccept).not.toBe(true);
+  });
   it('seeks the user after enrolled project activity, with debounce, durable cooldown and no self loop', async () => {
     const f = await fixture(); await enroll(f.app).expect(200);
     const event = (id) => ({ type: 'session.idle', properties: { sessionID: id } });

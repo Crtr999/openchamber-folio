@@ -5,6 +5,8 @@ import { hardenWebsiteSessions, secureWebsiteAttachment, setTeachingOrigin } fro
 
 const websites = [
   ['persist:open-carter-claude', 'https://claude.ai/'],
+  ['persist:open-carter-venice', 'https://venice.ai/chat'],
+  ['persist:open-carter-gemini', 'https://gemini.google.com/app'],
 ];
 
 test('website partitions deny requests, checks and device access', () => {
@@ -18,6 +20,7 @@ test('website partitions deny requests, checks and device access', () => {
         }
       },
       setPermissionCheckHandler(handler) { assert.equal(handler(), false); },
+      webRequest: { onBeforeRequest() {} },
       setDevicePermissionHandler(handler) { assert.equal(handler(), false); },
     };
   });
@@ -56,7 +59,7 @@ for (const [partition, src] of websites) {
   });
 
   test(`${partition} refuses remote parents and invalid initial origins`, () => {
-    for (const [localParent, source] of [[false, src], [true, src.replace('https:', 'http:')], [true, src.replace('.ai/', '.ai.evil.test/')], [true, 'about:blank'], [true, src.replace('https://', 'https://user:secret@')]]) {
+    for (const [localParent, source] of [[false, src], [true, src.replace('https:', 'http:')], [true, src.replace(new URL(src).hostname, new URL(src).hostname + '.evil.test')], [true, 'about:blank'], [true, src.replace('https://', 'https://user:secret@')]]) {
       let refused = false;
       secureWebsiteAttachment({ event: { preventDefault() { refused = true; } }, webPreferences: {}, params: { partition, src: source }, localParent });
       assert.equal(refused, true);
@@ -79,4 +82,64 @@ test('ChatGPT/browser controller partition remains outside this policy', () => {
   assert.match(main, /contents\.on\('will-attach-webview'/);
   assert.match(main, /parent && isLocalSender\(contents\)/);
   assert.match(main, /sameOrigin\(runtime\?\.apiBaseUrl/);
+});
+
+
+for (const [partition, src] of websites.filter(([partition]) => partition !== 'persist:open-carter-claude')) {
+  test(`${partition} refuses attachment and network access under enterprise policy`, () => {
+    let refused = false;
+    secureWebsiteAttachment({ event: { preventDefault() { refused = true; } }, webPreferences: {}, params: { partition, src }, localParent: true, enterpriseBlocked: true });
+    assert.equal(refused, true);
+    const requests = new Map();
+    let blocked = false;
+    hardenWebsiteSessions(name => ({ setPermissionRequestHandler() {}, setPermissionCheckHandler() {}, setDevicePermissionHandler() {}, webRequest: { onBeforeRequest(handler) { requests.set(name, handler); } } }), () => blocked);
+    requests.get(partition)({}, result => assert.equal(result.cancel, false));
+    blocked = true;
+    requests.get(partition)({}, result => assert.equal(result.cancel, true));
+  });
+}
+
+
+test('only Venice can retain its own storage; other origins and permissions remain denied', () => {
+  let blocked = false;
+  const handlers = new Map();
+  hardenWebsiteSessions(partition => {
+    const row = {}; handlers.set(partition, row);
+    return { setPermissionRequestHandler(handler) { row.request = handler; }, setPermissionCheckHandler(handler) { row.check = handler; }, setDevicePermissionHandler() {}, webRequest: { onBeforeRequest() {} } };
+  }, () => blocked);
+  const venice = handlers.get('persist:open-carter-venice');
+  const request = (permission, requestingUrl) => { let result; venice.request(null, permission, value => { result = value; }, { requestingUrl }); return result; };
+  assert.equal(request('persistent-storage', 'https://venice.ai/chat/classic'), true);
+  assert.equal(venice.check(null, 'persistent-storage', 'https://venice.ai'), true);
+  for (const origin of ['https://venice.ai.evil.test/', 'https://evil.test/', 'http://venice.ai/', 'invalid']) assert.equal(request('persistent-storage', origin), false);
+  for (const permission of ['media', 'display-capture', 'notifications', 'clipboard-read', 'geolocation']) assert.equal(request(permission, 'https://venice.ai'), false);
+  assert.equal(handlers.get('persist:open-carter-claude').check(null, 'persistent-storage', 'https://venice.ai'), false);
+  blocked = true;
+  assert.equal(request('persistent-storage', 'https://venice.ai'), false);
+});
+
+test('Gemini keeps its real browser versions without shell product tokens', () => {
+  const changed = new Map();
+  const original = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) OpenCarter/2.0.4 Chrome/138.0.7204.243 Electron/37.4.0 Safari/537.36';
+  hardenWebsiteSessions(partition => ({
+    getUserAgent: () => original,
+    setUserAgent: value => changed.set(partition, value),
+    setPermissionRequestHandler() {}, setPermissionCheckHandler() {}, setDevicePermissionHandler() {}, webRequest: { onBeforeRequest() {} },
+  }));
+  assert.deepEqual([...changed.keys()], ['persist:open-carter-gemini']);
+  const browser = changed.get('persist:open-carter-gemini');
+  assert.match(browser, /Chrome\/138\.0\.7204\.243/);
+  assert.match(browser, /Mac OS X 10_15_7/);
+  assert.doesNotMatch(browser, /Electron|OpenCarter/);
+});
+
+test('Gemini drops the OpenChamberPersonal shell token the app actually sends', () => {
+  const changed = new Map();
+  const original = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) OpenChamberPersonal/2.0.4 Chrome/150.0.7871.250 Safari/537.36';
+  hardenWebsiteSessions(partition => ({
+    getUserAgent: () => original,
+    setUserAgent: value => changed.set(partition, value),
+    setPermissionRequestHandler() {}, setPermissionCheckHandler() {}, setDevicePermissionHandler() {}, webRequest: { onBeforeRequest() {} },
+  }));
+  assert.equal(changed.get('persist:open-carter-gemini'), 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.7871.250 Safari/537.36');
 });

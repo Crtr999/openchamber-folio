@@ -1,3 +1,6 @@
+import { geminiI18n } from './gemini.i18n';
+import { veniceI18n } from './venice.i18n';
+import { healthI18n } from './health.i18n';
 import { companionI18n } from './companion.i18n';
 import { friendsI18n } from './friends.i18n';
 import { chatgptI18n } from './chatgpt.i18n';
@@ -25,6 +28,9 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { personalWorkspaceI18n } from './personal-workspace.i18n';
 import { notionPickerI18n } from './notion-picker.i18n';
 export const dict: Record<I18nKey, string> = {
+  ...healthI18n["ko"],
+  'activity.title': '활동',
+  'activity.needsYou': '확인이 필요합니다',
   ...companionI18n['ko'],
   ...notionPickerI18n['ko'],
   ...friendsI18n['ko'],
@@ -32,6 +38,8 @@ export const dict: Record<I18nKey, string> = {
   'workspace.officePreview': '텍스트와 포함된 이미지만 표시합니다. 원래 레이아웃, 차트, 애니메이션, 실시간 계산은 표시하지 않습니다.',
   ...chatgptI18n['ko'],
   ...claudeI18n.ko,
+  ...veniceI18n.ko,
+  ...geminiI18n.ko,
   ...meetingsI18n.ko,
   'meeting.quickStart': '회의 시작',
   'meeting.partial': '일부 저장된 회의를 읽을 수 없습니다. 목록이 불완전하며 손상된 파일은 그대로 유지됩니다.',
@@ -351,6 +359,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.dialog.actions.runNow': '지금 실행',
   'sessions.scheduledTasks.dialog.actions.edit': '편집',
   'sessions.scheduledTasks.dialog.actions.editAria': '편집 {taskName}',
+  'sessions.scheduledTasks.dialog.actions.delete': "삭제",
   'sessions.scheduledTasks.dialog.actions.deleteAria': '{taskName} 삭제',
   'sessions.scheduledTasks.dialog.loading': '작업 로드 중…',
   'sessions.scheduledTasks.dialog.empty.noTasks': '아직 예약 작업 없음',
@@ -413,7 +422,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.editor.scheduleType.daily': '매일',
   'sessions.scheduledTasks.editor.scheduleType.weekly': '매주',
   'sessions.scheduledTasks.editor.scheduleType.once': '한 번',
-  'sessions.scheduledTasks.editor.scheduleType.cron': 'Cron',
+  'sessions.scheduledTasks.editor.scheduleType.cron': "사용자 지정 일정 (고급)",
   'sessions.scheduledTasks.editor.date.label': '날짜',
   'sessions.scheduledTasks.editor.date.placeholder': '날짜 선택',
   'sessions.scheduledTasks.editor.date.previousMonth': '이전 달',
@@ -460,6 +469,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.editor.validation.timezoneRequired': '시간대 필수',
   'sessions.scheduledTasks.editor.validation.cronRequired': 'Cron 표현식이 필요합니다',
   'sessions.scheduledTasks.editor.validation.cronInvalid': '유효하지 않은 cron 표현식',
+  'sessions.scheduledTasks.editor.cronExpression.help': "반복 일정을 짧은 코드로 지정합니다. 일반 알림에는 매일 또는 매주를 사용하세요. 예를 들어 0 9 * * 1은 선택한 시간대에서 매주 월요일 오전 9시를 뜻합니다.",
   'sessions.scheduledTasks.editor.cronExpression.label': 'Cron 표현식',
   'sessions.scheduledTasks.editor.cronExpression.placeholder': '*/5 * * * *',
   'sessions.scheduledTasks.editor.cronExpression.nextRuns': '다음 실행',
@@ -3570,6 +3580,8 @@ export const dict: Record<I18nKey, string> = {
   'multirun.overview.bar.waiting': '사용자를 기다리는 실행: {count}. 응답하기 전에는 실행이 끝나지 않습니다.',
   'multirun.overview.prompt.expand': '모두 보기',
   'multirun.overview.prompt.collapse': '접기',
+  'computer.start': "컴퓨터 시작",
+  'computer.connectionError': "컴퓨터 연결을 사용할 수 없습니다",
   'computer.title': "에이전트의 컴퓨터",
   'computer.hint': "화면을 골라 작업을 지켜보세요.",
   'computer.noScreens': "컴퓨터에 열린 화면이 없습니다.",

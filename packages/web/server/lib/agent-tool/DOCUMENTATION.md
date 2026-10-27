@@ -159,3 +159,5 @@ tool fails rather than driving the browser. An unresolvable action answers with
 the actions that tool actually has, because an error that only says
 "unsupported" leaves the model to guess a second wrong name — which is exactly
 what happened before this existed.
+
+The native control-tool description directs explicit reminder/follow-up requests to `schedule.list` plus `schedule.create`, asks for essential missing timing, and permits a scheduling promise only after a persisted task ID and next run time are returned. This is model guidance, not automatic extraction or a guarantee that every provider follows it. Host-offline limits and scheduling errors must be stated plainly.

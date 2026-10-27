@@ -35,8 +35,8 @@ export const useModelLists = (directory?: string) => {
         if (!provider) return null;
         const model = findCatalogModel(provider.models, modelID);
         if (!model) return null;
-        if (isHidden(providerID, modelID)) return null;
-        return { provider, model, providerID, modelID };
+        if (isHidden(providerID, modelID) || isHidden(providerID, model.id)) return null;
+        return { provider, model, providerID, modelID: model.id };
       })
       .filter((item): item is ModelListItem => item !== null);
   }, [favoriteModels, providers, isHidden]);
@@ -48,12 +48,12 @@ export const useModelLists = (directory?: string) => {
         if (!provider) return null;
         const model = findCatalogModel(provider.models, modelID);
         if (!model) return null;
-        if (isHidden(providerID, modelID)) return null;
-        return { provider, model, providerID, modelID };
+        if (isHidden(providerID, modelID) || isHidden(providerID, model.id)) return null;
+        return { provider, model, providerID, modelID: model.id };
       })
       .filter((item): item is ModelListItem => item !== null)
-      .filter(({ providerID, modelID }) =>
-        !favoriteModels.some(fav => fav.providerID === providerID && fav.modelID === modelID)
+      .filter(({ providerID, modelID, model }) =>
+        !favoriteModels.some(fav => fav.providerID === providerID && (fav.modelID === modelID || fav.modelID === model.modelID))
       );
   }, [recentModels, providers, favoriteModels, isHidden]);
 

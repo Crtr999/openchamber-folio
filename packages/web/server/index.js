@@ -1,3 +1,5 @@
+import { createWebsiteModelsRuntime } from './lib/website-models/runtime.js';
+import { OpenCode } from '@opencode/client';
 import { installOpenCodeV2, supportsOpenCodeV2Install } from './lib/opencode/v2-install.js';
 import { describeOpenCodeCompatibility, readOpenCodeCliVersion, readExternalOpenCodeVersion } from './lib/opencode/compatibility.js';
 import 'reflect-metadata';
@@ -91,6 +93,7 @@ import { createLinearSessionStatusRuntime } from './lib/linear/status-runtime.js
 import { createSessionKnowledgeRuntime } from './lib/session-knowledge/runtime.js';
 import { createScheduledTasksRuntime } from './lib/scheduled-tasks/runtime.js';
 import { createCompanionDelivery } from './lib/companion/delivery.js';
+import { createPersonalAwareness, PERSONAL_AWARENESS_ID } from './lib/companion/personal-awareness.js';
 import { createCompanionCoordinator } from './lib/companion/coordinator.js';
 import { createCommitmentsStore } from './lib/commitments/store.js';
 import { createFolderGuard } from './lib/commitments/zdr-guard.js';
@@ -152,6 +155,7 @@ import { createManagedConfigRuntime } from './lib/opencode/managed-config-file.j
 import { createOpenChamberSessionService } from './lib/openchamber-sessions/routes.js';
 import { createSessionMetadataStore, createOpenCodeSessionMetadata } from './lib/openchamber-sessions/session-metadata-store.js';
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
+import { createHealthActions } from './lib/health/actions.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
 import { createPluginNotificationEmitter } from './lib/notifications/emit-route.js';
 import { OpenChamberControlError } from './lib/openchamber-control/error.js';
@@ -342,6 +346,7 @@ const deleteImportedTheme = (...args) => themeRuntime.deleteImportedTheme(...arg
 let notificationTemplateRuntime = null;
 let agentToolRuntime = null;
 let managedConfigRuntime = null;
+let websiteModelRuntime = null;
 
 const createTimeoutSignal = (...args) => notificationTemplateRuntime.createTimeoutSignal(...args);
 const formatProjectLabel = (...args) => notificationTemplateRuntime.formatProjectLabel(...args);
@@ -894,10 +899,15 @@ notificationTemplateRuntime = createNotificationTemplateRuntime({
 });
 
 let companionCoordinator = null;
+let personalAwareness = null;
 // The commitments list: declared here for the same reason as the coordinator.
 let commitmentChecks = null;
 let commitmentCapture = null;
 const companionDelivery = createCompanionDelivery({
+  readPersonalContext: (input) => input.task.id === PERSONAL_AWARENESS_ID
+    ? personalAwareness.prepare(input) : '',
+  onPersonalCompletion: (sessionID, enrollment) => enrollment.taskId === PERSONAL_AWARENESS_ID
+    ? personalAwareness.complete(sessionID) : undefined,
   readActivityContext: (projectID, taskID) => companionCoordinator?.activityContext(projectID, taskID) ?? '',
   readSessionMetadata: readStoredSessionMetadata,
   persistEnrollment: (sessionID, directory, companion) =>
@@ -1348,6 +1358,7 @@ const bootstrapRuntime = createBootstrapRuntime({
   registerOpenChamberRoutes,
   registerAgentToolRoutes: (app, options) => {
     options.agentToolRuntime.registerRoutes(app, options.express);
+    websiteModelRuntime?.registerCompletionRoutes(app, { express: options.express, authorizeRequest: options.agentToolRuntime.authorizeRequest });
     registerTeamToolsRoute(app, { authorizeRequest: options.agentToolRuntime.authorizeRequest, getTeam: () => teamRuntime, express: options.express });
   },
   express,
@@ -1649,7 +1660,16 @@ const commitmentGuard = createFolderGuard({
   resolveAllowedProviders: (directory) => resolveDirectoryAllowedProviders(directory),
   readExcludedDirectories: async () => (await commitmentStore.read()).settings.excludedDirectories,
 });
-const commitmentActions = createCommitmentActions({ store: commitmentStore, guard: commitmentGuard });
+const commitmentActions = createCommitmentActions({
+  store: commitmentStore, guard: commitmentGuard,
+  getReviewModel: async (sessionID) => {
+    const metadata = await readStoredSessionMetadata(sessionID);
+    if (metadata?.openchamber?.companion?.taskId !== PERSONAL_AWARENESS_ID) return null;
+    const consent = (await commitmentStore.read()).awareness;
+    if (!consent?.enabled || consent.providerID !== 'openai' || !consent.modelID) throw new Error('Personal review approval is unavailable');
+    return { providerID: 'openai', id: consent.modelID };
+  },
+});
 commitmentChecks = createCommitmentChecks({
   store: commitmentStore,
   guard: commitmentGuard,
@@ -1795,7 +1815,17 @@ const openChamberControlService = createOpenChamberControlService({
   browserControl: browserControlRouter,
   fileOpen: fileOpenRequester,
   commitmentActions,
-  isFollowUpSession: async (sessionID) => Boolean((await readStoredSessionMetadata(sessionID))?.openchamber?.commitment),
+  healthActions: createHealthActions({
+    dataDir: OPENCHAMBER_DATA_DIR,
+    readSession: async (sessionID) => {
+      const client = OpenCode.make({ baseUrl: new URL(buildOpenCodeUrl('/api/info', '')).origin, headers: getOpenCodeAuthHeaders() });
+      return client.session.get({ sessionID });
+    },
+  }),
+  isFollowUpSession: async (sessionID) => {
+    const metadata = (await readStoredSessionMetadata(sessionID))?.openchamber;
+    return Boolean(metadata?.commitment || metadata?.companion?.taskId === PERSONAL_AWARENESS_ID);
+  },
   // The tool is off by default; a plugin generated before it was switched off
   // must not keep paging the user.
   notifyUser: async (input) => {
@@ -1920,7 +1950,7 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   getSpacesHost: () => spacesHost,
 });
 
-const gracefulShutdown = (...args) => gracefulShutdownRuntime.gracefulShutdown(...args);
+const gracefulShutdown = (...args) => { websiteModelRuntime?.close(); return gracefulShutdownRuntime.gracefulShutdown(...args); };
 
 async function main(options = {}) {
   beginGuestServiceHost();
@@ -1946,12 +1976,14 @@ async function main(options = {}) {
     // A pipe listener reports a string here, which has no address to bind back to.
     getActiveHost: () => server?.address?.()?.address ?? null,
   });
+  websiteModelRuntime = createWebsiteModelsRuntime({ enabled: options.desktopWebsiteModels === true, catalogFile: path.join(OPENCHAMBER_DATA_DIR, 'website-model-catalog.json') });
   managedConfigRuntime = createManagedConfigRuntime({
     fsPromises,
     path,
     dataDir: OPENCHAMBER_DATA_DIR,
     env: process.env,
     agentToolRuntime,
+    getWebsiteProviders: childEnv => websiteModelRuntime?.providers(childEnv) ?? {},
     readSettings: () => readSettingsFromDiskMigrated(),
     isAgentMemoryAvailable: isAgentMemoryFeatureAvailable,
   });
@@ -2391,6 +2423,7 @@ async function main(options = {}) {
   relayService.registerRoutes(app);
 
   registerBrowserControlRoutes(app, { express, broker: browserControlBroker });
+  websiteModelRuntime?.registerWorkerRoutes(app, { express });
 
   // One scanner backs both discovery and the tunnel allowlist, so a port the
   // user can see is exactly a port the tunnel will dial.
@@ -2549,6 +2582,29 @@ async function main(options = {}) {
   dictationRuntime = startupPipelineResult.dictationRuntime;
   messageStreamRuntime = startupPipelineResult.messageStreamRuntime;
 
+  personalAwareness = createPersonalAwareness({
+    store: commitmentStore, guard: commitmentGuard, getClient: getSmallModelClient,
+    resolveAllowedProviders: resolveDirectoryAllowedProviders,
+    readMetadata: readStoredSessionMetadata,
+    isArchived: async (id) => openChamberSessionService.archiveStore.isArchived(id),
+    readSources: options.personalAwareness?.readSources,
+    readInbox: async () => {
+      const entries = [];
+      for (const project of await scheduledTaskService.listProjects()) {
+        if (!(await commitmentGuard.check(project.path)).ok) continue;
+        const bindings = await resolveDirectoryAllowedProviders(project.path);
+        if (bindings.some((provider) => provider !== 'openai')) continue;
+        const state = await projectConfigRuntime.readCompanionState(project.id);
+        entries.push(...state.inbox.filter((item) => !item.dismissed).slice(-3)
+          .map((item) => ({ sessionID: item.id, title: item.title, excerpt: item.excerpt, seen: item.seen })));
+        if (entries.length >= 24) break;
+      }
+      return entries.slice(0, 24);
+    },
+    isBlocked: isEnterpriseMode,
+  });
+
+
   try {
     await scheduledTasksRuntime.start();
     companionCoordinator.start();
@@ -2584,6 +2640,7 @@ async function main(options = {}) {
     teamCheckInterval.unref();
     void checkTeam();
   }
+
 
   if (options.aiTaskConnection) {
     aiTaskRuntime = createAiTaskRuntime({

@@ -21,3 +21,14 @@ export const sortSidebarScheduledTasks = (items: SidebarScheduledTask[]): Sideba
   if (byNext !== 0) return byNext;
   return a.task.name.localeCompare(b.task.name);
 });
+
+/** Dispatch success is not completion. Live blocking requests outrank busy. */
+export const scheduledRunActivity = ({ pending, live, unread, dispatching, failed }: {
+  pending: boolean; live: boolean; unread: boolean; dispatching: boolean; failed: boolean;
+}): 'waiting' | 'running' | 'unread' | 'error' | 'idle' => {
+  if (pending) return 'waiting';
+  if (live || dispatching) return 'running';
+  if (failed) return 'error';
+  if (unread) return 'unread';
+  return 'idle';
+};

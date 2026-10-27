@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { formatCompactUntil, sortSidebarScheduledTasks } from './sidebarScheduled';
+import { formatCompactUntil, sortSidebarScheduledTasks, scheduledRunActivity } from './sidebarScheduled';
 import type { ScheduledTask } from '@/lib/scheduledTasksApi';
 import type { ProjectEntry } from '@/lib/api/types';
 
@@ -31,5 +31,18 @@ describe('sidebar scheduled section', () => {
       { task: task('No next run', true), project },
     ]);
     expect(sorted.map((item) => item.task.name)).toEqual(['MacroTrack daily iPhone rebuild', 'Later', 'No next run', 'Paused']);
+  });
+});
+
+describe('scheduled run activity', () => {
+  const settled = { pending: false, live: false, unread: false, dispatching: false, failed: false };
+  test('an unanswered question overrides the upstream busy status', () => {
+    expect(scheduledRunActivity({ ...settled, pending: true, live: true })).toBe('waiting');
+  });
+  test('distinguishes a live run, unread result, failure and settled dispatch', () => {
+    expect(scheduledRunActivity({ ...settled, live: true })).toBe('running');
+    expect(scheduledRunActivity({ ...settled, unread: true })).toBe('unread');
+    expect(scheduledRunActivity({ ...settled, failed: true })).toBe('error');
+    expect(scheduledRunActivity(settled)).toBe('idle');
   });
 });

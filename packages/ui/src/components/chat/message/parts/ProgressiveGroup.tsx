@@ -16,7 +16,7 @@ import { FadeInOnReveal } from '../FadeInOnReveal';
 import { getToolIcon } from './toolPresentation';
 import { getToolMetadata } from '@/lib/toolHelpers';
 import { useGuestToolPresentation } from '@/lib/guests/tool-presentation';
-import { isExpandableTool, isStandaloneTool, isStaticTool } from './toolRenderUtils';
+import { getEffectiveToolInput, isExpandableTool, isStandaloneTool, isStaticTool } from './toolRenderUtils';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -99,7 +99,7 @@ const sortPartsByTime = (parts: TurnActivityPart[]): TurnActivityPart[] => parts
 const getToolFileName = (activity: TurnActivityPart): string | null => {
     const part = activity.part as ToolPartType;
     const state = part.state as { input?: Record<string, unknown>; metadata?: Record<string, unknown> } | undefined;
-    const input = state?.input;
+    const input = getEffectiveToolInput(part.state);
     const metadata = state?.metadata;
 
     const filePath =
@@ -121,7 +121,7 @@ const getToolFileName = (activity: TurnActivityPart): string | null => {
 const getToolFilePath = (activity: TurnActivityPart): string | null => {
     const part = activity.part as ToolPartType;
     const state = part.state as { input?: Record<string, unknown>; metadata?: Record<string, unknown> } | undefined;
-    const input = state?.input;
+    const input = getEffectiveToolInput(part.state);
     const metadata = state?.metadata;
 
     const filePath =
@@ -146,7 +146,7 @@ const getToolSkillDirectory = (activity: TurnActivityPart): string | null => {
 const getToolReadOffset = (activity: TurnActivityPart): number | undefined => {
     const part = activity.part as ToolPartType;
     const state = part.state as { input?: Record<string, unknown>; metadata?: Record<string, unknown> } | undefined;
-    const input = state?.input;
+    const input = getEffectiveToolInput(part.state);
     const metadata = state?.metadata;
 
     const rawOffset =
@@ -227,8 +227,9 @@ const SHORT_DESCRIPTION_MAX = 50;
 
 const getToolShortDescription = (activity: TurnActivityPart): string | null => {
     const part = activity.part as ToolPartType;
-    const state = part.state as { input?: ToolInput; metadata?: Metadata } | undefined;
-    const described = toolDescription(part.tool, state?.input, state?.metadata);
+    const state = part.state as { input?: ToolInput; raw?: string; metadata?: Metadata } | undefined;
+    const effectiveInput = getEffectiveToolInput(state);
+    const described = toolDescription(part.tool, effectiveInput, state?.metadata);
 
     if (described?.kind === 'text') {
         return described.value.length > SHORT_DESCRIPTION_MAX
@@ -433,7 +434,8 @@ const StaticToolRowInner: React.FC<{
     toolName: string;
     activities: TurnActivityPart[];
     animateTailText: boolean;
-}> = ({ toolName, activities, animateTailText }) => {
+    forceActive?: boolean;
+}> = ({ toolName, activities, animateTailText, forceActive }) => {
     const showToolFileIcons = useUIStore((state) => state.showToolFileIcons);
     // Grouped rows share one normalized name; the registry wants the full
     // name OpenCode reported, which every activity in the group carries.
@@ -446,7 +448,7 @@ const StaticToolRowInner: React.FC<{
     const mobileActions = useMobileAppActions();
     const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
     const skills = useSkillsStore((state) => state.skills);
-    const hasRunningActivity = React.useMemo(() => activities.some((activity) => isActivityRunning(activity)), [activities]);
+    const hasRunningActivity = React.useMemo(() => Boolean(forceActive) || activities.some((activity) => isActivityRunning(activity)), [activities, forceActive]);
     const skillByName = React.useMemo(() => new Map(skills.map((skill) => [skill.name, skill])), [skills]);
 
     const descriptions = React.useMemo(() => {
@@ -555,7 +557,7 @@ const StaticToolRowInner: React.FC<{
             // same 36px floor the [role="button"] expandable/reasoning rows get,
             // so static and expandable rows have identical rhythm.
             className={cn(
-                'oc-static-tool-row flex w-full items-center gap-x-1.5 pr-2 pl-px py-1.5 rounded-xl min-w-0'
+                'oc-static-tool-row oc-tool-pill inline-flex max-w-full items-center gap-x-2 px-2.5 py-1 my-0.5 rounded-lg border min-w-0'
             )}
         >
             <div className="inline-flex h-5 items-center flex-shrink-0" style={{ color: 'var(--tools-icon)' }}>
@@ -656,6 +658,7 @@ const StaticToolRowInner: React.FC<{
 export const StaticToolRow = React.memo(StaticToolRowInner, (prev, next) => {
     return prev.toolName === next.toolName
         && prev.animateTailText === next.animateTailText
+        && prev.forceActive === next.forceActive
         && areActivityListsEqual(prev.activities, next.activities);
 });
 

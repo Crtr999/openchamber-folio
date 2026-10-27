@@ -941,3 +941,7 @@ const useViewportStore = create(() => ({ scrollAnchor: 0 }))
 const useSelectionStore = create(() => ({ selectedModel: null }))
 const useInputStore = create(() => ({ pendingInput: "" }))
 ```
+
+Directory status refreshes receive OpenCode's global active-session map. Only IDs in the caller's authoritative owned-session list may be assigned that directory in the global live index. Other active IDs remain with their own event/metadata owner. This prevents General Chats from inheriting a different project's activity.
+
+General draft selection resolves and activates the authoritative configured chats root, rather than activating null and leaving a previously bound project catalog live. Its runtime/draft revision is checked before activation, so a newer project selection wins over a delayed chat-root read. Ordinary project policy remains enforced on send.

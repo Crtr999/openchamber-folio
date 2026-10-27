@@ -831,6 +831,18 @@ class OpencodeService {
     return projectSession(info)
   }
 
+  /** Retain user-imported context without running a model or any tools. */
+  async retainImportedContext(params: {
+    sessionID: string; messageID: string; text: string; description: string;
+    directory: string; runtimeKey: string;
+  }): Promise<void> {
+    this.assertRuntimeUnchanged(params.runtimeKey)
+    await call("session.synthetic", () => this.clientFor(params.directory).session.synthetic({
+      sessionID: params.sessionID, id: params.messageID, text: params.text,
+      description: params.description, resume: false,
+    }))
+  }
+
   async getSession(id: string, directory?: string | null): Promise<Session> {
     const info = await call("session.get", () => this.clientFor(directory).session.get({ sessionID: id }))
     return projectSession(info)

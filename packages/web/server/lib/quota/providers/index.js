@@ -29,6 +29,7 @@ import * as ollamaCloud from './ollama-cloud.js';
 import * as wafer from './wafer.js';
 import * as opencodeGo from './opencode-go.js';
 import * as xai from './xai.js';
+import { gemini as geminiWebsite, venice as veniceWebsite } from './website-accounts.js';
 
 const registry = {
   claude: {
@@ -156,6 +157,18 @@ const registry = {
     providerName: neuralwatt.providerName,
     isConfigured: neuralwatt.isConfigured,
     fetchQuota: neuralwatt.fetchQuota
+  },
+  'gemini-website': {
+    providerId: geminiWebsite.providerId,
+    providerName: geminiWebsite.providerName,
+    isConfigured: geminiWebsite.isConfigured,
+    fetchQuota: geminiWebsite.fetchQuota
+  },
+  'venice-website': {
+    providerId: veniceWebsite.providerId,
+    providerName: veniceWebsite.providerName,
+    isConfigured: veniceWebsite.isConfigured,
+    fetchQuota: veniceWebsite.fetchQuota
   },
   xai: {
     providerId: xai.providerId,

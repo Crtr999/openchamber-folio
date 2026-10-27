@@ -1,5 +1,5 @@
 import type { Message, Part } from '@/lib/opencode/model';
-import type { TurnActivityGroup, TurnActivityRecord, TurnChangedFile, TurnDiffStats, TurnGroupingContext } from '../lib/turns/types';
+import type { TurnActivityGroup, TurnActivityRecord, TurnChangedFile, TurnDiffStats, TurnGroupingContext, WorkingStepBatch, WorkingStepRecord } from '../lib/turns/types';
 
 type MessageRecord = {
   info: Message;
@@ -272,6 +272,77 @@ const areRelevantActivitySegmentsEqual = (
   }
 };
 
+const areWorkingStepRecordsEqual = (left: WorkingStepRecord, right: WorkingStepRecord): boolean => {
+  return left.id === right.id
+    && left.key === right.key
+    && left.messageId === right.messageId
+    && left.partIndex === right.partIndex
+    && left.kind === right.kind
+    && left.startedAt === right.startedAt
+    && left.endedAt === right.endedAt
+    && left.isStreaming === right.isStreaming
+    && areRenderRelevantPartsEqual([left.part], [right.part]);
+};
+
+const areWorkingStepBatchesEqual = (left: WorkingStepBatch, right: WorkingStepBatch): boolean => {
+  if (
+    left.id !== right.id
+    || left.anchorMessageId !== right.anchorMessageId
+    || left.anchorPartKey !== right.anchorPartKey
+    || left.settled !== right.settled
+    || left.durationSeconds !== right.durationSeconds
+    || left.steps.length !== right.steps.length
+  ) {
+    return false;
+  }
+
+  for (let index = 0; index < left.steps.length; index += 1) {
+    if (!areWorkingStepRecordsEqual(left.steps[index], right.steps[index])) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
+const isWorkingBatchRelevantToMessage = (batch: WorkingStepBatch, messageId: string): boolean => {
+  if (batch.anchorMessageId === messageId) return true;
+  return batch.steps.some((step) => step.messageId === messageId);
+};
+
+const areRelevantWorkingStepBatchesEqual = (
+  left: WorkingStepBatch[] | undefined,
+  right: WorkingStepBatch[] | undefined,
+  messageId: string,
+): boolean => {
+  if (left === right) return true;
+  let leftIndex = 0;
+  let rightIndex = 0;
+
+  while (true) {
+    while (leftIndex < (left?.length ?? 0) && !isWorkingBatchRelevantToMessage(left![leftIndex]!, messageId)) {
+      leftIndex += 1;
+    }
+    while (rightIndex < (right?.length ?? 0) && !isWorkingBatchRelevantToMessage(right![rightIndex]!, messageId)) {
+      rightIndex += 1;
+    }
+
+    const leftBatch = left?.[leftIndex];
+    const rightBatch = right?.[rightIndex];
+
+    if (!leftBatch || !rightBatch) {
+      return leftBatch === rightBatch;
+    }
+
+    if (!areWorkingStepBatchesEqual(leftBatch, rightBatch)) {
+      return false;
+    }
+
+    leftIndex += 1;
+    rightIndex += 1;
+  }
+};
+
 export const areRelevantTurnGroupingContextsEqual = (
   left: TurnGroupingContext | undefined,
   right: TurnGroupingContext | undefined,
@@ -316,6 +387,10 @@ export const areRelevantTurnGroupingContextsEqual = (
   }
 
   if (!areRelevantActivitySegmentsEqual(left.activityGroupSegments, right.activityGroupSegments, messageId)) {
+    return false;
+  }
+
+  if (!areRelevantWorkingStepBatchesEqual(left.workingStepBatches, right.workingStepBatches, messageId)) {
     return false;
   }
 

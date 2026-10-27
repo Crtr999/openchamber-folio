@@ -682,3 +682,11 @@ Outside mobile and expanded mode, desktop Enter sends by default, and
 Shift-modified Enter does not send until the Chat setting is changed.
 An explicit choice controls Enter and Shift+Enter there;
 Ctrl/Cmd+Enter sends in either configured mode.
+
+The local desktop composer offers Venice website/free-account navigation separately from native API models. Opening it closes the model selector and retains the native draft without sending its contents. Venice API provider groups are explicitly labeled as paid credits. Controlled model pickers and ZDR-bound drafts do not offer the account website action; enterprise policy hides it.
+
+
+Home and the desktop composer picker offer Venice website (free account) and Gemini website (Google account) as explicit navigation actions. They never send the native composer draft or select an API model. Venice API models remain separately labeled paid credits. Website actions are unavailable for controlled model settings, strict ZDR composer bindings, enterprise mode and nonlocal/non-Electron runtimes.
+
+
+Website-backed accounts are registered by the Mac host as actual OpenCode providers. ModelControls does not intercept website IDs or open an account page. The ordinary provider selection, favorite, composer, session and folder behavior is unchanged. HomeQuickActions contains only meeting start/log links, both in foreground text. Follow-ups and Health keep their owning sidebar/account entry points.

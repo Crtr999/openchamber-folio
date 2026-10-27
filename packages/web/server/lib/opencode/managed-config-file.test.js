@@ -11,7 +11,7 @@ afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => fs.rm(directory, { recursive: true, force: true })));
 });
 
-const createHarness = async ({ settings = {}, env = {}, memoryAvailable = true } = {}) => {
+const createHarness = async ({ settings = {}, env = {}, memoryAvailable = true, getWebsiteProviders } = {}) => {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'openchamber-managed-config-'));
   temporaryDirectories.push(dataDir);
   const agentToolRuntime = {
@@ -33,6 +33,7 @@ const createHarness = async ({ settings = {}, env = {}, memoryAvailable = true }
     dataDir,
     env,
     agentToolRuntime,
+    ...(getWebsiteProviders ? { getWebsiteProviders } : {}),
     readSettings: () => current.settings,
     isAgentMemoryAvailable: () => memoryAvailable,
   });
@@ -52,6 +53,7 @@ describe('managed OpenCode config file', () => {
     expect(childEnv.OPENCODE_CONFIG_CONTENT).toBeUndefined();
     expect(childEnv.OPENCHAMBER_AGENT_TOOL_TOKEN).toBe('token');
     expect(await readConfigFile()).toEqual({
+      mcp: { servers: { playwright: { disabled: true }, 'chrome-devtools': { disabled: true } } },
       plugins: ['-opencode.browser', path.join(dataDir, 'agent-tool', 'openchamber-agent-tool')],
     });
   });
@@ -74,7 +76,7 @@ describe('managed OpenCode config file', () => {
     const childEnv = await runtime.buildManagedChildEnv();
 
     expect(agentToolRuntime.materializePlugin).not.toHaveBeenCalled();
-    expect(await readConfigFile()).toEqual({ plugins: ['-opencode.browser'] });
+    expect(await readConfigFile()).toEqual({ plugins: ['-opencode.browser'], mcp: { servers: { playwright: { disabled: true }, 'chrome-devtools': { disabled: true } } } });
     // A tool switched on later reaches a process that can already call back.
     expect(childEnv.OPENCHAMBER_AGENT_TOOL_TOKEN).toBe('token');
   });
@@ -198,6 +200,27 @@ describe('managed OpenCode config file', () => {
     await runtime.buildManagedChildEnv();
 
     expect(agentToolRuntime.materializePlugin).not.toHaveBeenCalled();
-    expect(await readConfigFile()).toEqual({ plugins: ['-opencode.browser'] });
+    expect(await readConfigFile()).toEqual({ plugins: ['-opencode.browser'], mcp: { servers: { playwright: { disabled: true }, 'chrome-devtools': { disabled: true } } } });
   });
+});
+
+
+it('native website providers survive managed-tool refresh without changing the child token', async () => {
+  const provider = env => ({ 'website-fixture': { package: 'aisdk:@ai-sdk/openai-compatible', settings: { baseURL: env.OPENCHAMBER_AGENT_TOOL_URL, apiKey: env.OPENCHAMBER_AGENT_TOOL_TOKEN }, models: { website: { modelID: 'website' } } } });
+  const h = await createHarness({ getWebsiteProviders: provider });
+  await h.runtime.buildManagedChildEnv();
+  const initial = await h.readConfigFile();
+  expect(initial.providers['website-fixture'].settings.apiKey).toBe('token');
+  h.current.settings = { agentWebToolEnabled: false };
+  await h.runtime.refreshManagedConfigFile();
+  expect((await h.readConfigFile()).providers).toEqual(initial.providers);
+  expect(h.agentToolRuntime.createChildEnv).toHaveBeenCalledTimes(1);
+  expect((await fs.stat(h.runtime.filePath)).mode & 0o077).toBe(0);
+});
+
+it('external config-content retains user providers while adding the native bridge', async () => {
+  const h = await createHarness({ env: { OPENCODE_CONFIG: '/user-owned.json', OPENCODE_CONFIG_CONTENT: JSON.stringify({ providers: { owned: { name: 'Owned' } } }) }, getWebsiteProviders: () => ({ bridge: { name: 'Website' } }) });
+  const env = await h.runtime.buildManagedChildEnv();
+  expect(env.OPENCODE_CONFIG).toBeUndefined();
+  expect(JSON.parse(env.OPENCODE_CONFIG_CONTENT).providers).toEqual({ bridge: { name: 'Website' }, owned: { name: 'Owned' } });
 });

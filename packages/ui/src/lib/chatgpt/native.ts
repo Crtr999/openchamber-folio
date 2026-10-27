@@ -9,7 +9,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 
 /** Open the ordinary OpenCode project chat, with website history kept separately. */
 export async function openNativeChatGPT(setupError: string): Promise<void> {
-  if (!isElectronShell() || !isDesktopLocalOriginActive()) return;
+  if (isElectronShell() && !isDesktopLocalOriginActive()) return;
   // The account shortcut must not silently leave an active ZDR agent's pool.
   if (useConfigStore.getState().currentAgentName?.toLowerCase() === 'zdr') throw new Error(setupError);
   const activeAgent = useConfigStore.getState().currentAgentName;
@@ -19,7 +19,7 @@ export async function openNativeChatGPT(setupError: string): Promise<void> {
     && useConfigStore.getState().currentAgentName === activeAgent;
   const runtime = getRuntimeKey();
   const sdk = opencodeClient.getSdkClient();
-  const runtimeIsCurrent = () => getRuntimeKey() === runtime && opencodeClient.getSdkClient() === sdk && isDesktopLocalOriginActive();
+  const runtimeIsCurrent = () => getRuntimeKey() === runtime && opencodeClient.getSdkClient() === sdk && (!isElectronShell() || isDesktopLocalOriginActive());
   const { home } = await opencodeClient.getFilesystemHomeInfo();
   if (!runtimeIsCurrent()) return;
   if (useConfigStore.getState().currentAgentName?.toLowerCase() === 'zdr') throw new Error(setupError);

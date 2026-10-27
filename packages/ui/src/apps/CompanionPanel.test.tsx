@@ -134,3 +134,18 @@ test('opening an inbox update acknowledges it and selects the real result conver
   expect(useSessionUIStore.getState().currentSessionId).toBe('ses_open_result');
   expect(useSessionUIStore.getState().currentSessionDirectory).toBe('/workspace/fixture');
 });
+
+test('saving follow-up preferences preserves the enrolled model instead of the current chat model', async () => {
+  const submitted: Array<{ providerID: string; modelID: string }> = [];
+  globalThis.fetch = async (input, init) => {
+    if (init?.method === 'PUT' && String(input).endsWith('/companion/settings')) {
+      submitted.push(JSON.parse(String(init.body)));
+      return Response.json({ settings });
+    }
+    return Response.json({ settings, inbox: [], tasks: [{ id: 'companion:project-monitor', name: 'Follow up', enabled: true, state: {}, execution: { providerID: 'saved-provider', modelID: 'saved-model' } }] });
+  };
+  await render();
+  await act(async () => { document.querySelector('form')?.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })); });
+  expect(submitted).toHaveLength(1);
+  expect(submitted[0]).toMatchObject({ providerID: 'saved-provider', modelID: 'saved-model' });
+});

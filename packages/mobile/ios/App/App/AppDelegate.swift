@@ -108,6 +108,7 @@ class BridgeViewController: CAPBridgeViewController {
 
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
+        bridge?.registerPluginInstance(HealthDataPlugin())
         // GCKeyboard is the only authoritative answer to "is a hardware keyboard
         // attached?". The web layer can otherwise only INFER it from a keyboard
         // that never appears, which costs the user one focus before the layout

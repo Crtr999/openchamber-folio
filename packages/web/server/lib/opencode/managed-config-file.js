@@ -67,10 +67,12 @@ export const createManagedConfigRuntime = ({
   dataDir,
   env = process.env,
   agentToolRuntime = null,
+  getWebsiteProviders = () => ({}),
   readSettings,
   isAgentMemoryAvailable,
 }) => {
   const filePath = path.join(dataDir, MANAGED_CONFIG_FILE_NAME);
+  let activeChildEnv = {};
 
   /** The user owns `OPENCODE_CONFIG` when their environment already set it. */
   const ownsConfigFile = () => (env.OPENCODE_CONFIG ?? '').trim().length === 0;
@@ -83,8 +85,10 @@ export const createManagedConfigRuntime = ({
     const disabledServers = settings?.appRunsBrowserMcpServers === true
       ? {}
       : Object.fromEntries(APP_OWNED_BROWSER_MCP_SERVERS.map((name) => [name, { disabled: true }]));
+    const websiteProviders = getWebsiteProviders(activeChildEnv);
     const managed = {
       plugins: [...DISABLED_BUILTIN_PLUGINS, ...pluginDirectories],
+      ...(Object.keys(websiteProviders).length ? { providers: websiteProviders } : {}),
       ...(Object.keys(disabledServers).length > 0 ? { mcp: { servers: disabledServers } } : {}),
     };
     const text = `${JSON.stringify(managed, null, 2)}\n`;
@@ -128,6 +132,7 @@ export const createManagedConfigRuntime = ({
   const buildManagedChildEnv = async () => {
     const directories = await materializeEnabledPlugins();
     const childEnv = agentToolRuntime ? agentToolRuntime.createChildEnv() : {};
+    activeChildEnv = childEnv;
     if (ownsConfigFile()) {
       await writeConfigFile(directories);
       return { ...childEnv, OPENCODE_CONFIG: filePath };
@@ -135,6 +140,11 @@ export const createManagedConfigRuntime = ({
     let content = env.OPENCODE_CONFIG_CONTENT;
     for (const directory of [...DISABLED_BUILTIN_PLUGINS, ...directories]) {
       content = appendManagedPlugin(content, directory, 'managed plugin');
+    }
+    const websiteProviders = getWebsiteProviders(activeChildEnv);
+    if (Object.keys(websiteProviders).length) {
+      const config = content ? JSON.parse(content) : {};
+      content = JSON.stringify({ ...config, providers: { ...websiteProviders, ...config.providers } });
     }
     return { ...childEnv, OPENCODE_CONFIG_CONTENT: content };
   };
