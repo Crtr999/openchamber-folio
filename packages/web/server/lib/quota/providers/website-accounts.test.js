@@ -1,8 +1,9 @@
 import { expect, test, vi } from 'vitest';
 
+const bridge = vi.hoisted(() => ({ down: false, next: null }));
 vi.mock('../../website-models/usage-bridge.js', () => ({
   websiteUsageAvailable: () => true,
-  requestWebsiteUsage: async () => ({ limits: [{ label: 'Chat', remaining: 4, resetText: '10:38 PM' }, { label: 'Image', remaining: 3, resetText: 'Oct 28 at 4:17 PM' }, { label: 'Web Scrape', remaining: 15, resetText: null }], balance: '\$0.00' }),
+  requestWebsiteUsage: async () => bridge.down ? Promise.reject(new Error('The website did not answer in time.')) : bridge.next ?? ({ limits: [{ label: 'Chat', remaining: 4, resetText: '10:38 PM' }, { label: 'Image', remaining: 3, resetText: 'Oct 28 at 4:17 PM' }, { label: 'Web Scrape', remaining: 15, resetText: null }], balance: '\$0.00' }),
 }));
 
 import { parseResetText, venice } from './website-accounts.js';
@@ -25,4 +26,31 @@ test('venice chats and images become rings out of their allowances', async () =>
   expect(usage.windows.Chat.valueLabel).toContain('4/10 left');
   expect(usage.windows.Image.usedPercent).toBe(80);
   expect(usage.windows['Web Scrape'].usedPercent).toBeNull();
+});
+
+test('a failed refresh keeps the last reading instead of dropping the meter', async () => {
+  vi.useFakeTimers();
+  try {
+    vi.setSystemTime(Date.now() + 60_000);
+    bridge.down = true;
+    const result = await venice.fetchQuota();
+    expect(result.ok).toBe(true);
+    expect(result.usage.windows.Chat.usedPercent).toBe(60);
+    vi.setSystemTime(Date.now() + 25 * 3600_000);
+    expect((await venice.fetchQuota()).ok).toBe(false);
+  } finally { bridge.down = false; vi.useRealTimers(); }
+});
+
+test('a chat allowance that disappears at zero stays visible as spent', async () => {
+  vi.useFakeTimers();
+  try {
+    vi.setSystemTime(Date.now() + 120_000);
+    bridge.next = { limits: [{ label: 'Chat', remaining: 1, resetText: '10:38 PM' }, { label: 'Image', remaining: 15, resetText: null }] };
+    await venice.fetchQuota();
+    vi.setSystemTime(Date.now() + 60_000);
+    bridge.next = { limits: [{ label: 'Image', remaining: 15, resetText: null }] };
+    const { usage } = await venice.fetchQuota();
+    expect(usage.windows.Chat.usedPercent).toBe(100);
+    expect(usage.windows.Chat.valueLabel).toContain('limit reached');
+  } finally { bridge.next = null; vi.useRealTimers(); }
 });

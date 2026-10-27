@@ -4,9 +4,9 @@ import { runtimeFetch } from '@/lib/runtime-fetch';
 import { isElectronShell, isDesktopLocalOriginActive } from '@/lib/desktop';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
-import { buildWebsiteAccountScript, buildWebsiteChatScript, websiteAccountActionSchema, websiteChatSnapshotSchema, websiteChatActionSchema, waitForWebsiteSnapshot } from '@/lib/website-chat/websiteChat';
+import { buildWebsiteAccountScript, buildWebsiteChatScript, buildWebsiteImageScript, websiteImageResultSchema, websiteAccountActionSchema, websiteChatSnapshotSchema, websiteChatActionSchema, waitForWebsiteSnapshot } from '@/lib/website-chat/websiteChat';
 
-const jobSchema = z.object({ id: z.string().uuid(), lease: z.string().uuid(), provider: z.enum(['venice', 'gemini']), kind: z.enum(['chat', 'usage', 'models']).default('chat'), prompt: z.string().max(300_000), model: z.string().max(120).nullish() });
+const jobSchema = z.object({ id: z.string().uuid(), lease: z.string().uuid(), provider: z.enum(['venice', 'gemini']), kind: z.enum(['chat', 'usage', 'models']).default('chat'), prompt: z.string().max(300_000), model: z.string().max(120).nullish(), image: z.boolean().default(false) });
 type Job = z.infer<typeof jobSchema>;
 const normalize = (text: string) => text.replace(/\s+/g, ' ').trim();
 const wait = (signal: AbortSignal, ms: number) => new Promise<void>((resolve, reject) => {
@@ -80,28 +80,68 @@ function WebsiteModelJob({ job, signal, finish, userFocus }: { job: Job; signal:
         const start = await waitReady(read, ensureActive, deadline, 'chat');
         if (!start || !alive || signal.aborted) throw new Error('Website account connection cancelled.');
         if (start.busy || start.messages.length || start.draft.trim()) throw new Error('The website did not open a fresh chat. Nothing was sent; check its account connection.');
-        if (job.model) {
+        // Venice keeps its last pick between visits, so a text chat must not inherit an image model from an earlier job.
+        let pick: { name: string; tab?: 'text' | 'image' } | null = job.model ? { name: job.model, tab: job.provider === 'venice' ? (job.image ? 'image' : 'text') : undefined } : null;
+        if (!pick && job.provider === 'venice') {
+          try {
+            const current = websiteAccountActionSchema.parse(await webview.executeJavaScript(buildWebsiteAccountScript('venice', { kind: 'current-model' }), true));
+            if (current.kind === 'names' && /flux|image|banana|seedream|imagine|krea|luma|z-image/i.test(current.names[0] ?? '')) pick = { name: 'Auto', tab: 'text' };
+          } catch { /* Sending with the site's current model is the previous behaviour. */ }
+        }
+        if (pick) {
           // Pick the model the person chose in the native picker before anything is sent.
           phase = 'selecting-model';
           await check();
-          const picked = websiteAccountActionSchema.parse(await webview.executeJavaScript(buildWebsiteAccountScript(job.provider, { kind: 'select-model', name: job.model }), true));
-          if (picked.kind !== 'selected') throw new Error(picked.kind === 'unavailable' ? picked.reason : picked.kind === 'failed' ? 'Could not choose ' + job.model + ': ' + picked.reason : 'Could not choose ' + job.model + '.');
+          const picked = websiteAccountActionSchema.parse(await webview.executeJavaScript(buildWebsiteAccountScript(job.provider, { kind: 'select-model', name: pick.name, tab: pick.tab }), true));
+          if (picked.kind !== 'selected') throw new Error(picked.kind === 'unavailable' ? picked.reason : picked.kind === 'failed' ? 'Could not choose ' + pick.name + ': ' + picked.reason : 'Could not choose ' + pick.name + '.');
         }
         phase = 'sending';
         const currentFocus = document.activeElement;
         const focused = currentFocus instanceof HTMLElement && currentFocus.tagName !== 'WEBVIEW' ? currentFocus : userFocus.current;
         let sent;
-        try {
-          sent = websiteChatActionSchema.parse(await webview.executeJavaScript(buildWebsiteChatScript(job.provider, { kind: 'send', text: job.prompt, url: start.url, expectedDraft: start.draft }), true));
-        } finally {
-          if (document.activeElement === webview && focused instanceof HTMLElement && focused.isConnected) focused.focus({ preventScroll: true });
+        let target = start;
+        // These outcomes mean nothing was submitted (a route change or a briefly
+        // missing composer), so re-reading the page and sending once more cannot duplicate a turn.
+        for (let attempt = 0; ; attempt += 1) {
+          try {
+            sent = websiteChatActionSchema.parse(await webview.executeJavaScript(buildWebsiteChatScript(job.provider, { kind: 'send', text: job.prompt, url: target.url, expectedDraft: target.draft }), true));
+          } finally {
+            if (document.activeElement === webview && focused instanceof HTMLElement && focused.isConnected) focused.focus({ preventScroll: true });
+          }
+          if (sent.kind === 'submitted' || sent.kind === 'busy' || attempt >= 2) break;
+          phase = 'loading';
+          await wait(signal, 1500);
+          const again = await waitReady(read, ensureActive, Math.min(deadline, Date.now() + 20_000), 'account');
+          if (!again || again.busy) break;
+          target = again;
         }
-        if (sent.kind !== 'submitted') throw new Error('The website did not accept the message (' + sent.kind + '). No automatic retry was made.');
+        if (sent.kind !== 'submitted') throw new Error('The website did not accept the message (' + sent.kind + '). Nothing was sent; check its account connection and resend.');
         submitted = true;
         phase = 'reading';
         const sentAt = Date.now();
         let lastText = '', stableSince = 0, acknowledged = false, pushed = '';
-        while (alive && !signal.aborted && Date.now() < deadline) {
+        if (job.image) {
+          // An image answer is a picture, not text: wait for it, read its bytes and hand them to the server to store.
+          let shown = '', shownAt = 0;
+          while (alive && !signal.aborted && Date.now() < deadline) {
+            await ensureActive();
+            const probe = websiteImageResultSchema.parse(await webview.executeJavaScript(buildWebsiteImageScript(), true));
+            if (probe.kind === 'failed') throw new Error(probe.reason);
+            if (probe.kind === 'image') {
+              const response = await post('result', { image: { mime: probe.mime, base64: probe.base64, alt: probe.alt } });
+              if (!response.ok) throw new Error('Open Carter could not receive the image.');
+              completed = true; break;
+            }
+            // A long text answer with no picture is Venice declining, or a limit notice.
+            if (probe.kind === 'text' && probe.text.length > 60) {
+              if (probe.text !== shown) { shown = probe.text; shownAt = Date.now(); }
+              else if (Date.now() - shownAt > 8000) throw new Error('Venice did not make an image: ' + probe.text.slice(0, 200));
+            }
+            phase = 'waiting-for-answer';
+            await wait(signal, 1000);
+          }
+        }
+        while (!job.image && alive && !signal.aborted && Date.now() < deadline) {
           await ensureActive();
           const snapshot = await waitForWebsiteSnapshot({ read, ensureActive, wait: () => { phase = 'waiting-for-page'; return wait(signal, 500); } });
           const users = snapshot.messages.filter(row => row.role === 'user');
@@ -112,7 +152,7 @@ function WebsiteModelJob({ job, signal, finish, userFocus }: { job: Job; signal:
             if (lastText !== answer.text) { lastText = answer.text; stableSince = Date.now(); }
             // Hand the growing reply to the native chat as the website writes it.
             if (answer.text !== pushed && answer.text.length > pushed.length) { pushed = answer.text; await check(answer.text); }
-            if (!snapshot.busy && Date.now() - stableSince >= (job.provider === 'venice' ? 2500 : 1500)) {
+            if (!snapshot.busy && Date.now() - stableSince >= (job.provider === 'venice' ? 4000 : 3000)) {
               const response = await post('result', { text: answer.text });
               if (!response.ok) throw new Error('Open Carter could not receive the website reply.');
               completed = true; break;
@@ -127,7 +167,15 @@ function WebsiteModelJob({ job, signal, finish, userFocus }: { job: Job; signal:
           try { const row = await read(); if (row.kind === 'ready' && row.busy) await webview.executeJavaScript(buildWebsiteChatScript(job.provider, { kind: 'stop', url: row.url }), true); } catch { /* No retry after an uncertain website action. */ }
         }
         if (alive && !signal.aborted) {
-          try { await post('result', { error: error instanceof Error ? error.message : 'Website account failed.' }); } catch { /* The server owns its request deadline. */ }
+          let message = error instanceof Error ? error.message : 'Website account failed.';
+          // A spent allowance looks like a page that never loads. Quote the website's own notice if it shows one.
+          if (job.provider === 'venice' && /did not finish loading|did not confirm/.test(message)) {
+            try {
+              const notice = await webview.executeJavaScript("(document.body.innerText||'').split('\\n').map(l=>l.trim()).find(l=>l.length<160&&/(limit|out of|no more|upgrade).*(chat|message|prompt|credit|request)|(chat|message|prompt|credit|request).*(limit|used up|reached)/i.test(l))||''", false);
+              if (typeof notice === 'string' && notice) message = 'Venice may be out of free chats: “' + notice.slice(0, 140) + '”. ' + message;
+            } catch { /* Keep the original message. */ }
+          }
+          try { await post('result', { error: message.slice(0, 1000) }); } catch { /* The server owns its request deadline. */ }
         }
       } finally { if (alive) finish(job.id); }
     };

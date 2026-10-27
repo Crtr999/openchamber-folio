@@ -1,7 +1,10 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { z } from 'zod';
 import { isEnterpriseMode } from '../enterprise-mode.js';
-import { catalogFromNames, defaultCatalog, readCatalogFile, writeCatalogFile } from './catalog.js';
+import { catalogFromNames, defaultCatalog, modelSlug, readCatalogFile, writeCatalogFile } from './catalog.js';
 import { setWebsiteUsageRequester } from './usage-bridge.js';
 
 const toolSchema = z.object({ type: z.literal('function'), function: z.object({ name: z.string().regex(/^[a-zA-Z0-9_.:-]{1,128}$/), description: z.string().optional(), parameters: z.record(z.string(), z.unknown()).optional() }) });
@@ -12,7 +15,34 @@ const requestSchema = z.object({
   messages: z.array(z.object({ role: z.enum(['system', 'developer', 'user', 'assistant', 'tool']), content: textSchema.nullish(), tool_call_id: z.string().optional(), tool_calls: z.array(callSchema).optional() })).min(1).max(1000),
   tools: z.array(toolSchema).max(256).optional(), tool_choice: z.unknown().optional(),
 });
-const resultSchema = z.object({ id: z.string().uuid(), lease: z.string().uuid(), text: z.string().max(500_000).optional(), error: z.string().max(1000).optional(), data: z.unknown().optional() });
+const imageSchema = z.object({ mime: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']), base64: z.string().max(14_000_000), alt: z.string().max(500).optional() });
+const resultSchema = z.object({ id: z.string().uuid(), lease: z.string().uuid(), text: z.string().max(500_000).optional(), error: z.string().max(1000).optional(), data: z.unknown().optional(), image: imageSchema.optional() });
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+// Venice's own image picker. Selecting one of these in the native model picker makes the message an image prompt.
+const IMAGE_MODEL_NAMES = ['Flux 3', 'Flux 2 Max', 'GPT Image 2.5 Flare', 'GPT Image 2.5 Sunburst', 'GPT Image 2', 'Grok Imagine 2.0', 'Krea 2 Turbo', 'Luma Uni-1 Max', 'Nano Banana 2', 'Nano Banana 2 Lite', 'Qwen Image 3', 'Qwen Image 3 Pro', 'Qwen Image 2 Pro', 'Seedream V5 Pro', 'Z-Image Turbo'];
+const IMAGE_MODELS = IMAGE_MODEL_NAMES.map(name => ({ id: 'image-' + modelSlug(name), name }));
+const EXTENSIONS = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
+const lastUserText = messages => {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i].role === 'user' && typeof messages[i].content === 'string' && messages[i].content.trim()) return messages[i].content.trim();
+  }
+  return '';
+};
+/** Stored where OpenChamber's markdown gallery already reads assistant images from. */
+const saveImage = ({ mime, base64, alt }, name) => {
+  const bytes = Buffer.from(base64, 'base64');
+  const png = bytes.length > 8 && bytes[0] === 0x89 && bytes.subarray(1, 4).toString('ascii') === 'PNG';
+  const jpeg = bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const head = bytes.subarray(0, 12).toString('ascii');
+  const webp = head.startsWith('RIFF') && head.endsWith('WEBP');
+  const gif = head.startsWith('GIF8');
+  if (!bytes.length || bytes.length > MAX_IMAGE_BYTES || !(png || jpeg || webp || gif)) throw fail('The website returned something that is not a usable image.', 422);
+  const dir = path.join(os.tmpdir(), 'opencode', 'venice-images');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, name + '.' + EXTENSIONS[mime]);
+  fs.writeFileSync(file, bytes);
+  return file;
+};
 const loopback = address => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(address);
 const fail = (message, status = 422) => Object.assign(new Error(message), { status });
 const stripDescriptions = (key, value) => ['description', '$schema', 'additionalProperties'].includes(key) ? undefined : value;
@@ -23,8 +53,22 @@ const compactTool = tool => {
   return entry;
 };
 
+const COMPACTION_MARKER = /<template>[\s\S]*##\s*Objective/;
+const isCompactionRequest = messages => messages.some(msg => typeof msg.content === 'string' && COMPACTION_MARKER.test(msg.content));
+/** OpenCode rejects a compaction summary that does not start at its template. Websites
+ * add a greeting or wrap the answer in a code fence, so keep only the template body. */
+export function extractCompactionSummary(text) {
+  const start = text.search(/^[ \t]*##\s*Objective\b/m);
+  if (start < 0) return null;
+  const body = text.slice(start).replace(/\n?```\s*$/, '').trim();
+  return (body.match(/^##\s/gm) ?? []).length >= 2 ? body : null;
+}
+
 export function buildWebsitePrompt(body) {
-  const request = requestSchema.parse(body);
+  const parsed = requestSchema.parse(body);
+  const compaction = isCompactionRequest(parsed.messages);
+  // A summary is plain text: never invite the website to answer with a tool request.
+  const request = compaction ? { ...parsed, tools: [] } : parsed;
   if (JSON.stringify(request.messages).length > 300_000) throw fail('This website account request exceeds the local bridge context limit. Shorten or compact the conversation.', 413);
   const tools = request.tools ?? [];
   const messages = request.messages.map(msg => (msg.role === 'system' || msg.role === 'developer') && msg.content && msg.content.length > 7000
@@ -35,9 +79,10 @@ export function buildWebsitePrompt(body) {
     'The transcript below contains role-labeled messages and any tool results already supplied by the client. Never claim a tool ran unless its result is present.',
     tools.length ? 'If a client tool is needed, reply with ONLY a JSON object of this exact shape: {"tool_calls":[{"name":"listed_tool_name","arguments":{}}]}. The client applies its normal permissions before executing a tool. Otherwise reply normally. These are the available client tools:\n' + JSON.stringify(tools.map(compactTool)) : 'Reply normally. No client tools are available for this request.',
     'CONVERSATION TRANSCRIPT\n' + JSON.stringify(messages),
+    ...(compaction ? ['Reply with ONLY the summary, filled in using the template from the transcript. Start your reply with "## Objective". No greeting, no explanation, no code fence.'] : []),
   ].join('\n\n');
   if (instructions.length > 300_000) throw fail('This website account request exceeds the local bridge context limit. Shorten or compact the conversation.', 413);
-  return { request, prompt: instructions };
+  return { request, prompt: instructions, compaction };
 }
 
 const toolCallsSchema = z.object({ tool_calls: z.array(z.object({ name: z.string(), arguments: z.record(z.string(), z.unknown()) })).min(1).max(8) });
@@ -123,7 +168,7 @@ export function createWebsiteModelsRuntime({ enabled = false, blocked = isEnterp
     if (!job) return null;
     active.add(job.provider); job.lease = crypto.randomUUID();
     armWorkerTimer(job);
-    return { id: job.id, lease: job.lease, provider: job.provider, kind: job.kind, prompt: job.prompt, model: job.model };
+    return { id: job.id, lease: job.lease, provider: job.provider, kind: job.kind, prompt: job.prompt, model: job.model, image: Boolean(job.image) };
   };
   const workerConnected = () => Date.now() - lastWorkerSeen <= 45_000;
   /** Usage and model-list reads share the chat worker; they never send a message. */
@@ -151,6 +196,11 @@ export function createWebsiteModelsRuntime({ enabled = false, blocked = isEnterp
   if (enabled) setWebsiteUsageRequester(provider => runAux(provider, 'usage', 60_000));
   const modelLabel = (provider, id) => {
     if (id === 'website') return null;
+    if (provider === 'venice' && id.startsWith('image-')) {
+      const image = IMAGE_MODELS.find(item => item.id === id);
+      if (!image) throw fail('That image model is not offered. Pick another model.', 422);
+      return image.name;
+    }
     const entry = catalog[provider]?.find(item => item.id === id);
     if (!entry) throw fail('That model is no longer offered by this website account. Pick another model.', 422);
     return entry.name;
@@ -168,6 +218,7 @@ export function createWebsiteModelsRuntime({ enabled = false, blocked = isEnterp
       models: Object.fromEntries([
         model('website', provider === 'venice' ? 'Venice website account (site default)' : 'Gemini website account (site default)'),
         ...catalog[provider].map(entry => model(entry.id, (provider === 'gemini' ? 'Gemini ' + entry.name : entry.name) + (entry.paid ? ' · uses credits' : ''))),
+        ...(provider === 'venice' ? IMAGE_MODELS.map(entry => model(entry.id, 'Image · ' + entry.name)) : []),
       ]),
     }]));
   };
@@ -178,19 +229,45 @@ export function createWebsiteModelsRuntime({ enabled = false, blocked = isEnterp
       if (!['venice', 'gemini'].includes(req.params.provider)) return res.status(404).end();
       let job, started = false, sent = 0;
       try {
-        const { request, prompt } = buildWebsitePrompt(req.body);
+        const built = buildWebsitePrompt(req.body);
+        const { request, compaction } = built;
+        let prompt = built.prompt;
         const label = modelLabel(req.params.provider, request.model);
+        const image = req.params.provider === 'venice' && request.model.startsWith('image-');
+        if (image) {
+          if (compaction) throw fail('Image models cannot summarize a conversation. Switch to a text model to compact.', 422);
+          const idea = lastUserText(request.messages);
+          if (!idea) throw fail('Write what the image should show.', 422);
+          // Helper requests (a chat title) carry no tools; answer them here instead of spending an image on them.
+          if ((request.tools?.length ?? 0) === 0) {
+            const title = 'Image: ' + idea.replace(/\s+/g, ' ').slice(0, 48);
+            const id = 'chatcmpl-' + crypto.randomUUID();
+            const created = Math.floor(Date.now() / 1000);
+            if (!request.stream) return res.json({ id, object: 'chat.completion', created, model: request.model, choices: [{ index: 0, message: { role: 'assistant', content: title }, finish_reason: 'stop' }] });
+            res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+            res.flushHeaders?.();
+            const chunk = (delta, reason = null) => res.write('data: ' + JSON.stringify({ id, object: 'chat.completion.chunk', created, model: request.model, choices: [{ index: 0, delta, finish_reason: reason }] }) + '\n\n');
+            chunk({ role: 'assistant' }); chunk({ content: title }); chunk({}, 'stop'); return res.end('data: [DONE]\n\n');
+          }
+          prompt = idea;
+        }
         // Counts only: never log prompts, replies, headers or account details.
         console.info('[website-models] request', { provider: req.params.provider, model: request.model, inputCharacters: prompt.length, toolCount: request.tools?.length ?? 0 });
         if (!workerConnected()) throw fail('Open Carter’s website account bridge is not connected. Open the app on this Mac and retry.');
         if (jobs.size >= 8) throw fail('The website accounts are busy. Wait for a current reply before retrying.', 409);
         const hasTools = (request.tools?.length ?? 0) > 0;
         const created = Math.floor(Date.now() / 1000);
-        const reply = new Promise((resolve, reject) => {
-          job = { id: crypto.randomUUID(), kind: 'chat', provider: req.params.provider, model: label, prompt, resolve, reject, lease: null, timer: null, startedAt: Date.now(), phase: 'queued' };
-          jobs.set(job.id, job);
-          job.timer = setTimeout(() => settle(job, fail('The website did not finish in time. Check its account connection before retrying.', 422)), timeoutMs);
-        });
+        const enqueue = text => {
+          const queued = new Promise((resolve, reject) => {
+            job = { id: crypto.randomUUID(), kind: 'chat', image, provider: req.params.provider, model: label, prompt: text, resolve, reject, lease: null, timer: null, startedAt: Date.now(), phase: 'queued' };
+            jobs.set(job.id, job);
+            const owned = job;
+            job.timer = setTimeout(() => settle(owned, fail('The website did not finish in time. Check its account connection before retrying.', 422)), timeoutMs);
+          });
+          for (const waiter of [...waiters]) waiter.wake();
+          return queued;
+        };
+        let reply = enqueue(prompt);
         const id = 'chatcmpl-' + job.id;
         const send = (delta, reason = null) => res.write('data: ' + JSON.stringify({ id, object: 'chat.completion.chunk', created, model: request.model, choices: [{ index: 0, delta, finish_reason: reason }] }) + '\n\n');
         const begin = () => {
@@ -201,17 +278,27 @@ export function createWebsiteModelsRuntime({ enabled = false, blocked = isEnterp
           send({ role: 'assistant' });
         };
         // Show the reply as the website writes it. Tool requests are held back until complete.
-        if (request.stream) job.onPartial = text => {
+        // A compaction summary is checked against the template before anything is shown.
+        if (request.stream && !compaction) job.onPartial = text => {
           if (req.params.provider === 'gemini' && /^sorry,?\s+something went wrong/i.test(text.trim())) return;
           const end = streamableLength(text, hasTools);
           if (end > sent) { begin(); send({ content: text.slice(sent, end) }); sent = end; }
         };
         const abort = () => { if (!res.writableEnded) settle(job, fail('Website account request cancelled.', 499)); };
         res.once('close', abort);
-        for (const waiter of [...waiters]) waiter.wake();
 
         try {
-          const text = await reply;
+          let text = await reply;
+          if (compaction) {
+            let summary = extractCompactionSummary(text);
+            if (!summary) {
+              console.info('[website-models] compaction reply missed the template, asking once more', { provider: req.params.provider, outputCharacters: text.length });
+              text = await (reply = enqueue(prompt + '\n\nYour previous reply did not follow the template. Reply again with ONLY the filled template, starting with "## Objective".'));
+              summary = extractCompactionSummary(text);
+            }
+            if (!summary) throw fail('The website did not return the compaction template twice. Nothing was lost; switch to a different model, or compact again.', 422);
+            text = summary;
+          }
           console.info('[website-models] reply', { provider: req.params.provider, outputCharacters: text.length });
           const message = websiteReplyMessage(text, request.tools ?? []);
           const finish = message.tool_calls ? 'tool_calls' : 'stop';
@@ -250,12 +337,19 @@ export function createWebsiteModelsRuntime({ enabled = false, blocked = isEnterp
       if (!result) return res.status(204).end();
       res.json(result);
     });
-    app.post('/api/openchamber/website-models/jobs/result', express.json({ limit: '1mb' }), (req, res) => {
+    app.post('/api/openchamber/website-models/jobs/result', express.json({ limit: '20mb' }), (req, res) => {
       if (!permitted(req)) return res.status(403).end();
       const parsed = resultSchema.safeParse(req.body); if (!parsed.success) return res.status(400).end();
       const result = parsed.data, job = jobs.get(result.id);
       if (!job || job.lease !== result.lease) return res.json({ accepted: false });
       if (result.error) settle(job, fail(result.error, 422));
+      else if (job.image && result.image) {
+        try {
+          const file = saveImage(result.image, 'venice-' + job.id);
+          const alt = (result.image.alt || job.prompt).replace(/[\[\]\n]/g, ' ').trim().slice(0, 200) || 'Venice image';
+          settle(job, null, '![' + alt + '](' + file + ')\n\nGenerated with Venice ' + (job.model ?? 'image') + ' from your subscription allowance.');
+        } catch (error) { settle(job, error); }
+      }
       else if (job.kind !== 'chat') {
         if (result.data === undefined) return res.status(400).json({ error: 'No data was received.' });
         settle(job, null, result.data);

@@ -144,7 +144,7 @@ export const websiteAccountActionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('venice-usage'), plan: z.string().max(40).nullable(), balance: z.string().max(30).nullable(), limits: z.array(z.object({ label: z.string().max(40), remaining: z.number(), resetText: z.string().max(40).nullable() })).max(12) }),
   z.object({ kind: z.literal('failed'), reason: z.string().max(300) }),
 ]);
-type WebsiteAccountAction = { kind: 'models' } | { kind: 'select-model'; name: string } | { kind: 'usage' };
+type WebsiteAccountAction = { kind: 'models' } | { kind: 'select-model'; name: string; tab?: 'text' | 'image' } | { kind: 'current-model' } | { kind: 'usage' };
 
 /** Reads and operates only ordinary website controls: the model picker and the
  * account's own usage and limits pages. Like operateChat, it never reads
@@ -212,8 +212,19 @@ async function operateAccount(provider: WebsiteAccount, action: WebsiteAccountAc
     await closePicker();
     return { kind: 'names', names: usable.map(entry => entry.name), paid: usable.filter(entry => entry.paid).map(entry => entry.name) };
   }
+  if (action.kind === 'current-model') {
+    const button = provider === 'venice' ? veniceButton() : geminiButton();
+    return button ? { kind: 'names', names: [label(button).slice(0, 120)], paid: [] } : { kind: 'failed', reason: 'The model picker was not found.' };
+  }
   if (action.kind === 'select-model') {
     if (!(await openPicker())) return { kind: 'failed', reason: 'The model picker did not open.' };
+    if (provider === 'venice' && action.tab) {
+      // Venice lists text and image models on separate tabs of the same picker, and "Auto" exists on both.
+      const wantedTab = action.tab === 'image' ? 'Image' : 'Text';
+      const tabButton = Array.from(document.querySelectorAll('button')).find(el => el.children.length === 0 && (el.textContent || '').trim() === wantedTab);
+      if (tabButton) { click(tabButton); await sleep(1000); }
+      else if (action.tab === 'image') { await closePicker(); return { kind: 'unavailable', reason: 'Venice’s image models are not offered on this account.' }; }
+    }
     const wanted = action.name.trim().toLowerCase();
     const entries = provider === 'venice' ? veniceRows() : geminiOptions();
     const hit = entries.find(entry => entry.name.toLowerCase() === wanted);
@@ -269,6 +280,16 @@ async function operateAccount(provider: WebsiteAccount, action: WebsiteAccountAc
     const m = line.match(/^(\d+)\s+remaining(?:\s+until\s+(.+))?$/i);
     if (m && index > 0 && limits.length < 12) limits.push({ label: lines[index - 1].slice(0, 40), remaining: Number(m[1]), resetText: m[2] ? m[2].slice(0, 40) : null });
   });
+  // Venice words a spent allowance differently ("Limit reached", "Resets at ..."), so a
+  // known label followed by no count but a limit notice or reset time reads as zero left.
+  lines.forEach((line, index) => {
+    if (!/^(chat|image|web scrape)s?$/i.test(line) || limits.some(row => row.label.toLowerCase() === line.toLowerCase())) return;
+    const next = lines.slice(index + 1, index + 3).join(' ');
+    if (/\b(\d+)\s+(remaining|left)\b/i.test(next)) return;
+    if (/(no .*remaining|limit reached|used up|0\s*(?:\/\s*\d+)?\s*(?:left|remaining)|resets?|until|try again)/i.test(next)) {
+      limits.push({ label: line.slice(0, 40), remaining: 0, resetText: (next.match(/(?:until|resets?(?:\s+at)?)\s+(.{3,30})/i)?.[1] ?? '').slice(0, 40) || null });
+    }
+  });
   let balance: string | null = null;
   const usageTab = tab('Usage');
   if (usageTab) {
@@ -281,6 +302,41 @@ async function operateAccount(provider: WebsiteAccount, action: WebsiteAccountAc
   const plan = /upgrade to venice pro/i.test(document.body.innerText || '') ? 'Free' : null;
   return { kind: 'venice-usage', plan, balance, limits };
 }
+
+export const websiteImageResultSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('pending') }),
+  z.object({ kind: z.literal('text'), text: z.string().max(2000) }),
+  z.object({ kind: z.literal('failed'), reason: z.string().max(300) }),
+  z.object({ kind: z.literal('image'), mime: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']), base64: z.string().max(14_000_000), alt: z.string().max(500) }),
+]);
+
+/** Reads the newest answer in the open Venice chat. When it holds a finished picture, hands back that
+ * picture's bytes by reading the page's own image. Like the other guest scripts it touches no cookies or storage. */
+async function operateImage() {
+  const rows = Array.from(document.querySelectorAll('[data-message-id]')).filter(row => !row.querySelector('.chat-user-msg-actions'));
+  const last = rows.at(-1);
+  if (!last) return { kind: 'pending' };
+  const img = Array.from(last.querySelectorAll('img')).find(el => el.complete && el.naturalWidth > 0 && /^(blob:|https:)/.test(el.src));
+  if (!img) {
+    const text = (last as HTMLElement).innerText.replace(/\s+/g, ' ').trim();
+    return text ? { kind: 'text', text: text.slice(0, 2000) } : { kind: 'pending' };
+  }
+  const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+  const toBase64 = (blob: Blob) => new Promise<string>(resolve => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(',')[1] || ''); reader.readAsDataURL(blob); });
+  try {
+    let blob = await (await fetch(img.src)).blob();
+    if (!allowed.includes(blob.type)) {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      canvas.getContext('2d')?.drawImage(img, 0, 0);
+      blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(out => out ? resolve(out) : reject(new Error('encode')), 'image/png'));
+    }
+    if (blob.size > 10 * 1024 * 1024) return { kind: 'failed', reason: 'The picture is larger than 10 MB.' };
+    return { kind: 'image', mime: blob.type, base64: await toBase64(blob), alt: (img.alt || '').slice(0, 500) };
+  } catch { return { kind: 'failed', reason: 'The picture could not be read from the page.' }; }
+}
+
+export const buildWebsiteImageScript = (): string => `(${operateImage.toString()})()`;
 
 export const buildWebsiteAccountScript = (provider: WebsiteAccount, action: WebsiteAccountAction): string => `(${operateAccount.toString()})(${JSON.stringify(provider)},${JSON.stringify(action)})`;
 

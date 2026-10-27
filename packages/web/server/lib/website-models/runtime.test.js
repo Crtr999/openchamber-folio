@@ -1,7 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import express from 'express';
 import { once } from 'node:events';
-import { createWebsiteModelsRuntime, buildWebsitePrompt, streamableLength, websiteReplyMessage } from './runtime.js';
+import { createWebsiteModelsRuntime, buildWebsitePrompt, extractCompactionSummary, streamableLength, websiteReplyMessage } from './runtime.js';
 
 const cleanups = [];
 afterEach(async () => { await Promise.all(cleanups.splice(0).map(fn => fn())); });
@@ -174,4 +174,45 @@ test('provider models come from the saved catalog with credit-only models marked
   const venice = providers['opencarter-venice-website'].models, gemini = providers['opencarter-gemini-website'].models;
   expect(Object.keys(venice)).toContain('website'); expect(venice['claude-opus-5'].name).toBe('Claude Opus 5 · uses credits'); expect(venice['glm-4-6'].name).toBe('GLM 4.6');
   expect(gemini['3-1-pro'].name).toBe('Gemini 3.1 Pro');
+});
+
+test('keeps only the template body of a website reply', async () => {
+    const body = '## Objective\n- fix it\n## Next Move\n1. test';
+    expect(extractCompactionSummary('Sure! Here it is:\n```markdown\n' + body + '\n```')).toBe(body);
+    expect(extractCompactionSummary(body)).toBe(body);
+    expect(extractCompactionSummary('I cannot do that.')).toBeNull();
+    expect(extractCompactionSummary('## Objective\n- only one heading')).toBeNull();
+});
+
+test('asks for the template and offers no tools on a compaction request', async () => {
+    const out = buildWebsitePrompt({ model: 'website', messages: [{ role: 'user', content: 'Summarize.\n<template>\n## Objective\n- x\n</template>' }], tools: [{ type: 'function', function: { name: 'read' } }] });
+    expect(out.compaction).toBe(true);
+    expect(out.request.tools).toEqual([]);
+    expect(out.prompt).toContain('Start your reply with "## Objective"');
+    expect(out.prompt).not.toContain('"tool_calls"');
+});
+
+const PIXEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const imageRequest = (content, tools) => ({ model: 'image-z-image-turbo', stream: false, messages: [{ role: 'system', content: 'You are an assistant.' }, { role: 'user', content }], ...(tools ? { tools } : {}) });
+test('an image model sends only the prompt and returns a stored picture as markdown', async () => {
+  const h = await start(); const waiting = h.worker(); await vi.waitFor(() => expect(h.runtime.workerCount).toBe(1));
+  const completion = h.native(imageRequest('a red apple', [{ type: 'function', function: { name: 'read' } }]));
+  const job = await (await waiting).json();
+  expect(job.image).toBe(true); expect(job.model).toBe('Z-Image Turbo'); expect(job.prompt).toBe('a red apple');
+  await h.result({ id: job.id, lease: job.lease, image: { mime: 'image/png', base64: PIXEL, alt: 'An apple' } });
+  const text = (await (await completion).json()).choices[0].message.content;
+  const file = text.match(/!\[An apple\]\((.+?)\)/)?.[1];
+  expect(file).toContain('venice-images');
+  const fs = await import('node:fs'); expect(fs.existsSync(file)).toBe(true); fs.rmSync(file);
+});
+test('an image model never spends an image on a helper request or a bogus picture', async () => {
+  const h = await start();
+  const title = await h.native(imageRequest('a red apple'));
+  expect(title.status).toBe(200); expect((await title.json()).choices[0].message.content).toBe('Image: a red apple');
+  expect(h.runtime.pendingCount).toBe(0);
+  const waiting = h.worker(); await vi.waitFor(() => expect(h.runtime.workerCount).toBe(1));
+  const completion = h.native(imageRequest('a pear', [{ type: 'function', function: { name: 'read' } }]));
+  const job = await (await waiting).json();
+  await h.result({ id: job.id, lease: job.lease, image: { mime: 'image/png', base64: Buffer.from('not an image').toString('base64') } });
+  expect((await completion).status).toBe(422);
 });

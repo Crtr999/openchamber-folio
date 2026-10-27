@@ -3,6 +3,7 @@ import { requestWebsiteUsage, websiteUsageAvailable } from '../../website-models
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const CACHE_MS = 45_000;
+const STALE_MS = 24 * 3600_000;
 
 /** Reads "5:07 PM" or "Oct 29 at 5:07 PM" as the next time that clock reading occurs. */
 export const parseResetText = (text, now = new Date()) => {
@@ -43,6 +44,9 @@ const make = ({ providerId, providerName, site, toResult }) => {
         cached = { at: Date.now(), result };
         return result;
       } catch (error) {
+        // The website can be busy answering a chat or between pages. Keep showing the last
+        // reading rather than dropping the meter; a reading older than a day is not kept.
+        if (cached && Date.now() - cached.at < STALE_MS) return cached.result;
         return buildResult({ providerId, providerName, ok: false, configured: true, error: error instanceof Error ? error.message : 'Request failed' });
       }
     },
@@ -70,6 +74,10 @@ const VENICE_ALLOWANCE = {
   image: { total: 15, windowSeconds: 86_400 },
 };
 
+/** Venice stops listing an allowance once it is used up. A row that was nearly gone on the
+ * last reading and is now absent is shown as spent, not dropped, until its reset time. */
+const veniceSeen = new Map();
+
 export const venice = make({
   providerId: 'venice-website',
   providerName: 'Venice website',
@@ -87,6 +95,21 @@ export const venice = make({
         windows[row.label] = toUsageWindow({ usedPercent: used, windowSeconds: allowance.windowSeconds, resetAt, valueLabel: row.remaining + '/' + total + ' left' + reset });
       } else {
         windows[row.label] = toUsageWindow({ usedPercent: null, windowSeconds: null, resetAt, valueLabel: row.remaining + ' left' + reset });
+      }
+    }
+    const present = new Set(Object.keys(windows).map(key => key.trim().toLowerCase()));
+    for (const row of Array.isArray(data?.limits) ? data.limits : []) {
+      if (typeof row?.label === 'string' && typeof row.remaining === 'number') veniceSeen.set(row.label.trim().toLowerCase(), { remaining: row.remaining, resetAt: parseResetText(row.resetText), at: Date.now() });
+    }
+    if (present.size) {
+      for (const [key, allowance] of Object.entries(VENICE_ALLOWANCE)) {
+        const seen = veniceSeen.get(key);
+        if (present.has(key)) continue;
+        // Last reading nearly spent, or (after a restart) the other allowances are listed and this one is not.
+        const inferred = !seen && key === 'chat' && present.size >= 2;
+        if (!inferred && (!seen || seen.remaining > 2 || Date.now() - seen.at > allowance.windowSeconds * 1000)) continue;
+        const label = key[0].toUpperCase() + key.slice(1);
+        windows[label] = toUsageWindow({ usedPercent: 100, windowSeconds: allowance.windowSeconds, resetAt: seen?.resetAt && seen.resetAt > Date.now() ? seen.resetAt : null, valueLabel: '0/' + allowance.total + ' left · ' + (inferred ? 'not listed, likely spent' : 'limit reached') });
       }
     }
     if (typeof data?.balance === 'string' && data.balance.trim()) windows.Balance = toUsageWindow({ usedPercent: null, windowSeconds: null, resetAt: null, valueLabel: data.balance.trim().slice(0, 30) });
