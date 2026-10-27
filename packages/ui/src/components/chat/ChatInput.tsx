@@ -74,6 +74,11 @@ import { MobileAgentButton } from './MobileAgentButton';
 import { MobileModelButton } from './MobileModelButton';
 import { useCurrentSessionActivity, useSessionActivity } from '@/hooks/useSessionActivity';
 import { toast } from '@/components/ui';
+import { useDirectorStore } from '@/stores/useDirectorStore';
+import { useChatsRoot } from '@/hooks/useChatsRoot';
+import { ALL_CHATS_PROJECT_ID, allChatsFriendName } from '@/lib/allChatsFriend';
+import { DirectorError, improveWithDirector } from '@/lib/director';
+import { folderFriendAppearance, folderFriendName, readFriendProfiles } from '@/lib/friends';
 // useMessageStore removed — messages now come from sync system
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useTabletLayout } from '@/lib/device';
@@ -487,6 +492,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     // they no longer apply.
     const isPromotedBtwSession = wasPromotedBtwSession(btwPanel.parentSession);
     const activeRuntimeKey = getRuntimeKey();
+    const chatsRoot = useChatsRoot();
     const chatDraftIdentity = React.useMemo(
         () => createChatDraftIdentity(
             activeRuntimeKey,
@@ -1293,6 +1299,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             starter chips: on mobile the collapsed pill has no mounted textarea,
             so the DOM-first input snapshot would read empty content. */
         presetText?: string;
+        /** Set by the Director when it re-enters with the improved text, so it is not improved twice. */
+        directorBypass?: boolean;
     };
     const handleSubmitRef = React.useRef<(options?: SubmitOptions) => Promise<void>>(async () => {});
 
@@ -1544,6 +1552,50 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             : message || fallback;
     };
 
+    const runDirector = async (target: { id: string; path: string }, original: string) => {
+        const store = useDirectorStore.getState();
+        const project = useProjectsStore.getState().projects.find((entry) => entry.id === target.id);
+        let profiles = null;
+        try { profiles = readFriendProfiles(localStorage, getRuntimeKey()); } catch { /* Defaults apply. */ }
+        const appearance = folderFriendAppearance(profiles, target.path, project?.color);
+        const name = target.id === ALL_CHATS_PROJECT_ID
+            ? (allChatsFriendName(profiles, target.path) ?? 'General')
+            : folderFriendName(profiles, { path: target.path, label: project?.label });
+        const id = store.begin({ directory: target.path, original, friend: { name, body: appearance.body, color: appearance.color } });
+        const controller = new AbortController();
+        const unsubscribe = useDirectorStore.subscribe((state) => { if (state.run?.id === id && state.run.skipped) controller.abort(); });
+        const wasSkipped = () => useDirectorStore.getState().run?.skipped === true;
+        const pause = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+        const startedAt = Date.now();
+        let outgoing = original;
+        try {
+            const result = await improveWithDirector({ directory: target.path, folderName: name, prompt: original, signal: controller.signal });
+            // A short beat so the scan reads as deliberate even when the model answers at once.
+            await pause(Math.max(0, 2300 - (Date.now() - startedAt)));
+            if (!wasSkipped()) {
+                outgoing = result.text;
+                useDirectorStore.getState().update(id, { phase: 'compose', improved: result.text, used: result.used });
+                await pause(Math.min(3200, 1100 + result.text.length * 4));
+            }
+        } catch (error) {
+            if (error instanceof DirectorError && error.reason === 'zdr') {
+                useDirectorStore.getState().block(target.path);
+                toast.info('Director is off in ZDR folders. Sent as written.');
+            } else if (!(error instanceof DirectorError && error.reason === 'cancelled')) {
+                toast.error('The Director could not improve this message. Sent as written.');
+            }
+        } finally {
+            unsubscribe();
+        }
+        useDirectorStore.getState().update(id, { phase: 'deliver' });
+        await pause(wasSkipped() ? 0 : 520);
+        try {
+            await handleSubmitRef.current({ presetText: outgoing, directorBypass: true });
+        } finally {
+            window.setTimeout(() => useDirectorStore.getState().end(id), 700);
+        }
+    };
+
     const handleSubmit = async (options?: SubmitOptions) => {
         // Comment mode's only submit is attach; every other send path must be
         // inert while it is open.
@@ -1553,6 +1605,24 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         if (parallel.isActive && !options?.queuedOnly) {
             if (parallel.runCount >= 2) void parallel.launch();
             return;
+        }
+        // The Director takes over a plain first message to a folder: its friend rewrites the draft
+        // from the folder's memory, then the improved text goes through this same function.
+        if (!options?.directorBypass && !options?.queuedOnly && options?.presetText == null && !isBtwActive && !currentSessionId && newSessionDraftOpen) {
+            if (useDirectorStore.getState().run) return;
+            const draftText = getCurrentInputSnapshot().message;
+            // A folder draft goes to that folder's friend; a draft with no folder goes to General, the chats root's friend.
+            const directorFolder = newSessionDraft?.target === 'chat'
+                ? (chatsRoot ? { id: ALL_CHATS_PROJECT_ID, path: chatsRoot } : null)
+                : parallelProjectRef;
+            const directorTarget = useDirectorStore.getState().enabled && directorFolder
+                && !useDirectorStore.getState().blocked.includes(directorFolder.path)
+                && draftText.trim().length > 0 && !/^[/!#]/.test(draftText.trim())
+                ? directorFolder : null;
+            if (directorTarget) {
+                void runDirector(directorTarget, draftText);
+                return;
+            }
         }
         const submitRuntimeKey = getRuntimeKey();
         const queuedOnly = options?.queuedOnly ?? false;

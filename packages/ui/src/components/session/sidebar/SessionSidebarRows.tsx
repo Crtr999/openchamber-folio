@@ -19,7 +19,8 @@ type Props = {
 function sectionSpacingAfter(row: SessionSidebarRow, nextRow: SessionSidebarRow | undefined): string | undefined {
   const startsSection = nextRow?.kind === 'activity-header'
     || nextRow?.kind === 'project-header'
-    || (nextRow?.kind === 'group-header' && row.kind !== 'project-header');
+    || nextRow?.kind === 'website-folder'
+    || (nextRow?.kind === 'group-header' && row.kind !== 'project-header' && row.kind !== 'website-folder');
   return startsSection ? 'pb-1.5' : undefined;
 }
 

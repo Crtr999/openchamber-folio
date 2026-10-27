@@ -1,4 +1,5 @@
 import { WebsiteModelRuntime } from '@/components/views/WebsiteModelRuntime';
+import { DirectorOverlay } from '@/components/chat/DirectorOverlay';
 import { GeminiWorkspace } from '@/components/views/GeminiWorkspace';
 import { useGeminiStore } from '@/stores/useGeminiStore';
 import { useChatGPTStore } from '@/stores/useChatGPTStore';
@@ -246,6 +247,7 @@ export const MainLayout: React.FC = () => {
                                                 </div>
                                             )}
                                             <ErrorBoundary><WorktreesView /></ErrorBoundary>
+                                            <ErrorBoundary><DirectorOverlay /></ErrorBoundary>
                                             {isElectronShell() && isDesktopLocalOriginActive() && <ErrorBoundary>
                                                 <WebsiteModelRuntime />
                                                 <ChatGPTWorkspace visible={isChatGPTPageOpen} />

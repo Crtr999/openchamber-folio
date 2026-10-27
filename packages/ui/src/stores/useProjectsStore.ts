@@ -73,6 +73,7 @@ interface ProjectsStore {
   removeProjectIcon: (id: string) => Promise<{ ok: boolean; error?: string }>;
   discoverProjectIcon: (id: string, options?: { force?: boolean }) => Promise<{ ok: boolean; skipped?: boolean; reason?: string; error?: string }>;
   reorderProjects: (fromIndex: number, toIndex: number) => void;
+  setManualProjectOrder: (ids: string[]) => void;
   resetForRuntimeSwitch: () => void;
   validateProjectPath: (path: string) => ProjectPathValidationResult;
   synchronizeFromSettings: (settings: DesktopSettings, options?: { adoptActiveProject?: boolean }) => void;
@@ -1011,6 +1012,21 @@ export const useProjectsStore = create<ProjectsStore>()(
       nextProjects.splice(toIndex, 0, moved);
 
       const newOrder = nextProjects.map((p) => p.id);
+      set({ projects: nextProjects, manualProjectOrder: newOrder });
+      persistProjects(nextProjects, activeProjectId, newOrder);
+    },
+
+    setManualProjectOrder: (ids) => {
+      if (isVSCodeProjectsRuntime) {
+        return;
+      }
+      const { projects, activeProjectId } = get();
+      const byId = new Map(projects.map((project) => [project.id, project]));
+      const orderedIds = ids.filter((id) => byId.has(id));
+      const seen = new Set(orderedIds);
+      const rest = projects.filter((project) => !seen.has(project.id));
+      const nextProjects = [...orderedIds.flatMap((id) => byId.get(id) ?? []), ...rest];
+      const newOrder = nextProjects.map((project) => project.id);
       set({ projects: nextProjects, manualProjectOrder: newOrder });
       persistProjects(nextProjects, activeProjectId, newOrder);
     },

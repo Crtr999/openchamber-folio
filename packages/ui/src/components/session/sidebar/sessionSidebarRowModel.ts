@@ -10,6 +10,7 @@ import { getSessionFolderIdentityKey, getSessionFolderOwnerKey, getSessionFolder
 import type { SessionRowOrderEntry } from './sessions/sessionRowOrder';
 import { countSessionTreeQueryMatches } from './recent/activitySections';
 import { EMPTY_MULTI_RUN_INDEX, type MultiRunIndex, type MultiRunSummary } from '@/lib/multirun/runs';
+import { isWebsiteSidebarId, mergeSidebarItemOrder, type WebsiteSidebarId } from './projects/sidebarItemOrder';
 
 export type SessionSidebarActivityItem = {
   node: SessionNode;
@@ -48,6 +49,7 @@ type RowBase = { key: string; estimateSize: number };
 export type SessionSidebarRow =
   | (RowBase & { kind: 'activity-header'; activityKey: SessionSidebarActivityKey; collapsed: boolean; forceExpanded: boolean })
   | (RowBase & { kind: 'project-header'; section: ProjectSection; collapsed: boolean; forceExpanded: boolean })
+  | (RowBase & { kind: 'website-folder'; websiteId: WebsiteSidebarId })
   | (RowBase & { kind: 'group-header'; group: SessionGroup; groupKey: string; projectId: string | null; collapsed: boolean; forceExpanded: boolean; allSessions: readonly Session[] })
   | (RowBase & { kind: 'folder-header'; group: SessionGroup; folder: SessionFolder; displayName: string; scopeKey: string; scopeDirectory: string | null; ownerKey: string | null; nodes: readonly SessionNode[]; activityNodes: readonly SessionNode[]; projectId: string | null; archived: boolean; collapsed: boolean; forceExpanded: boolean; deleteSessions: readonly Session[]; subFolderCount: number; dropEnabled: boolean })
   | (RowBase & { kind: 'session'; node: SessionNode; depth: number; projectId: string | null; groupDirectory: string | null; ownerKey: string | null; selectionScopeKey: string | null; archived: boolean; renderContext: SessionSidebarRenderContext; secondaryMeta: SessionSidebarActivityItem['secondaryMeta'] })
@@ -130,6 +132,13 @@ export type SessionSidebarRowModelArgs = {
   sessionBatchSize?: number;
   /** Active multi-runs; their member sessions collapse into one run row per container. */
   runIndex?: MultiRunIndex;
+  /**
+   * Saved mix of project ids and website sidebar ids. Empty means folders
+   * first, then the website rows. Only the projects view interleaves them.
+   */
+  sidebarItemOrder?: readonly string[];
+  /** Website ids that should render as rows. Others in the saved order are skipped. */
+  visibleWebsiteIds?: readonly string[];
 };
 
 type RunEntry = { run: MultiRunSummary; lanes: SessionNode[] };
@@ -196,6 +205,7 @@ const TIMELINE_SESSION_ESTIMATE = 64;
 const TIMELINE_CHATS_INITIAL_LIMIT = 3;
 const TIMELINE_CHATS_INCREMENT = 7;
 const HEADER_ESTIMATE = 32;
+const WEBSITE_FOLDER_ESTIMATE = 40;
 const STATUS_ESTIMATE = 28;
 
 const compareNodes = (
@@ -713,18 +723,37 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     const active = projectSections.find((section) => section.project.id === args.activeProjectId) ?? projectSections[0];
     projectSections = active ? [active] : [];
   }
-  for (const section of projectSections) {
+  const appendProjectSection = (section: ProjectSection): void => {
     const descriptors = buildGroupRenderDescriptors(section, { mainWorkspaceOnly: args.showOnlyMainWorkspace });
     // A project whose only matches moved to In work shows no empty header.
-    if (search && !descriptors.some((descriptor) => groupSearchMatches(descriptor.group) > 0)) continue;
+    if (search && !descriptors.some((descriptor) => groupSearchMatches(descriptor.group) > 0)) return;
     const projectCollapsed = !search && !args.singleProjectMode && !args.showOnlyMainWorkspace && args.collapsedProjects.has(section.project.id);
     if (!args.showOnlyMainWorkspace) {
       const rowIndex = rows.length;
       push({ kind: 'project-header', key: `project:${section.project.id}:header`, estimateSize: HEADER_ESTIMATE, section, collapsed: projectCollapsed, forceExpanded: search });
       stickyHeaders.push(Object.freeze({ rowIndex, kind: 'project', id: section.project.id }));
     }
-    if (projectCollapsed) continue;
+    if (projectCollapsed) return;
     for (const descriptor of descriptors) appendGroup(descriptor.group, descriptor.groupKey, descriptor.projectId, descriptor.hideGroupLabel);
+  };
+
+  // Website rows sit in the projects list only. Timeline, search, a single
+  // project, and the main-workspace filter keep the old bottom render.
+  const interleaveWebsites = !timelineMode && !search && !args.singleProjectMode && !args.showOnlyMainWorkspace;
+  if (!interleaveWebsites) {
+    for (const section of projectSections) appendProjectSection(section);
+  } else {
+    const byId = new Map(projectSections.map((section) => [section.project.id, section]));
+    const visible = new Set(args.visibleWebsiteIds ?? []);
+    for (const id of mergeSidebarItemOrder(projectSections.map((section) => section.project.id), args.sidebarItemOrder)) {
+      if (isWebsiteSidebarId(id)) {
+        if (!visible.has(id)) continue;
+        push({ kind: 'website-folder', key: id, estimateSize: WEBSITE_FOLDER_ESTIMATE, websiteId: id });
+        continue;
+      }
+      const section = byId.get(id);
+      if (section) appendProjectSection(section);
+    }
   }
 
   if (rows.length === 0) {

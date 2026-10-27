@@ -350,3 +350,27 @@ html:not(.dark)[data-oc-home] [data-oc-personal-interactions]:has(> .oc-scene-ba
     .oc-scene-art::before,
     .oc-scene-art::after { display: none; }
 }
+
+/* ── Idle cost ──────────────────────────────────────────────────────────── */
+/* The scene is one static layer under many frosted panels. Containing it keeps its
+   painting, layout and size out of everything that moves above it. */
+.oc-scene-backdrop { contain: strict; }
+
+/* While the window is hidden or unfocused, decorative motion stops. Each of these keeps the
+   compositor producing frames, and every frosted panel re-blurs on each one. Spinners and
+   progress indicators are left alone: someone watching from another window still needs them. */
+html[data-oc-inactive] .oc-friend-card-avatar,
+html[data-oc-inactive] .oc-friend-avatar-eyes,
+html[data-oc-inactive] .oc-friend-status-dot,
+html[data-oc-inactive] .oc-friend-activity,
+html[data-oc-inactive] .oc-friend-activity *,
+html[data-oc-inactive] .oc-scene-art,
+html[data-oc-inactive] .oc-home-dot-waiting,
+html[data-oc-inactive] .oc-rec-dot,
+html[data-oc-inactive] [class*="shimmer"],
+html[data-oc-inactive] [class*="sheen"],
+html[data-oc-inactive] [class*="marquee"],
+html[data-oc-inactive] [class*="glow"],
+html[data-oc-inactive] .cm-cursor {
+    animation-play-state: paused !important;
+}

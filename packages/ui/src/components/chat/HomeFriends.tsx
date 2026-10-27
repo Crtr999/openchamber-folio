@@ -159,7 +159,7 @@ export function HomeFriendsHeader({ projects, project, loading, busy, onChooseFo
     onRefresh: () => void;
 }) {
     const { t } = useI18n();
-    return <div className="oc-home-card-heading oc-friends-heading">
+    return <><div className="oc-home-card-heading oc-friends-heading">
         <h2 className="flex min-w-0 items-center gap-2">
             <Icon name="user-smile" className="size-3.5 shrink-0" />
             {t('friends.title')}
@@ -175,14 +175,17 @@ export function HomeFriendsHeader({ projects, project, loading, busy, onChooseFo
                     <SelectContent>{projects.map(item => <SelectItem key={item.id} value={item.id}>{folderLabel(item)}</SelectItem>)}</SelectContent>
                 </Select>
             ) : (
-                <span className="ms-auto text-[11px] font-normal text-muted-foreground">1 folder = 1 friend</span>
+                <span className="ms-auto text-[11px] font-normal text-muted-foreground">Each friend owns its folder</span>
             )}
             <Button type="button" variant="ghost" size="icon" className="size-6 text-muted-foreground" disabled={loading || busy}
                 aria-label={t('friends.refresh')} title={t('friends.refresh')} onClick={onRefresh}>
                 <Icon name="refresh" className={cn('size-3.5', loading && 'oc-friends-spin')} />
             </Button>
         </>}
-    </div>;
+    </div>
+    {!onChooseFolder && projects.length > 0 && (
+        <p className="text-[11px] font-normal text-muted-foreground">{t('friends.ownsLine')}</p>
+    )}</>;
 }
 
 const relative = (locale: string, time: number, now: number) => {

@@ -6,10 +6,10 @@ import { isElectronShell, isDesktopLocalOriginActive } from '@/lib/desktop';
 import { useUIStore } from '@/stores/useUIStore';
 import { useClaudeStore } from '@/stores/useClaudeStore';
 import { useI18n } from '@/lib/i18n';
-import { WebsiteFolderHeader } from './WebsiteFolderHeader';
+import { WebsiteFolderHeader, type WebsiteFolderEmbedProps } from './WebsiteFolderHeader';
 
 /** Resume metadata only. Claude keeps its account history in its own sidebar. */
-export function ClaudeFolder(): React.ReactNode {
+export function ClaudeFolder({ embedded = false, dragAttributes, dragListeners }: WebsiteFolderEmbedProps = {}): React.ReactNode {
   const { t } = useI18n();
   const selected = useUIStore(state => state.isClaudePageOpen);
   const pageTitle = useClaudeStore(state => state.pageTitle);
@@ -17,8 +17,8 @@ export function ClaudeFolder(): React.ReactNode {
   const savedPages = useClaudeStore(state => state.savedPages);
   const [expanded, setExpanded] = React.useState(false);
   if (!isElectronShell() || !isDesktopLocalOriginActive()) return null;
-  return <div className="mt-3">
-    <WebsiteFolderHeader label="Claude" logo={<ClaudeLogo className="size-3.5" />} selected={selected} expanded={expanded} controlsId="claude-sidebar-pages" onOpen={() => useClaudeStore.getState().open()} onToggle={() => setExpanded(value => !value)} />
+  return <div className={embedded ? undefined : 'mt-3'}>
+    <WebsiteFolderHeader label="Claude" logo={<ClaudeLogo className="size-5" />} selected={selected} expanded={expanded} controlsId="claude-sidebar-pages" onOpen={() => useClaudeStore.getState().open()} onToggle={() => setExpanded(value => !value)} dragAttributes={dragAttributes} dragListeners={dragListeners} />
     {expanded && <div id="claude-sidebar-pages" className="ml-5 space-y-0.5">
       {pageTitle && <Button variant={selected ? 'secondary' : 'ghost'} size="xs" className="w-full justify-start" title={pageTitle} onClick={() => useClaudeStore.getState().open()}><span className="truncate">{pageTitle}</span></Button>}
       {savedPages.map(page => <div key={page.url} className="group flex min-w-0 items-center">

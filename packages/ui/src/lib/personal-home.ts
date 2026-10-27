@@ -150,6 +150,24 @@ export const createHomeTask = (title: string, status?: string) => invoke({ actio
 export const renameHomeTask = (page: string, title: string) => invoke({ action: 'rename-task', page, title });
 export const deleteHomeTask = (page: string) => invoke({ action: 'delete-task', page, confirmed: true });
 export const readHomeCalendar = async (connect = false) => calendarSchema.parse(await invoke({ action: 'calendar', op: connect ? 'connect' : 'read' }));
+const reminderSchema = z.object({
+    access: z.enum(['connected', 'not-connected', 'unsupported']),
+    error: z.string().optional(),
+    reminders: z.array(z.object({ id: z.string(), title: z.string(), due: z.string().nullable(), overdue: z.boolean(), priority: z.enum(['none', 'low', 'medium', 'high']), list: z.string() })).default([]),
+});
+export type HomeReminder = z.infer<typeof reminderSchema>['reminders'][number];
+export const readHomeReminders = async (connect = false) => reminderSchema.parse(await invoke({ action: 'reminders', op: connect ? 'reminders-connect' : 'reminders-read' }));
+export const completeHomeReminder = async (id: string) => {
+    const result = z.object({ access: z.enum(['connected', 'not-connected', 'unsupported']), savedId: z.string().optional(), error: z.string().optional() }).parse(await invoke({ action: 'reminders', op: 'reminder-complete', id }));
+    if (result.error) throw new Error(result.error);
+    if (result.access !== 'connected') throw new Error('Connect Reminders before completing one.');
+};
+export const saveHomeReminder = async (title: string, due?: string) => {
+    const result = z.object({ access: z.enum(['connected', 'not-connected', 'unsupported']), savedId: z.string().optional(), error: z.string().optional() }).parse(await invoke({ action: 'reminders', op: 'reminder-save', title, ...(due ? { due } : {}) }));
+    if (result.error) throw new Error(result.error);
+    if (result.access !== 'connected' || !result.savedId) throw new Error('Connect Reminders before adding one.');
+    return result;
+};
 const savedEventSchema = z.object({ access: z.enum(['connected', 'not-connected', 'unsupported']), savedId: z.string().optional(), error: z.string().optional() });
 export const saveHomeEvent = async (event: { id?: string; title: string; start: string; end: string; calendarId: string }) => {
     const result = savedEventSchema.parse(await invoke({ action: 'calendar', op: 'save', ...event }));

@@ -7,9 +7,9 @@ import { isElectronShell, isDesktopLocalOriginActive } from '@/lib/desktop';
 import { useUIStore } from '@/stores/useUIStore';
 import { useChatGPTStore } from '@/stores/useChatGPTStore';
 import { useI18n } from '@/lib/i18n';
-import { WebsiteFolderHeader } from './WebsiteFolderHeader';
+import { WebsiteFolderHeader, type WebsiteFolderEmbedProps } from './WebsiteFolderHeader';
 
-export function ChatGPTFolder(): React.ReactNode {
+export function ChatGPTFolder({ embedded = false, dragAttributes, dragListeners }: WebsiteFolderEmbedProps = {}): React.ReactNode {
   const { t } = useI18n();
   const selected = useUIStore(s => s.isChatGPTPageOpen);
   const expanded = useChatGPTStore(s => s.expanded);
@@ -20,8 +20,8 @@ export function ChatGPTFolder(): React.ReactNode {
   const status = useChatGPTStore(s => s.status);
   if (!isElectronShell() || !isDesktopLocalOriginActive()) return null;
   const rows = [...chats.filter(chat => pins.includes(chat.path)), ...chats.filter(chat => !pins.includes(chat.path))];
-  return <div className="mt-3">
-    <WebsiteFolderHeader label={t('chatgpt.websiteHistory')} logo={<ProviderLogo providerId="chatgpt" alt="" className="size-3.5 shrink-0" />} selected={selected} expanded={expanded} controlsId="chatgpt-sidebar-pages" onOpen={() => useChatGPTStore.getState().open(undefined, 'full')} onToggle={() => useChatGPTStore.getState().toggleExpanded()}>
+  return <div className={embedded ? undefined : 'mt-3'}>
+    <WebsiteFolderHeader label={t('chatgpt.websiteHistory')} logo={<ProviderLogo providerId="chatgpt" alt="" className="size-5 shrink-0" />} selected={selected} expanded={expanded} controlsId="chatgpt-sidebar-pages" onOpen={() => useChatGPTStore.getState().open(undefined, 'full')} onToggle={() => useChatGPTStore.getState().toggleExpanded()} dragAttributes={dragAttributes} dragListeners={dragListeners}>
       <Button variant="ghost" size="xs" aria-label={t('chatgpt.new')} onClick={() => useChatGPTStore.getState().open({ kind: 'navigate', path: '/' })}><Icon name="add" className="size-3.5" /></Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild><Button variant="ghost" size="xs" aria-label={t('chatgpt.tools')}><Icon name="more" className="size-3.5" /></Button></DropdownMenuTrigger>

@@ -393,7 +393,7 @@ describe('ModelControls effort restore', () => {
 
 
   for (const missing of ['request', 'body', 'permissions', 'v2 fields']) {
-    test(`renders a cached agent without ${missing}`, async () => {
+    test(`renders with a cached agent lacking ${missing} and shows no agent picker`, async () => {
       const request = agent.request;
       const body = request.body;
       const permissions = agent.permissions;
@@ -403,7 +403,7 @@ describe('ModelControls effort restore', () => {
       try {
         const { dom, cleanup } = await renderModelControls();
         try {
-          expect(dom.container.querySelector('.model-controls__agent-label')?.textContent).toBe('Build');
+          expect(dom.container.querySelector('.model-controls__agent-label')).toBeNull();
         } finally {
           await cleanup();
         }
@@ -576,13 +576,11 @@ describe('ModelControls effort restore', () => {
       });
       const { dom, cleanup } = await renderModelControls();
       const modelLabel = () => dom.container.querySelector('.model-controls__model-trigger')?.textContent;
-      const agentLabel = () => dom.container.querySelector('.model-controls__agent-label')?.textContent;
       try {
         expect(modelLabel()).toContain('Loading');
-        expect(agentLabel()).toContain('Loading');
+        expect(dom.container.querySelector('.model-controls__agent-label')).toBeNull();
         await act(async () => { useConfigStore.setState({ providers: [provider], providersLoaded: true }); });
         expect(modelLabel()).toContain('Loading');
-        expect(agentLabel()).toContain('Loading');
         await act(async () => {
           useConfigStore.setState({
             settingsDefaultsLoaded: true, currentProviderId: PROVIDER_ID, currentModelId: MODEL_ID,
@@ -590,10 +588,9 @@ describe('ModelControls effort restore', () => {
           });
         });
         expect(modelLabel()).toContain(MODEL_ID);
-        expect(agentLabel()).toBe('Build');
         await act(async () => { useConfigStore.setState({ agents: [agent], agentsLoaded: true }); });
         expect(modelLabel()).toContain(MODEL_ID);
-        expect(agentLabel()).toBe('Build');
+        expect(dom.container.querySelector('.model-controls__agent-label')).toBeNull();
       } finally {
         await cleanup();
       }
@@ -606,14 +603,14 @@ describe('ModelControls effort restore', () => {
       const { dom, cleanup } = await renderModelControls();
       try {
         expect(dom.container.querySelector('.model-controls__model-trigger')?.textContent?.toLowerCase()).toContain(MODEL_ID);
-        expect(dom.container.querySelector('.model-controls__agent-label')?.textContent).toBe('Build');
+        expect(dom.container.querySelector('.model-controls__agent-label')).toBeNull();
       } finally {
         await cleanup();
       }
     });
   }
 
-  test('enables the agent picker before providers and distinguishes a completed empty catalog', async () => {
+  test('distinguishes a completed empty model catalog and shows no agent picker', async () => {
     useUIStore.setState({ isMobile: true });
     useSessionUIStore.setState({ currentSessionId: null });
     useConfigStore.setState({
@@ -622,14 +619,14 @@ describe('ModelControls effort restore', () => {
     });
     const { dom, cleanup } = await renderModelControls();
     try {
-      expect(dom.container.querySelector('.model-controls__agent-trigger')?.hasAttribute('disabled')).toBe(false);
+      expect(dom.container.querySelector('.model-controls__agent-trigger')).toBeNull();
       expect(dom.container.querySelector('.model-controls__model-trigger')?.hasAttribute('disabled')).toBe(true);
       expect(dom.container.querySelector('.model-controls__model-trigger')?.textContent).toContain('Loading');
       await act(async () => {
         useConfigStore.setState({ providersLoaded: true, agents: [], currentAgentName: undefined });
       });
       expect(dom.container.querySelector('.model-controls__model-trigger')?.textContent?.toLowerCase()).toContain('select model');
-      expect(dom.container.querySelector('.model-controls__agent-label')?.textContent?.toLowerCase()).toContain('select agent');
+      expect(dom.container.querySelector('.model-controls__agent-label')).toBeNull();
     } finally {
       await cleanup();
     }

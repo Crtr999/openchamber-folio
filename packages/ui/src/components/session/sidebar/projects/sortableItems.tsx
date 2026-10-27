@@ -93,7 +93,7 @@ const ProjectHeaderIdentity: React.FC<ProjectHeaderIdentityProps> = ({
   return (
     <>
       <span
-        className="oc-friend-activity relative inline-flex size-5 flex-shrink-0 items-center justify-center"
+        className="oc-friend-activity relative inline-flex size-6 flex-shrink-0 items-center justify-center"
         data-working={activity.working ? 'true' : undefined}
         data-waiting={activity.waiting ? 'true' : undefined}
         data-retrying={activity.retrying ? 'true' : undefined}
@@ -109,7 +109,7 @@ const ProjectHeaderIdentity: React.FC<ProjectHeaderIdentityProps> = ({
         {projectIconImage ? (
           <span
             className={cn(
-              'h-3.5 w-3.5 items-center justify-center overflow-hidden rounded-[3px]',
+              'h-5 w-5 items-center justify-center overflow-hidden rounded-[3px]',
               hasCollapseControl && alwaysShowActions ? 'hidden' : 'inline-flex',
               iconVisibilityClassName,
             )}
@@ -130,19 +130,19 @@ const ProjectHeaderIdentity: React.FC<ProjectHeaderIdentityProps> = ({
             />
           </span>
         ) : projectIcon === 'claude' ? (
-          <ClaudeLogo className={cn('h-4 w-4 text-[#D97757]', iconVisibilityClassName)} />
+          <ClaudeLogo className={cn('h-5 w-5 text-[#D97757]', iconVisibilityClassName)} />
         ) : projectIcon === 'chatgpt' ? (
-          <ProviderLogo providerId="chatgpt" className={cn('h-4 w-4', iconVisibilityClassName)} alt="ChatGPT" />
+          <ProviderLogo providerId="chatgpt" className={cn('h-5 w-5', iconVisibilityClassName)} alt="ChatGPT" />
         ) : friendLook ? (
           <HomeFriendAvatar
             body={friendLook.body}
             color={friendLook.color}
-            className={cn('size-5', iconVisibilityClassName)}
+            className={cn('size-6', iconVisibilityClassName)}
           />
         ) : projectIconName ? (
-          <Icon name={projectIconName} className={cn('h-4 w-4', iconVisibilityClassName)} style={iconColor ? { color: iconColor } : undefined} />
+          <Icon name={projectIconName} className={cn('h-5 w-5', iconVisibilityClassName)} style={iconColor ? { color: iconColor } : undefined} />
         ) : (
-          <Icon name="folder" className={cn('h-4 w-4 text-muted-foreground/80', iconVisibilityClassName)} style={iconColor ? { color: iconColor } : undefined} />
+          <Icon name="folder" className={cn('h-5 w-5 text-muted-foreground/80', iconVisibilityClassName)} style={iconColor ? { color: iconColor } : undefined} />
         )}
       </span>
       <span className="truncate typography-ui-label font-semibold text-foreground">{displayLabel}</span>

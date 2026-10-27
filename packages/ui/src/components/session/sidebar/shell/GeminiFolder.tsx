@@ -7,10 +7,10 @@ import { isElectronShell, isDesktopLocalOriginActive } from '@/lib/desktop';
 import { useUIStore } from '@/stores/useUIStore';
 import { useGeminiStore } from '@/stores/useGeminiStore';
 import { useI18n } from '@/lib/i18n';
-import { WebsiteFolderHeader } from './WebsiteFolderHeader';
+import { WebsiteFolderHeader, type WebsiteFolderEmbedProps } from './WebsiteFolderHeader';
 
 /** Resume metadata only. Gemini keeps its account history in its own sidebar. */
-export function GeminiFolder(): React.ReactNode {
+export function GeminiFolder({ embedded = false, dragAttributes, dragListeners }: WebsiteFolderEmbedProps = {}): React.ReactNode {
   const { t } = useI18n();
   const blocked = useEnterpriseMode();
   const selected = useUIStore(state => state.isGeminiPageOpen);
@@ -19,8 +19,8 @@ export function GeminiFolder(): React.ReactNode {
   const savedPages = useGeminiStore(state => state.savedPages);
   const [expanded, setExpanded] = React.useState(false);
   if (blocked || !isElectronShell() || !isDesktopLocalOriginActive()) return null;
-  return <div className="mt-3">
-    <WebsiteFolderHeader label="Gemini" logo={<ProviderLogo providerId="opencarter-gemini-website" alt="" className="size-3.5 shrink-0" />} selected={selected} expanded={expanded} controlsId="gemini-sidebar-pages" onOpen={() => useGeminiStore.getState().open()} onToggle={() => setExpanded(value => !value)} />
+  return <div className={embedded ? undefined : 'mt-3'}>
+    <WebsiteFolderHeader label="Gemini" logo={<ProviderLogo providerId="opencarter-gemini-website" alt="" className="size-5 shrink-0" />} selected={selected} expanded={expanded} controlsId="gemini-sidebar-pages" onOpen={() => useGeminiStore.getState().open()} onToggle={() => setExpanded(value => !value)} dragAttributes={dragAttributes} dragListeners={dragListeners} />
     {expanded && <div id="gemini-sidebar-pages" className="ml-5 space-y-0.5">
       {pageTitle && <Button variant={selected ? 'secondary' : 'ghost'} size="xs" className="w-full justify-start" title={pageTitle} onClick={() => useGeminiStore.getState().open()}><span className="truncate">{pageTitle}</span></Button>}
       {savedPages.map(page => <div key={page.url} className="group flex min-w-0 items-center">

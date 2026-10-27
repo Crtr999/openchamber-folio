@@ -18,6 +18,7 @@ import './HomeDashboard.css';
 import { HomePersonalPanels, HomeChatExport } from './HomePersonalPanels';
 import { HomeWidgetLayout } from './HomeWidgetLayout';
 import { HomeFriends } from './HomeFriends';
+import { HomeThisWeek } from './HomeThisWeek';
 import { openMeetingWorkspace } from '@/lib/meetings/workspace';
 import { meetingsSupported } from '@/lib/meetings/contract';
 
@@ -140,6 +141,7 @@ export const HomeDashboard: React.FC = () => {
         <HomeQuickActions className="flex justify-end xl:hidden" />
         <HomePersonalPanels>{(personalPanels) => <HomeWidgetLayout widgets={{
             friends: { label: t('friends.title'), content: <HomeFriends /> },
+            week: { label: 'This week', content: <HomeThisWeek /> },
             working: { label: t('home.working'), content: <section>
                 <h2 className="oc-home-card-heading">
                     <Icon name="flashlight" className="size-3.5" />

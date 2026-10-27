@@ -17,6 +17,8 @@ import { registerProjectContextRoutes } from '../project-context/routes.js';
 import { registerProjectSetupRoutes } from '../projects/routes.js';
 import { registerAgentMemoryRoutes } from '../agent-memory/routes.js';
 import { registerSessionKnowledgeRoutes } from '../session-knowledge/routes.js';
+import { registerDirectorRoutes } from '../director/routes.js';
+import { resolveDirectoryAllowedProviders } from '../session-memory-capture/providers.js';
 import { registerHealthRoutes } from '../health/routes.js';
 import { registerComputerRoutes } from '../computer/routes.js';
 import { fetchComputerState, resolveComputerEndpoint, sendComputerClipboard } from '../computer/endpoint.js';
@@ -140,6 +142,8 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       projectContextRuntime,
       agentMemoryRuntime,
       isAgentMemoryEnabled,
+      resolveMemoryProjectId,
+      listConfiguredProjectPaths,
       sessionKnowledgeRuntime,
       scheduledTasksRuntime,
       scheduledTaskService,
@@ -368,6 +372,16 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     registerProjectSetupRoutes(app, { projectConfigRuntime });
     registerAgentMemoryRoutes(app, { agentMemoryRuntime, isAgentMemoryEnabled });
     registerSessionKnowledgeRoutes(app, { sessionKnowledgeRuntime });
+    registerDirectorRoutes(app, {
+      fsPromises,
+      path,
+      agentMemoryRuntime,
+      isAgentMemoryEnabled,
+      resolveProjectId: resolveMemoryProjectId,
+      resolveAllowedProviders: resolveDirectoryAllowedProviders,
+      listProjectPaths: listConfiguredProjectPaths,
+      getSmallModelService: async () => import('../small-model/index.js'),
+    });
     // The agent's computer, when a tool brings one: the app shows its screens.
     registerHealthRoutes(app, { dataDir: openchamberDataDir });
     registerComputerRoutes(app, {

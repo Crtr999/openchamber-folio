@@ -1,17 +1,16 @@
 # Friends (1-to-1 Folder = Friend)
 
 Friends is the `friends` widget on Home and the unified identity across Open Carter's
-folders: each folder is a Friend with built-in Operator capabilities, its own
-personality (`AGENTS.md`), shared folder memory (`MEMORY.md`), folder-level
-guardrails (`opencode.json`), and a memory that carries what the folder's
-earlier conversations worked out.
+folders: each friend owns its folder, with built-in Operator capabilities, its own
+personality (`AGENTS.md`), the folder's memory (`MEMORY.md`), folder-level
+guardrails (`opencode.json`). Every chat in the folder is added to that folder's memory.
 
 ## Surface
 
 `HomeFriends.tsx` renders one Friend card per configured project folder:
 
-- Header (`HomeFriendsHeader`): title, folder-friend count, `"1 folder = 1 friend"`
-  indicator, and an icon-only refresh.
+- Header (`HomeFriendsHeader`): title, folder-friend count, `Each friend owns its folder`,
+  and an icon-only refresh.
 - Cards (`HomeFriendCards`): generated `HomeFriendAvatar` (body + theme color),
   Friend name, role/specialty, active guardrail pills (such as `ZDR Locked`,
   `Virtual Computer`, `Local Only`), and a live status line across all
@@ -52,12 +51,12 @@ Two memories, and they are not the same thing.
 `MEMORY.md` is the user's: their own file, edited by hand, read by the folder's
 rules. It is never written by the app.
 
-The store behind `openchamber_memory` is the agent's. Every conversation in the
-folder contributes to it: when a conversation ends, `session-memory-capture`
-distils the turns since the last capture and writes what was settled into the
-folder's project memory. `session-knowledge` then tells every later session in
-that folder the titles of what is stored, so the next conversation there starts
-with the earlier ones. See
+The store behind `openchamber_memory` is the friend's. The friend owns the folder
+and takes charge of remembering it. Every chat in the folder is added to the
+folder's memory: when a chat ends, `session-memory-capture` distils the turns
+since the last capture and writes what was settled into that folder's memory.
+`session-knowledge` then tells every later chat in that folder the titles of
+what is stored, so the next chat there starts with the earlier ones. See
 `packages/web/server/lib/session-memory-capture/DOCUMENTATION.md`.
 
 The capture is a setting of its own (`folderMemoryAutoCapture`), and the whole

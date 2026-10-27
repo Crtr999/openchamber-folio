@@ -26,6 +26,9 @@ import { clearProviderBindingCache } from '@/lib/projectProviderBinding';
 import { morphFrom } from '@/lib/motion';
 import { isAllChatsProject } from '@/lib/allChatsFriend';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useUIStore } from '@/stores/useUIStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { FRIEND_MAC_APPS, readFriendMacApps, writeFriendMacApps, type FriendMacApp } from '@/lib/friendMacApps';
 import { HomeFriendAvatar } from './HomeFriendAvatar';
 import { FriendAppearanceEditor } from './FriendAppearanceEditor';
 import { HomeFriendsWork } from './HomeFriendsWork';
@@ -494,8 +497,9 @@ export function HomeFriendDetails({
                         {agent.description || t('friends.noDescription')}
                     </p>
                     <p className="text-[11px] text-muted-foreground">
-                        Every conversation started in <strong>{project?.label || 'this folder'}</strong> inherits {target.name}&apos;s built-in capabilities, folder rules (<code className="font-mono">AGENTS.md</code>), shared memory (<code className="font-mono">MEMORY.md</code>), and guardrails.
+                        {target.name} owns <strong>{project?.label || 'this folder'}</strong>. Every chat here is added to what this friend knows. The folder&apos;s rules, memory, and the Mac apps you leave on stay with this friend.
                     </p>
+                    {project && !allChats ? <FriendEstate project={project} /> : null}
                 </section>
 
                 {project && folderSessions.length > 0 && (
@@ -542,6 +546,7 @@ export function HomeFriendDetails({
                 {project && (
                     <details className="oc-friend-section" open>
                         <summary>{t('friends.memory')}</summary>
+                        <p className="text-[11px] text-muted-foreground">{t('friends.customizeMemoryHint')}</p>
                         <div className="pt-1">
                             <MemorySection projectPath={project.path} query="" />
                         </div>
@@ -557,16 +562,16 @@ export function HomeFriendDetails({
                                 directory={project.path}
                                 kind="instructions"
                                 title="Folder Rules & Personality (AGENTS.md)"
-                                hint="Instructions, citation requirements, and workflow rules enforced on every conversation in this folder."
+                                hint="How this friend works. Applied to every chat in this folder."
                                 placeholder="Write rules, persona instructions, and workflow gates for this folder's Friend..."
                             />
                             <MarkdownRuleSection
                                 key={`memory:${project.path}`}
                                 directory={project.path}
                                 kind="memory"
-                                title="Shared Friend Memory (MEMORY.md)"
-                                hint="Persistent facts, preferences, and project memory shared across all conversations in this folder."
-                                placeholder="Add durable notes and memory for this folder's Friend..."
+                                title="Folder memory (MEMORY.md)"
+                                hint="This friend keeps the folder's memory. Every chat in the folder adds to it."
+                                placeholder="Notes this friend should keep for the folder..."
                             />
                         </div>
                     </details>
@@ -602,4 +607,36 @@ export function HomeFriendDetails({
             </>}
         </DialogContent>
     </Dialog>;
+}
+
+const MAC_APP_LABEL: Record<FriendMacApp, string> = { calendar: 'Calendar', reminders: 'Reminders' };
+
+/** The folder's files and the Mac apps this friend is allowed to use. Connecting an app lives in Settings. */
+function FriendEstate({ project }: { project: ProjectEntry }): React.ReactNode {
+    const folderKey = folderFriendKey(project.path);
+    const [apps, setApps] = React.useState(() => readFriendMacApps(folderKey));
+    const toggle = (app: FriendMacApp) => {
+        const next = apps.includes(app) ? apps.filter((item) => item !== app) : [...apps, app];
+        setApps(writeFriendMacApps(folderKey, next));
+    };
+    return <div className="space-y-2 pt-1">
+        <Button type="button" variant="ghost" size="sm" className="oc-home-row w-full justify-start" onClick={() => {
+            useProjectsStore.getState().setActiveProject(project.id);
+            useDirectoryStore.getState().setDirectory(project.path);
+            useUIStore.getState().openContextPanelTab(project.path, { mode: 'file' });
+        }}>
+            <Icon name="folder-3" className="size-3.5 text-muted-foreground" />
+            <span>Open this friend&apos;s files</span>
+            <Icon name="arrow-right" className="ml-auto size-3.5 opacity-40" />
+        </Button>
+        <div className="flex flex-wrap gap-1.5">
+            {FRIEND_MAC_APPS.map((app) => {
+                const on = apps.includes(app);
+                return <Button key={app} type="button" size="sm" variant={on ? 'secondary' : 'outline'} aria-pressed={on} onClick={() => toggle(app)}>
+                    {MAC_APP_LABEL[app]}
+                </Button>;
+            })}
+        </div>
+        <p className="text-[11px] text-muted-foreground">Pressed means this friend may use that app. Connect it under Settings, Integrations.</p>
+    </div>;
 }

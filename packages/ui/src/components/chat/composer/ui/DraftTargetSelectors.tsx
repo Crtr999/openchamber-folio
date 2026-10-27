@@ -334,6 +334,7 @@ export function DraftTargetSelectors(props: DraftTargetProps) {
                     render={
                         <Button
                             ref={projectTriggerRef}
+                            data-director-origin="true"
                             variant="ghost"
                             size="sm"
                             aria-haspopup="dialog"

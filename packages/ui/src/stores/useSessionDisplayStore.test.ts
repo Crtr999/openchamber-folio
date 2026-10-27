@@ -19,6 +19,13 @@ describe('useSessionDisplayStore worktree sorting', () => {
   test('v8→v9 starts existing users on manual ordering', () => {
     expect(migrateSessionDisplayState({}, 8).worktreeSortOrder).toBe('manual');
   });
+
+  test('v9→v10 leaves sidebar item order empty when it was never saved', () => {
+    const migrated = migrateSessionDisplayState({ projectSortOrder: 'a-z' }, 9);
+
+    expect(migrated.sidebarItemOrder).toEqual([]);
+    expect(migrated.projectSortOrder).toBe('a-z');
+  });
 });
 
 describe('useSessionDisplayStore project sorting', () => {
@@ -116,7 +123,7 @@ describe('useSessionDisplayStore animated activity', () => {
       await useSessionDisplayStore.persist.rehydrate();
       expect(useSessionDisplayStore.getState().animatedActivityIndicators).toBe(false);
       expect(useSessionDisplayStore.getState().sidebarViewMode).toBe('timeline');
-      expect(useSessionDisplayStore.persist.getOptions().version).toBe(9);
+      expect(useSessionDisplayStore.persist.getOptions().version).toBe(10);
       useSessionDisplayStore.getState().setAnimatedActivityIndicators(true);
       const enabledSnapshot = stored;
       useSessionDisplayStore.setState({ animatedActivityIndicators: false });

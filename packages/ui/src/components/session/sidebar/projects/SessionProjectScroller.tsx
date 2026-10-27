@@ -13,7 +13,8 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Button } from '@/components/ui/button';
 import { formatDirectoryName, formatPathForDisplay } from '@/lib/utils';
@@ -25,7 +26,8 @@ import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
 import { refreshGlobalSessions } from '@/stores/useGlobalSessionsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useChildStoreManager } from '@/sync/sync-context';
-import type { ProjectSortOrder, WorktreeSortOrder } from '@/stores/useSessionDisplayStore';
+import { useSessionDisplayStore, type ProjectSortOrder, type WorktreeSortOrder } from '@/stores/useSessionDisplayStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
 import { streamPerfCount } from '@/stores/utils/streamDebug';
 import { Icon } from '@/components/icon/Icon';
 import { SessionSidebarFolderItem } from '../folders/SessionSidebarFolderItem';
@@ -45,6 +47,7 @@ import type { ProjectSection } from './sessionProjectRender';
 import { formatProjectLabel } from '../utils';
 import { CrossfadeZoneHeader, CrossfadeZoneHeaders } from './CrossfadeZoneHeaders';
 import { prepareSessionProjectAction } from './sessionProjectActionContext';
+import { type WebsiteSidebarId } from './sidebarItemOrder';
 
 type SessionProjectScrollerState = Pick<SessionGroupSectionProps,
   | 'editingId'
@@ -116,6 +119,20 @@ type Actions = {
 };
 
 type Props = { leadingContent?: React.ReactNode; model: SessionProjectScrollerModel; view: View; actions: Actions };
+
+function SortableWebsiteFolder({ websiteId, disabled }: { websiteId: WebsiteSidebarId; disabled: boolean }): React.ReactNode {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: websiteId, disabled });
+  const drag = {
+    embedded: true,
+    dragAttributes: attributes as React.HTMLAttributes<HTMLDivElement>,
+    dragListeners: listeners as React.HTMLAttributes<HTMLButtonElement> | undefined,
+  };
+  const folder = websiteId === 'website:chatgpt' ? <ChatGPTFolder {...drag} />
+    : websiteId === 'website:claude' ? <ClaudeFolder {...drag} />
+    : websiteId === 'website:venice' ? <VeniceFolder {...drag} />
+    : <GeminiFolder {...drag} />;
+  return <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={cn(isDragging && 'opacity-30')}>{folder}</div>;
+}
 
 const getProjectLabel = (project: ProjectSection['project'], homeDirectory: string | null): string => formatProjectLabel(
   project.label?.trim() || formatDirectoryName(project.normalizedPath, homeDirectory) || project.normalizedPath,
@@ -421,6 +438,9 @@ function SessionProjectScrollerComponent({ model, view, actions, leadingContent 
         else actions.group.resetGroupSessionLimit(row.containerKey);
       }}>{t(row.control === 'more' ? 'sessions.sidebar.group.showMore' : 'sessions.sidebar.group.showFewer')}</button>;
     }
+    if (row.kind === 'website-folder') {
+      return <SortableWebsiteFolder websiteId={row.websiteId} disabled={view.projectSortOrder !== 'manual' || model.state.editingId !== null} />;
+    }
     if (row.kind === 'status') return renderStatus(row);
     if (row.emptyKind === 'sidebar') return model.emptyState;
     if (row.emptyKind === 'search') return model.searchEmptyState;
@@ -442,7 +462,7 @@ function SessionProjectScrollerComponent({ model, view, actions, leadingContent 
     </div>;
   }, [actions, deleteFolder, model, projectPickerOptions, renameFolder, renderStatus, showDeletionDialog, t, toggleFolderCollapse, view]);
 
-  const structuralIds = React.useMemo(() => model.rowModel.rows.flatMap((row) => row.kind === 'project-header' ? [row.section.project.id] : row.kind === 'group-header' ? [row.groupKey] : []), [model.rowModel.rows]);
+  const structuralIds = React.useMemo(() => model.rowModel.rows.flatMap((row) => row.kind === 'project-header' ? [row.section.project.id] : row.kind === 'group-header' ? [row.groupKey] : row.kind === 'website-folder' ? [row.websiteId] : []), [model.rowModel.rows]);
   const projectDragIds = React.useMemo(() => new Set(model.sectionsForRender.map((section) => section.project.id)), [model.sectionsForRender]);
   const zoneLayoutKey = React.useMemo(() => model.rowModel.stickyHeaders
     .map(({ kind, id, rowIndex }) => `${kind}:${id}:${rowIndex}`)
@@ -486,6 +506,24 @@ function SessionProjectScrollerComponent({ model, view, actions, leadingContent 
           const activeId = String(event.active.id);
           const overId = String(event.over.id);
           const projectIds = model.sectionsForRender.map((section) => section.project.id);
+          const projectIdSet = new Set(projectIds);
+          const visibleWebsiteIds = model.rowModel.rows.flatMap((row) => row.kind === 'website-folder' ? [row.websiteId] : []);
+          const mixed = new Set<string>([...projectIds, ...visibleWebsiteIds]);
+          if (view.projectSortOrder === 'manual' && visibleWebsiteIds.length > 0 && mixed.has(activeId) && mixed.has(overId)) {
+            const current = model.rowModel.rows.flatMap((row) => (
+              row.kind === 'project-header' && projectIdSet.has(row.section.project.id) ? [row.section.project.id]
+              : row.kind === 'website-folder' ? [row.websiteId]
+              : []
+            ));
+            const from = current.indexOf(activeId);
+            const to = current.indexOf(overId);
+            if (from >= 0 && to >= 0 && from !== to) {
+              const next = arrayMove(current, from, to);
+              useSessionDisplayStore.getState().setSidebarItemOrder(next);
+              useProjectsStore.getState().setManualProjectOrder(next.filter((id) => projectIdSet.has(id)));
+            }
+            return;
+          }
           const projectFrom = projectIds.indexOf(activeId);
           const projectTo = projectIds.indexOf(overId);
           if (projectFrom >= 0 && projectTo >= 0 && view.projectSortOrder === 'manual') {
@@ -507,10 +545,12 @@ function SessionProjectScrollerComponent({ model, view, actions, leadingContent 
             <SessionSidebarRows scrollMargin={scrollMargin} model={model.rowModel} scrollElement={scrollElement} pinnedRowIndexes={pinnedRowIndexes} renderRow={renderRow} onFirstVisibleIndexChange={handleFirstVisibleIndexChange} />
           </SortableContext>
         </DndContext>
-        <ChatGPTFolder />
-        <ClaudeFolder />
-        <VeniceFolder />
-        <GeminiFolder />
+        {model.rowModel.rows.some((row) => row.kind === 'website-folder') ? null : <>
+          <ChatGPTFolder />
+          <ClaudeFolder />
+          <VeniceFolder />
+          <GeminiFolder />
+        </>}
       </ScrollableOverlay>
     </CrossfadeZoneHeaders>
     <FolderDeleteConfirmDialog value={folderDeleteConfirm} setValue={setFolderDeleteConfirm} onConfirm={() => {

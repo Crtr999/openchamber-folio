@@ -43,6 +43,12 @@ type SessionDisplayStore = {
   toggleArchivedSessions: () => void;
   setProjectSortOrder: (order: ProjectSortOrder) => void;
   setWorktreeSortOrder: (order: WorktreeSortOrder) => void;
+  /**
+   * Manual order of project ids and website sidebar ids in the projects view.
+   * Empty means the default merge: folders first, then ChatGPT, Claude, Venice, Gemini.
+   */
+  sidebarItemOrder: string[];
+  setSidebarItemOrder: (order: string[]) => void;
 };
 
 export const migrateSessionDisplayState = (
@@ -87,6 +93,11 @@ export const migrateSessionDisplayState = (
     // destructive actions like deleting a worktree.
     state.worktreeSortOrder = 'manual';
   }
+  if (version < 10 && !state.sidebarItemOrder) {
+    // v10 adds the mixed folder/website order. Empty means the default merge:
+    // folders first, then the website rows, until the user drags.
+    state.sidebarItemOrder = [];
+  }
   return state;
 };
 
@@ -116,10 +127,12 @@ export const useSessionDisplayStore = create<SessionDisplayStore>()(
       toggleArchivedSessions: () => set((state) => ({ showArchivedSessions: !state.showArchivedSessions })),
       setProjectSortOrder: (order) => set({ projectSortOrder: order }),
       setWorktreeSortOrder: (order) => set({ worktreeSortOrder: order }),
+      sidebarItemOrder: [],
+      setSidebarItemOrder: (order) => set({ sidebarItemOrder: order }),
     }),
     {
       name: 'session-display-mode',
-      version: 9,
+      version: 10,
       // v1→v2 adds projectSortOrder using the canonical manual ordering.
       // v2→v3 replaces the previously shipped recent default with manual.
       // v3→v4 removes displayMode (single sidebar row layout).
@@ -128,6 +141,7 @@ export const useSessionDisplayStore = create<SessionDisplayStore>()(
       // v6→v7 drops stickyZoneHeaders (derived from the view mode now).
       // v7→v8 defaults showRecentSection to false.
       // v8→v9 adds worktreeSortOrder (manual by default).
+      // v9→v10 adds sidebarItemOrder (empty until the user drags folders and websites).
       migrate: migrateSessionDisplayState,
     },
   ),

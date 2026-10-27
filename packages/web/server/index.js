@@ -1613,6 +1613,15 @@ const resolveMemoryProjectId = createMemoryProjectResolver({
   managedProjectRoots: [...new Set([path.join(OPENCHAMBER_USER_CONFIG_ROOT, 'chats'), OPENCHAMBER_CHATS_DIR])],
 });
 
+// The Director works in configured folders and in the chats root, which is the General friend's folder.
+const listConfiguredProjectPaths = async () => {
+  const settings = await readSettingsFromDiskMigrated().catch(() => null);
+  return [
+    ...sanitizeProjects(settings?.projects || []).map((project) => project.path),
+    ...new Set([path.join(OPENCHAMBER_USER_CONFIG_ROOT, 'chats'), OPENCHAMBER_CHATS_DIR]),
+  ];
+};
+
 /**
  * Tells open panels that the service changed what it remembers, so what it just
  * stored is visible without reopening anything.
@@ -2502,6 +2511,8 @@ async function main(options = {}) {
     projectContextRuntime,
     agentMemoryRuntime,
     isAgentMemoryEnabled,
+    resolveMemoryProjectId,
+    listConfiguredProjectPaths,
     sessionKnowledgeRuntime,
     scheduledTasksRuntime,
     scheduledTaskService,

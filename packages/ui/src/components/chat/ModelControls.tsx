@@ -40,6 +40,9 @@ import { matchesRankQuery, rankByQuery } from '@/lib/search/fuzzySearch';
 import { useContextStore } from '@/stores/contextStore';
 import { useConfigStore, isStaleAutoSelection } from '@/stores/useConfigStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useDirectorStore } from '@/stores/useDirectorStore';
+import { useChatsRoot } from '@/hooks/useChatsRoot';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useSession, useSessionMessages, useSessionRenderable } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
@@ -332,6 +335,10 @@ type ModelControlsProps = {
     /** Offers "Run on several models" at the top of the desktop model picker. */
     onRunInParallel?: () => void;
 } & ({ selection?: never; sessionId?: never } | { selection: BtwSelection; sessionId: string | null });
+
+/** Folders carry the rules and the models carry the capability, so the composer no longer asks for an agent.
+ * A folder still names its own agent (operator by default, zdr when locked) in its configuration. */
+const SHOW_AGENT_PICKER = false;
 
 export const ModelControls: React.FC<ModelControlsProps> = ({
     className,
@@ -2868,6 +2875,55 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         );
     };
 
+    // The Director belongs to a new message for a folder: that folder's friend improves the draft first.
+    const directorDraft = useSessionUIStore((state) => state.newSessionDraft);
+    const directorChatsRoot = useChatsRoot();
+    const directorFolderPath = useProjectsStore((state) => {
+        const id = directorDraft?.selectedProjectId ?? state.activeProjectId;
+        return state.projects.find((entry) => entry.id === id)?.path ?? null;
+    });
+    // A draft with no folder belongs to General, whose folder is the chats root.
+    const directorProjectPath = directorDraft?.target === 'chat' ? directorChatsRoot : directorFolderPath;
+    const directorEnabled = useDirectorStore((state) => state.enabled);
+    const setDirectorEnabled = useDirectorStore((state) => state.setEnabled);
+    const directorBlocked = useDirectorStore((state) => Boolean(directorProjectPath) && state.blocked.includes(directorProjectPath as string));
+    const showDirector = !selection && Boolean(directorDraft?.open) && Boolean(directorProjectPath);
+
+    const renderDirectorToggle = () => {
+        if (!showDirector) return null;
+        const active = directorEnabled && !directorBlocked;
+        return (
+            <Tooltip delayDuration={600}>
+                <TooltipTrigger asChild>
+                    <button
+                        type="button"
+                        aria-pressed={active}
+                        disabled={directorBlocked}
+                        onClick={() => setDirectorEnabled(!directorEnabled)}
+                        onMouseDown={(event) => event.preventDefault()}
+                        className={cn(
+                            'model-controls__director-toggle flex items-center gap-1.5 transition-opacity min-w-0 focus:outline-none',
+                            buttonHeight,
+                            directorBlocked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-transparent hover:opacity-70',
+                        )}
+                    >
+                        <Icon name="scan-2" className={cn(controlIconSize, 'flex-shrink-0', active ? 'text-[color:var(--status-info)]' : 'text-muted-foreground')} />
+                        <span className={cn(controlTextSize, 'font-medium min-w-0 truncate', active ? 'text-[color:var(--status-info)]' : 'text-muted-foreground')}>Director</span>
+                    </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                    <p className="typography-meta">
+                        {directorBlocked
+                            ? 'Director is off in ZDR folders'
+                            : active
+                                ? 'On: this folder\u2019s friend improves your message from its memory before it sends'
+                                : 'Off: let this folder\u2019s friend improve your message from its memory before it sends'}
+                    </p>
+                </TooltipContent>
+            </Tooltip>
+        );
+    };
+
     const renderVariantSelector = () => {
         if (!isReady || !hasVariants || isAutoSelected) {
             return null;
@@ -3187,9 +3243,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     )}
                 >
                     {!inlineMobileSelection && renderVariantSelector()}
+                    {!inlineMobileSelection && renderDirectorToggle()}
                     {renderModelSelector()}
                     {inlineMobileSelection && renderVariantSelector()}
-                    {!selection && !isAutoSelected && renderAgentSelector()}
+                    {inlineMobileSelection && renderDirectorToggle()}
+                    {SHOW_AGENT_PICKER && !selection && !isAutoSelected && renderAgentSelector()}
                 </div>
             </div>
 

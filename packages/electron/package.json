@@ -69,7 +69,8 @@
       "preload.mjs",
       "!**/*.map",
       "!**/*.d.ts",
-      "!**/node_modules/effect/src/**"
+      "!**/node_modules/effect/src/**",
+      "!**/node_modules/@openchamber/web/dist/**"
     ],
     "extraResources": [
       {

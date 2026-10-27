@@ -305,7 +305,25 @@
 @media (prefers-reduced-motion: reduce) {
     .oc-home-greeting, .oc-home-card { animation: none; }
     .oc-home-row:active { transform: none; }
+    .oc-home-week-check { transition: none; }
 }
+.oc-home-week-row { display: flex; align-items: center; gap: 8px; min-height: 32px; }
+.oc-home-week-check {
+    width: 16px; height: 16px; flex-shrink: 0; border-radius: 999px;
+    border: 1.5px solid color-mix(in srgb, var(--foreground) 35%, transparent);
+    background: transparent;
+}
+.oc-home-week-check:hover { border-color: var(--foreground); background: color-mix(in srgb, var(--foreground) 8%, transparent); }
+.oc-home-week-check:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.oc-home-week-pill {
+    flex-shrink: 0; border-radius: 999px; padding: 1px 7px;
+    font-size: 11px; color: var(--muted-foreground);
+    background: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+.oc-home-week-pill-today { color: var(--foreground); background: color-mix(in srgb, var(--foreground) 12%, transparent); }
+.oc-home-week-pill-overdue { color: var(--status-error-text, var(--destructive)); }
+.oc-home-week-flag { width: 8px; height: 8px; flex-shrink: 0; border-radius: 999px; background: color-mix(in srgb, var(--foreground) 45%, transparent); }
+.oc-home-week-flag-high { background: var(--status-error-text, var(--destructive)); }
 
 /* Friends: agent cards with generated faces, customized in place. */
 .oc-friends-heading { gap: 8px; }

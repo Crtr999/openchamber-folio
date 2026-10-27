@@ -1,0 +1,63 @@
+.oc-director { position: fixed; inset: 0; z-index: 9000; pointer-events: none; --director-accent: var(--status-info); }
+.oc-director[data-ending="true"] { animation: oc-director-out .45s ease forwards; }
+@keyframes oc-director-out { to { opacity: 0; } }
+
+.oc-director-frame { position: fixed; border-radius: 16px; border: 1px solid color-mix(in srgb, var(--director-accent) 55%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--director-accent) 10%, transparent); animation: oc-director-fade-in .45s ease both; }
+/* The glow breathes by changing opacity only, which the compositor does without repainting. */
+.oc-director-frame::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--director-accent) 14%, transparent), 0 18px 60px -14px color-mix(in srgb, var(--director-accent) 44%, transparent);
+    opacity: .35; animation: oc-director-breathe 2.8s ease-in-out infinite; will-change: opacity; }
+@keyframes oc-director-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes oc-director-breathe { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+
+.oc-director-veil { position: fixed; border-radius: 16px; overflow: hidden; background: color-mix(in srgb, var(--surface-background) 38%, transparent); animation: oc-director-fade-in .4s ease both; }
+.oc-director-beam { will-change: transform; position: absolute; top: 0; bottom: 0; width: 84px; left: 0;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--director-accent) 24%, transparent) 55%, color-mix(in srgb, var(--director-accent) 60%, transparent) 98%, transparent 100%);
+    animation: oc-director-sweep 1.7s cubic-bezier(.5, 0, .3, 1) infinite; }
+.oc-director-beam::after { content: ''; position: absolute; top: 0; bottom: 0; right: 0; width: 1px; background: color-mix(in srgb, var(--director-accent) 90%, white); box-shadow: 0 0 14px 1px var(--director-accent); }
+@keyframes oc-director-sweep { 0% { transform: translateX(-90px); } 100% { transform: translateX(var(--director-sweep, 640px)); } }
+.oc-director-lines { position: absolute; inset: 14px 16px; display: flex; flex-direction: column; gap: 9px; opacity: .55; }
+.oc-director-lines i { display: block; height: 5px; border-radius: 3px; background: linear-gradient(90deg, color-mix(in srgb, var(--foreground) 14%, transparent), color-mix(in srgb, var(--foreground) 5%, transparent));
+    transform-origin: left; animation: oc-director-line 1.7s ease-in-out infinite; }
+@keyframes oc-director-line { 0%, 100% { transform: scaleX(.55); opacity: .5; } 50% { transform: scaleX(1); opacity: 1; } }
+
+.oc-director-figure { position: fixed; left: 0; top: 0; width: 36px; height: 36px; will-change: transform; filter: drop-shadow(0 6px 10px color-mix(in srgb, black 35%, transparent)); }
+.oc-director-figure .oc-friend-avatar { width: 100%; height: 100%; display: block; }
+.oc-director-shadow { position: fixed; left: 0; top: 0; width: 22px; height: 6px; border-radius: 50%; background: color-mix(in srgb, black 30%, transparent); filter: blur(2px); will-change: transform; }
+
+.oc-director-chip { position: fixed; display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 12px; border-radius: 999px; pointer-events: auto; white-space: nowrap;
+    background: color-mix(in srgb, var(--surface-elevated) 97%, transparent); color: var(--surface-elevated-foreground);
+    border: 1px solid color-mix(in srgb, var(--director-accent) 32%, var(--interactive-border)); box-shadow: 0 10px 34px -12px rgb(0 0 0 / .45); font-size: 12px; letter-spacing: .01em;
+    animation: oc-director-chip-in .35s ease both; }
+@keyframes oc-director-chip-in { from { opacity: 0; transform: translate(-50%, 6px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.oc-director-chip-label { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--surface-muted-foreground); }
+.oc-director-chip-step { min-width: 190px; transition: opacity .2s ease; }
+.oc-director-chip-step[data-done="true"] { color: var(--status-success); }
+.oc-director-spin { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--director-accent) 30%, transparent); border-top-color: var(--director-accent); animation: oc-director-rotate .8s linear infinite; }
+@keyframes oc-director-rotate { to { transform: rotate(360deg); } }
+.oc-director-skip { all: unset; cursor: pointer; font-size: 11px; padding: 3px 9px; border-radius: 999px; color: var(--surface-muted-foreground); border: 1px solid var(--interactive-border); }
+.oc-director-skip:hover { background: var(--interactive-hover); color: var(--foreground); }
+.oc-director-skip:focus-visible { outline: 2px solid var(--interactive-focus-ring); outline-offset: 1px; }
+
+.oc-director-result { position: fixed; border-radius: 16px; padding: 12px 16px; overflow: hidden; display: flex; flex-direction: column; gap: 8px;
+    background: color-mix(in srgb, var(--surface-elevated) 96%, transparent); color: var(--surface-elevated-foreground); border: 1px solid color-mix(in srgb, var(--director-accent) 45%, var(--interactive-border));
+    animation: oc-director-result-in .45s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes oc-director-result-in { from { opacity: 0; transform: translateY(6px) scale(.99); } to { opacity: 1; transform: none; } }
+.oc-director-result-head { display: flex; align-items: center; gap: 8px; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--surface-muted-foreground); }
+.oc-director-result-head b { font-weight: 600; color: var(--director-accent); }
+.oc-director-source { text-transform: none; letter-spacing: .01em; font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--interactive-border); }
+.oc-director-result-text { font-size: 14px; line-height: 1.5; overflow: hidden; white-space: pre-wrap; flex: 1; mask-image: linear-gradient(180deg, #000 85%, transparent); }
+.oc-director-caret { display: inline-block; width: 1px; height: 1em; margin-left: 1px; vertical-align: -2px; background: var(--director-accent); animation: oc-director-blink .9s steps(1) infinite; }
+@keyframes oc-director-blink { 50% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .oc-director-beam, .oc-director-lines i, .oc-director-frame::after, .oc-director-spin, .oc-director-caret { animation: none; }
+    .oc-director-beam { opacity: .5; left: 40%; }
+}
+
+.oc-director[data-phase="deliver"] .oc-director-frame,
+.oc-director[data-phase="deliver"] .oc-director-result,
+.oc-director[data-phase="deliver"] .oc-director-chip { opacity: 0; transition: opacity .5s ease .15s; }
+
+.oc-director-check { width: 14px; height: 14px; flex: none; color: var(--status-success); }

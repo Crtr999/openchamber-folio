@@ -3,6 +3,7 @@ import type { Session } from '@/lib/opencode/model';
 import type { SessionGroup, SessionNode } from './types';
 import type { ProjectSection } from './projects/sessionProjectRender';
 import { buildSessionSidebarRowModel, countSessionSearchMatches, resolveSessionSidebarStickyHeader, runExpansionKey, type SessionSidebarActivityItem, type SessionSidebarRowModelArgs } from './sessionSidebarRowModel';
+import { WEBSITE_SIDEBAR_IDS } from './projects/sidebarItemOrder';
 import { buildMultiRunIndex } from '@/lib/multirun/runs';
 import { withMultiRunMembership } from '@/lib/multirun/identity';
 import { getPinnedSessionKey } from '@/stores/useSessionPinnedStore';
@@ -486,6 +487,31 @@ describe('buildSessionSidebarRowModel', () => {
 
       expect(rows.map((row) => (row.kind === 'session' ? row.node.session.id : row.kind))).toEqual(['run', 'a']);
     });
+  });
+
+  test('website folders interleave with projects only in the projects view', () => {
+    const projectB = { ...project([group([node('b')])]), project: { id: 'project-b', normalizedPath: '/repo-b' } };
+    const projectA = project([group([node('a')])]);
+    const input = args([projectA, projectB]);
+    input.visibleWebsiteIds = WEBSITE_SIDEBAR_IDS;
+    input.sidebarItemOrder = ['project-b', 'website:chatgpt', 'project-a'];
+
+    const headers = (model: ReturnType<typeof buildSessionSidebarRowModel>) => model.rows.flatMap((row) => (
+      row.kind === 'project-header' ? [row.section.project.id] : row.kind === 'website-folder' ? [row.key] : []
+    ));
+
+    const mixed = buildSessionSidebarRowModel(input);
+    expect(headers(mixed)).toEqual(['project-b', 'website:chatgpt', 'project-a', 'website:claude', 'website:venice', 'website:gemini']);
+    expect(mixed.rows.find((row) => row.kind === 'website-folder')).toMatchObject({ key: 'website:chatgpt', websiteId: 'website:chatgpt', estimateSize: 40 });
+
+    const defaults = buildSessionSidebarRowModel({ ...input, sidebarItemOrder: [] });
+    expect(headers(defaults)).toEqual(['project-a', 'project-b', ...WEBSITE_SIDEBAR_IDS]);
+
+    const search = buildSessionSidebarRowModel({ ...input, mode: 'search', normalizedQuery: 'missing' });
+    expect(search.rows.some((row) => row.kind === 'website-folder')).toBe(false);
+
+    const timeline = buildSessionSidebarRowModel({ ...input, viewMode: 'timeline', timelineItems: [timelineItem('a')] });
+    expect(timeline.rows.some((row) => row.kind === 'website-folder')).toBe(false);
   });
 
   test('retains current session authority when presentation filters the row out', () => {

@@ -20,6 +20,7 @@ import { useTraySync } from '@/hooks/useTraySync';
 import { useGlobalSessionsPolling } from '@/hooks/useGlobalSessionsPolling';
 import { useRouter } from '@/hooks/useRouter';
 import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
+import { usePauseAnimationsWhenInactive } from '@/hooks/usePauseAnimationsWhenInactive';
 import { useWebNotificationStream } from '@/hooks/useWebNotificationStream';
 import { useAgentMemorySync } from '@/hooks/useAgentMemorySync';
 import { useBrowserProviderSync } from '@/hooks/useBrowserProviderSync';
@@ -774,6 +775,7 @@ function App({ apis }: AppProps) {
   // Session attention now handled by notification-store via SSE events (session.idle/session.error)
 
   usePushVisibilityBeacon({ enabled: embeddedBackgroundWorkEnabled });
+  usePauseAnimationsWhenInactive();
   useWebNotificationStream({ enabled: embeddedBackgroundWorkEnabled });
   // Loaded here rather than by the Memory tab: the session index is built from
   // this snapshot, so leaving it to the panel meant a user who never opened

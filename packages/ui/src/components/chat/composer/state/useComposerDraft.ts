@@ -27,6 +27,26 @@ import {
 const PERSIST_DEBOUNCE_MS = 500;
 
 /**
+ * A new-session draft should follow the user onto a folder they just picked.
+ * Open chats stay put: either identity having a real session id means a
+ * session switch, and a saved incoming draft is never overwritten.
+ */
+export function shouldCarryNewSessionDraft(
+    previous: ChatDraftIdentity | null,
+    next: ChatDraftIdentity | null,
+    incomingText: string,
+    outgoingText: string,
+    skipOutgoing: boolean,
+): boolean {
+    if (skipOutgoing) return false;
+    if (previous != null && previous.sessionId != null) return false;
+    if (next == null || next.sessionId != null) return false;
+    if (incomingText !== '') return false;
+    if (outgoingText === '') return false;
+    return true;
+}
+
+/**
  * Identifies a stored draft's content. Comparing signatures lets a repeated
  * save of unchanged text skip the write entirely.
  */
@@ -180,7 +200,8 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
         // debounced effect must not immediately write it back out.
         skipNextPersistRef.current = true;
 
-        if (!skipOutgoingDraftRef.current && previousKey) {
+        const skipOutgoing = skipOutgoingDraftRef.current;
+        if (!skipOutgoing && previousKey) {
             const outgoing = { text: messageRef.current, confirmedMentions: new Set(confirmedMentionsRef.current) };
             draftMemoryRef.current.set(previousKey, outgoing);
             if (persistEnabled) persistNow(previous, outgoing.text);
@@ -189,6 +210,35 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
 
         const restored = (currentKey && draftMemoryRef.current.get(currentKey))
             || (persistEnabled ? readChatDraft(identity) : { text: '', confirmedMentions: new Set<string>() });
+        const outgoingText = messageRef.current;
+        if (shouldCarryNewSessionDraft(previous, identity, restored.text, outgoingText, skipOutgoing)) {
+            const carriedMentions = new Set(confirmedMentionsRef.current);
+            messageRef.current = outgoingText;
+            setMessage(outgoingText);
+            confirmedMentionsRef.current = carriedMentions;
+            if (currentKey) {
+                draftMemoryRef.current.set(currentKey, { text: outgoingText, confirmedMentions: carriedMentions });
+            }
+            if (persistEnabled) persistNow(identity, outgoingText);
+            // selectAttachmentDraft already parked files on the previous key.
+            // Copy them forward when the new key is empty so choosing a folder
+            // does not drop what was attached on the home composer.
+            if (previousKey && currentKey) {
+                const input = useInputStore.getState();
+                if (input.attachedFiles.length === 0 && input.attachmentDraftKey === currentKey) {
+                    const previousFiles = input.attachmentDrafts.get(previousKey) ?? [];
+                    if (previousFiles.length > 0) {
+                        const drafts = new Map(input.attachmentDrafts);
+                        const existing = drafts.get(currentKey) ?? [];
+                        const seen = new Set(existing.map((file) => file.id));
+                        const merged = [...existing, ...previousFiles.filter((file) => !seen.has(file.id))];
+                        drafts.set(currentKey, merged);
+                        useInputStore.setState({ attachmentDrafts: drafts, attachedFiles: merged });
+                    }
+                }
+            }
+            return;
+        }
         messageRef.current = restored.text;
         setMessage(restored.text);
         confirmedMentionsRef.current = new Set(restored.confirmedMentions);

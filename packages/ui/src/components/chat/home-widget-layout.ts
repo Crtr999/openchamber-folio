@@ -1,16 +1,16 @@
 import { z } from 'zod';
 
-const widgetIds = ['working', 'recent', 'tasks', 'calendar', 'habits', 'projects', 'shortcuts', 'friends'] as const;
+const widgetIds = ['working', 'recent', 'tasks', 'calendar', 'habits', 'projects', 'shortcuts', 'friends', 'week'] as const;
 const legacySchema = z.array(z.object({ id: z.enum(widgetIds), wide: z.boolean() }));
 const layoutSchema = z.array(z.object({ id: z.enum(widgetIds), wide: z.boolean(), column: z.enum(['left', 'right']), width: z.number().min(20).max(80).catch(50) }));
 export type HomeLayoutItem = z.infer<typeof layoutSchema>[number];
 export type HomeLayoutSection = { id: string; items: HomeLayoutItem[]; full?: HomeLayoutItem };
 export const homeDropSchema = z.object({ kind: z.enum(['widget', 'column']), section: z.string(), column: z.enum(['left', 'right']) });
 
-const defaultColumns = { working: 'left', recent: 'right', tasks: 'left', calendar: 'left', habits: 'right', projects: 'left', shortcuts: 'right', friends: 'left' } as const;
+const defaultColumns = { working: 'left', recent: 'right', tasks: 'left', calendar: 'left', habits: 'right', projects: 'left', shortcuts: 'right', friends: 'left', week: 'right' } as const;
 // A fresh Home leads with Friends at full width. Saved layouts keep their order;
 // widgets they do not know yet are appended below and can be dragged into place.
-const defaultOrder: readonly HomeLayoutItem['id'][] = ['friends', ...widgetIds.filter((id) => id !== 'friends')];
+const defaultOrder: readonly HomeLayoutItem['id'][] = ['friends', 'week', ...widgetIds.filter((id) => id !== 'friends' && id !== 'week')];
 const defaultWide = new Set<HomeLayoutItem['id']>(['tasks', 'friends']);
 export const defaultHomeLayout = (): HomeLayoutItem[] => defaultOrder.map((id) => ({ id, wide: defaultWide.has(id), column: defaultColumns[id], width: 50 }));
 export function restoreHomeLayout(saved: string | null, legacy: string | null): HomeLayoutItem[] {

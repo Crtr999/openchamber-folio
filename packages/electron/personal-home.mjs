@@ -782,7 +782,7 @@ export function createPersonalHome({ filePath, safeStorage, openExternal, isBloc
     close: () => { pendingAuth?.close(); pendingAuth = undefined; },
     handle: async (raw) => {
       const action = z.object({ action: z.string() }).parse(raw).action;
-      if (action === 'calendar') return calendar(raw);
+      if (action === 'calendar' || action === 'reminders') return calendar(raw);
       if (action === 'disconnect') {
         await save({ token: undefined, clientId: undefined, expiresAt: undefined });
         invalidateReads();
