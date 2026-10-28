@@ -363,9 +363,15 @@ export const rowToMessage = (row) => {
     chatGuid: typeof row?.chatGuid === 'string' ? row.chatGuid : '',
     isGroup: Number(row?.chatStyle) === GROUP_CHAT_STYLE,
     fromMe,
+    ageSeconds: Number.isFinite(Number(row?.ageSeconds)) ? Number(row.ageSeconds) : 0,
     text,
   };
 };
+
+/** A text that sat unread past this age is not answered. Without it, a text
+ *  the bridge could not read before an update gets answered minutes late, on
+ *  top of the answer to whatever was sent next. */
+export const MAX_PROMPT_AGE_SECONDS = 180;
 
 /** Outgoing rows are read too, because a thread whose only members are the
  *  user's own addresses records his texts as sent by him: a text from the
@@ -379,6 +385,7 @@ SELECT m.ROWID AS rowid,
        hex(m.attributedBody) AS bodyHex,
        m.is_from_me AS is_from_me,
        m.account AS account,
+       CAST(strftime('%s', 'now') - (m.date / 1000000000 + 978307200) AS INTEGER) AS ageSeconds,
        h.id AS handle,
        c.guid AS chatGuid,
        c.style AS chatStyle
@@ -1155,6 +1162,7 @@ export const createImessageBridge = ({
           changed = true;
         }
         if (!message.handle || !message.text || !message.chatGuid) continue;
+        if (message.ageSeconds > MAX_PROMPT_AGE_SECONDS) continue;
         if (!store.handles.includes(message.handle) && !ownIdentities.has(message.handle)) continue;
         // Our own words come back as incoming rows in a self-thread. Dropping
         // them by body hash is what keeps the bridge from answering itself.

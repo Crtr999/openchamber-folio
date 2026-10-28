@@ -303,7 +303,7 @@ test('inbound rows from a real sqlite database reach one turn and one reply', as
 CREATE TABLE handle (ROWID INTEGER PRIMARY KEY, id TEXT, service TEXT);
 CREATE TABLE chat (ROWID INTEGER PRIMARY KEY, guid TEXT, style INTEGER, chat_identifier TEXT, display_name TEXT);
 CREATE TABLE message (ROWID INTEGER PRIMARY KEY, guid TEXT, text TEXT, attributedBody BLOB, handle_id INTEGER,
-  is_from_me INTEGER, item_type INTEGER, is_system_message INTEGER, associated_message_type INTEGER, account TEXT);
+  is_from_me INTEGER, item_type INTEGER, is_system_message INTEGER, associated_message_type INTEGER, account TEXT, date INTEGER);
 CREATE TABLE chat_message_join (chat_id INTEGER, message_id INTEGER);
 INSERT INTO handle (ROWID, id, service) VALUES (1, '+18566892599', 'iMessage');
 INSERT INTO handle (ROWID, id, service) VALUES (2, '+15551234567', 'iMessage');
@@ -444,7 +444,7 @@ test('a group thread answers only a named friend, and never its own reply', asyn
 CREATE TABLE handle (ROWID INTEGER PRIMARY KEY, id TEXT, service TEXT);
 CREATE TABLE chat (ROWID INTEGER PRIMARY KEY, guid TEXT, style INTEGER, chat_identifier TEXT, display_name TEXT);
 CREATE TABLE message (ROWID INTEGER PRIMARY KEY, guid TEXT, text TEXT, attributedBody BLOB, handle_id INTEGER,
-  is_from_me INTEGER, item_type INTEGER, is_system_message INTEGER, associated_message_type INTEGER, account TEXT);
+  is_from_me INTEGER, item_type INTEGER, is_system_message INTEGER, associated_message_type INTEGER, account TEXT, date INTEGER);
 CREATE TABLE chat_message_join (chat_id INTEGER, message_id INTEGER);
 INSERT INTO handle (ROWID, id, service) VALUES (1, '+18566892599', 'iMessage');
 INSERT INTO chat (ROWID, guid, style, chat_identifier, display_name) VALUES (1, 'any;+;group1', 43, 'group1', 'Friends');
@@ -558,7 +558,7 @@ test('a text from the phone to its own number is a prompt, though it is stored a
 CREATE TABLE handle (ROWID INTEGER PRIMARY KEY, id TEXT, service TEXT);
 CREATE TABLE chat (ROWID INTEGER PRIMARY KEY, guid TEXT, style INTEGER, chat_identifier TEXT, display_name TEXT, account_login TEXT);
 CREATE TABLE message (ROWID INTEGER PRIMARY KEY, guid TEXT, text TEXT, attributedBody BLOB, handle_id INTEGER,
-  is_from_me INTEGER, item_type INTEGER, is_system_message INTEGER, associated_message_type INTEGER, account TEXT);
+  is_from_me INTEGER, item_type INTEGER, is_system_message INTEGER, associated_message_type INTEGER, account TEXT, date INTEGER);
 CREATE TABLE chat_message_join (chat_id INTEGER, message_id INTEGER);
 INSERT INTO handle (ROWID, id, service) VALUES (1, '+18566892599', 'iMessage'), (2, '+12672888147', 'iMessage');
 INSERT INTO chat (ROWID, guid, style, chat_identifier, account_login) VALUES (1, 'any;-;+18566892599', 45, '+18566892599', 'E:carterlaborde@gmail.com'), (2, 'any;-;+12672888147', 45, '+12672888147', 'E:carterlaborde@gmail.com');
@@ -636,6 +636,17 @@ INSERT INTO chat_message_join (chat_id, message_id) VALUES (1, 13);
     await bridge.pollOnce();
     await sleep(120);
     assert.equal(dispatched.length, 1, 'the bridge does not answer itself');
+
+    // A text left unread for twenty minutes is not answered late.
+    const staleDate = (Math.floor(Date.now() / 1000) - 20 * 60 - 978307200) * 1_000_000_000;
+    execFileSync('/usr/bin/sqlite3', [dbPath, `
+INSERT INTO message (ROWID, guid, text, handle_id, is_from_me, item_type, is_system_message, associated_message_type, account, date)
+  VALUES (14, 's14', 'an old question', 1, 1, 0, 0, 0, 'E:carterlaborde@gmail.com', ${staleDate});
+INSERT INTO chat_message_join (chat_id, message_id) VALUES (1, 14);
+`]);
+    await bridge.pollOnce();
+    await sleep(120);
+    assert.equal(dispatched.length, 1, 'a stale text is not answered');
   } finally {
     bridge.dispose();
     globalThis.fetch = originalFetch;
