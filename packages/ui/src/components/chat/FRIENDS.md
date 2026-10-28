@@ -80,9 +80,12 @@ friend, not a pile of folders.
   about the user, not about the work.
 - Starting a conversation there creates a dated chat directory, exactly as the
   sidebar's *All Chats* does, so the two are the same thing.
-- It has no rules file and no guardrail file of its own: the chats root is the
-  app's managed directory, and the Studio shows its conversations and its
-  memory instead of editors that would write into it.
+- It has a rules file (`AGENTS.md`) and a memory file (`MEMORY.md`) at the chats
+  root, edited in the Studio like any folder's. OpenCode finds the rules by walking
+  up from each dated chat directory, so they reach every General chat and nothing
+  outside the chats root. `ai-team/` under the root carries its own `AGENTS.md` that
+  says General's rules do not apply to team runs. It has no guardrail file of its
+  own: the Studio hides the guardrail studio for it.
 - When the user gives it a name, the sidebar's *All Chats* heading says that
   name, so the area reads as theirs rather than as a system bucket.
 

@@ -428,8 +428,8 @@ export function HomeFriendDetails({
         () => summarizeFolderGuardrails(configuration, agent, project?.path),
         [configuration, agent, project?.path],
     );
-    // All Chats lives in the app's own managed directory, so it has no rules
-    // file and no guardrail file to edit; it has conversations and a memory.
+    // All Chats lives in the app's own managed directory: its rules and memory files sit at the
+    // chats root and are edited like any folder's, but it has no guardrail file of its own.
     const allChats = isAllChatsProject(project);
 
     /**
@@ -553,7 +553,7 @@ export function HomeFriendDetails({
                     </details>
                 )}
 
-                {project && !allChats && (
+                {project && (
                     <details className="oc-friend-section" open>
                         <summary>{t('friends.rules')} &amp; Memory</summary>
                         <div className="space-y-5 pt-1">
