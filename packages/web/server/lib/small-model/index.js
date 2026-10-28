@@ -181,7 +181,17 @@ const resolveSmallModel = async ({ client, directory, model, preferredProviderID
   if (explicit) return { ...explicit, source: 'request' };
 
   const fromSettings = parseModelRef(readSmallModelSettingsOverride());
-  if (fromSettings) return { ...fromSettings, source: 'settings' };
+  if (fromSettings) {
+    // A saved override can outlive the model it names: a provider retires a
+    // preview model, or the override was typed for another account. Keeping it
+    // fails every caller with "Model unavailable" — the Director, titles and
+    // summaries all go dark in every folder — so an override the catalog does
+    // not know is ignored and the chain below decides. An empty catalog means
+    // "not known yet", not "gone", so the override still wins there.
+    const models = await listModelInfos(client, directory);
+    const known = models.some((item) => item?.providerID === fromSettings.providerID && item?.id === fromSettings.modelID);
+    if (known || models.length === 0) return { ...fromSettings, source: 'settings' };
+  }
 
   if (preferredProviderID) {
     const small = pickSmallModelInProvider(await listModelInfos(client, directory), preferredProviderID);

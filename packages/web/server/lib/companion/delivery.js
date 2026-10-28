@@ -10,9 +10,10 @@ const resultLimit = 6000;
 
 // Session messages remain the result store. Enrollment only links this check
 // to its predecessor; there is no second inbox or cached copy of private text.
-export const createCompanionDelivery = ({ readSessionMetadata, persistEnrollment, readLastReply, readActivityContext = async () => '', readPersonalContext = async () => '', onPersonalCompletion = async () => {} }) => {
+export const createCompanionDelivery = ({ readSessionMetadata, persistEnrollment, readLastReply, canReadProject, folderGuard, readActivityContext = async () => '', readPersonalContext = async () => '', onPersonalCompletion = async () => {} }) => {
   const prepareRun = async ({ sessionID, directory, task, projectID }) => {
     if (!task.id.startsWith('companion:')) return '';
+    if (!folderGuard || !(await folderGuard.check(directory)).ok) throw new Error('Companion checks are unavailable for this folder');
     const enrollment = enrollmentSchema.parse({
       taskId: task.id,
       projectId: projectID,
@@ -41,6 +42,7 @@ export const createCompanionDelivery = ({ readSessionMetadata, persistEnrollment
       const metadata = await readSessionMetadata(sessionID);
       const enrollment = enrollmentSchema.safeParse(metadata?.openchamber?.companion);
       if (!enrollment.success) return { kind: 'ordinary' };
+      if (!canReadProject || !await canReadProject(enrollment.data.projectId)) return { kind: 'quiet' };
       // Fetch one character beyond the comparison limit so truncated prefixes
       // can never masquerade as equal complete results.
       const reply = await readLastReply(sessionID, undefined, resultLimit + 1);

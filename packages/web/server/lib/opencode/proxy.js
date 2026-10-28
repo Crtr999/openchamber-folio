@@ -12,6 +12,7 @@ import { createRealpathCache } from '../path-realpath-cache.js';
 import { DEFAULT_UPSTREAM_STALL_TIMEOUT_MS } from '../event-stream/upstream-reader.js';
 import { recordStartupPerformance } from './startup-performance.js';
 import { getWorktreeBootstrapStatus } from '../git/service.js';
+import { createPrivateSseFilter } from '../zdr-lock/privacy.js';
 
 const DEFAULT_SSE_HEARTBEAT_INTERVAL_MS = 20_000;
 
@@ -312,6 +313,7 @@ export const registerOpenCodeProxy = (app, deps) => {
     // the host's own answers go out exactly as before spaces.
     mergeSpaceSessionList = null,
     spaceEventHub = null,
+    privacy = null,
   } = deps;
 
   /**
@@ -654,6 +656,11 @@ export const registerOpenCodeProxy = (app, deps) => {
       // only between the upstream's own blocks so a block of the host's is never cut.
       // A directory in the query or in the header scopes the stream to the host's one directory.
       const isGlobalStream = !new URL(requestUrl, 'http://localhost').searchParams.get('directory') && !req.get('x-opencode-directory');
+      const streamQuery = new URL(requestUrl, 'http://localhost').searchParams;
+      const privateScope = req.get('x-openchamber-zdr-directory') || streamQuery.get('directory') || req.get('x-opencode-directory');
+      const filterPrivateSse = privacy ? createPrivateSseFilter({ privacy, options: { scope: privateScope,
+        token: req.get('x-openchamber-zdr-access'),
+      } }) : null;
       const pendingSpaceBlocks = [];
       const flushSpaceBlocks = async () => {
         while (pendingSpaceBlocks.length > 0 && sseBoundary.isAtBoundary() && !abortController.signal.aborted) {
@@ -665,8 +672,11 @@ export const registerOpenCodeProxy = (app, deps) => {
       if (spaceEventHub && isGlobalStream) {
         unsubscribeSpaceEvents = spaceEventHub.subscribeEvent((event) => {
           if (event.spaceId === null) return;
-          pendingSpaceBlocks.push(`data: ${JSON.stringify(event.payload)}\n\n`);
-          void flushSpaceBlocks();
+          void (async () => {
+            if (privacy && !await privacy.filterEvent(event.payload, { directory: event.directory })) return;
+            pendingSpaceBlocks.push(`data: ${JSON.stringify(event.payload)}\n\n`);
+            await flushSpaceBlocks();
+          })().catch(() => {});
         }, { spaces: true });
       }
 
@@ -681,8 +691,9 @@ export const registerOpenCodeProxy = (app, deps) => {
         }
         if (value && value.length > 0) {
           resetUpstreamStallTimer();
-          sseBoundary.observe(value);
-          const canContinue = await enqueueSseWrite(value);
+          const filtered = filterPrivateSse ? await filterPrivateSse(value) : value;
+          sseBoundary.observe(filtered);
+          const canContinue = filtered.length ? await enqueueSseWrite(filtered) : true;
           if (!canContinue) {
             break;
           }
@@ -781,25 +792,34 @@ export const registerOpenCodeProxy = (app, deps) => {
       applyForwardProxyResponseHeaders(result.upstream.headers, res);
 
       if (!result.isJson) {
+        if (privacy) return res.status(503).json({ error: 'Session list could not be safely read' });
         res.setHeader('content-type', result.contentType);
         res.end(result.bodyText);
         return;
       }
 
       if (result.parseError || !sessionListRecords(result.payload)) {
+        if (privacy) return res.status(503).json({ error: 'Session list could not be safely read' });
         res.setHeader('content-type', result.contentType);
         res.end(result.bodyText);
         return;
       }
 
       res.setHeader('content-type', result.contentType);
-      const hostList = await overlayOwnedStateOnList(sanitizeSessionListPayload(result.payload));
+      const listQuery = new URL(upstreamPath, 'http://localhost').searchParams;
+      const scope = listQuery.get('directory') || listQuery.get('location[directory]') || req.get('x-opencode-directory');
+      const options = { scope, token: req.get('x-openchamber-zdr-access') };
+      const visible = privacy ? await privacy.filterSessions(sessionListRecords(result.payload), options) : sessionListRecords(result.payload);
+      const safePayload = Array.isArray(result.payload) ? visible : { ...result.payload, data: visible };
+      const hostList = await overlayOwnedStateOnList(sanitizeSessionListPayload(safePayload));
       // The first page of the global list carries every space's sessions after the host's; a
       // later page, and a list scoped to one directory, are the host's alone.
-      const listQuery = new URL(upstreamPath, 'http://localhost').searchParams;
       const scopedToDirectory = Boolean(listQuery.get('directory') || req.get('x-opencode-directory'));
       const wantsSpaces = typeof mergeSpaceSessionList === 'function' && !listQuery.get('cursor') && !scopedToDirectory;
-      res.json(wantsSpaces ? await mergeSpaceSessionList(hostList) : hostList);
+      const merged = wantsSpaces ? await mergeSpaceSessionList(hostList) : hostList;
+      if (!privacy || !wantsSpaces) return res.json(merged);
+      const mergedRecords = await privacy.filterSessions(sessionListRecords(merged), options);
+      return res.json(Array.isArray(merged) ? mergedRecords : { ...merged, data: mergedRecords });
     } catch (error) {
       if (isAbortError(error)) {
         return;
@@ -814,6 +834,20 @@ export const registerOpenCodeProxy = (app, deps) => {
   };
 
   // Ensure API prefix is detected before proxying
+  if (privacy) app.get('/api/session/active', async (req, res, next) => {
+    try {
+      const upstreamPath = await getRequestUpstreamPath(req);
+      const result = await fetchSessionListPayload(upstreamPath, { req });
+      if (!result.upstream.ok || !result.isJson || result.parseError || !result.payload || Array.isArray(result.payload)) {
+        return res.status(503).json({ error: 'Session activity could not be safely read' });
+      }
+      const query = new URL(upstreamPath, 'http://localhost').searchParams;
+      const visible = await privacy.filterActive(result.payload, { scope: query.get('directory') || req.get('x-opencode-directory'), token: req.get('x-openchamber-zdr-access') });
+      res.setHeader('Cache-Control', 'no-store');
+      return res.json(visible);
+    } catch (error) { return next(error); }
+  });
+
   app.use('/api', (_req, _res, next) => {
     ensureOpenCodeApiPrefix();
     next();
@@ -1009,6 +1043,8 @@ export const registerOpenCodeProxy = (app, deps) => {
     router: () => resolveProxyTarget(),
     on: {
       proxyReq: (proxyReq, req) => {
+        proxyReq.removeHeader('x-openchamber-zdr-access');
+        proxyReq.removeHeader('x-openchamber-zdr-directory');
         // Inject OpenCode auth headers
         const authHeaders = getOpenCodeAuthHeaders();
         if (authHeaders.Authorization) {

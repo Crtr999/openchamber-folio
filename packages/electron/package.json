@@ -115,7 +115,8 @@
         "NSMicrophoneUsageDescription": "Capture microphone audio only when you deliberately start local meeting recording or dictation.",
         "NSAudioCaptureUsageDescription": "Capture system audio only after you consent and start a local meeting recording. Raw audio is not archived.",
         "NSCalendarsFullAccessUsageDescription": "Show your agenda and save events you choose from your personal homepage.",
-        "NSCalendarsUsageDescription": "Show your agenda and save events you choose from your personal homepage."
+        "NSCalendarsUsageDescription": "Show your agenda and save events you choose from your personal homepage.",
+        "NSAppleEventsUsageDescription": "Read Outlook account identities after you connect, and read selected inbox and calendar excerpts only after separate personal-review approval. Never send mail or change Outlook data."
       },
       "hardenedRuntime": true,
       "gatekeeperAssess": false,

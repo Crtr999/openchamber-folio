@@ -1,5 +1,5 @@
 .oc-zdr-curtain { position: fixed; inset: 0; z-index: 8500; display: flex; align-items: center; justify-content: center;
-    background: color-mix(in srgb, var(--surface-background) 96%, transparent); animation: oc-zdr-in .22s ease both; }
+    background: var(--surface-background); }
 @keyframes oc-zdr-in { from { opacity: 0; } to { opacity: 1; } }
 .oc-zdr-card { width: min(340px, calc(100vw - 48px)); display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 28px 26px 22px;
     border-radius: 18px; border: 1px solid var(--interactive-border); background: var(--surface-elevated); color: var(--surface-elevated-foreground);

@@ -1,5 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import { createChatSearchCache, searchChats, type ChatSearchProgress } from './chat-search';
+import { useZdrLockStore } from '@/stores/useZdrLockStore';
 import type { Session, Message, Part } from './model';
 const session = (id: string, directory = '/project'): Session => ({ id, directory, projectID: 'p', title: id, cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }, time: { created: 1, updated: 1 } });
 type SearchItem = { info: Message; parts: Part[] };
@@ -10,6 +11,17 @@ const run = async (query: string, messages: Parameters<typeof searchChats>[1]['m
   return result;
 };
 describe('chat content search', () => {
+  beforeEach(() => useZdrLockStore.setState({ loaded: true, pinSet: false, unlocked: false, directories: [] }));
+  test('does not read chats while lock state is unknown or after a lock during a read', async () => {
+    useZdrLockStore.setState({ loaded: false });
+    let reads = 0;
+    const loader = async () => { reads++; return { items: [item('m', 'alpha')], cursor: {} }; };
+    expect((await run('alpha', loader))?.matches).toHaveLength(0);
+    expect(reads).toBe(0);
+    useZdrLockStore.setState({ loaded: true, pinSet: true, unlocked: true, directories: ['/project'] });
+    const result = await run('alpha', async () => { useZdrLockStore.getState().lock(); return loader(); });
+    expect(result?.matches).toHaveLength(0);
+  });
   test('finds older pages and attachment names; excludes reasoning and injected system text', async () => {
     const first = item('m1', 'unrelated');
     first.parts.push({ id: 'f', sessionID: 's', messageID: 'm1', type: 'file', mime: 'text/plain', filename: 'contract.md', url: 'private' });

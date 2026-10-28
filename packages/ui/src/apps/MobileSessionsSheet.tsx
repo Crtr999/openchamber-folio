@@ -13,6 +13,8 @@ import {
   RiFolderAddLine,
 } from '@remixicon/react';
 import type { Session } from '@/lib/opencode/model';
+import { isPathGuarded } from '@/lib/zdrLock';
+import { useZdrLockStore } from '@/stores/useZdrLockStore';
 import {
   DndContext,
   type DragEndEvent,
@@ -734,6 +736,10 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const ensureGitStatus = useGitStore((state) => state.ensureStatus);
   const liveSessions = useAllLiveSessions();
   const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
+  const lockLoaded = useZdrLockStore((state) => state.loaded);
+  const pinSet = useZdrLockStore((state) => state.pinSet);
+  const unlocked = useZdrLockStore((state) => state.unlocked);
+  const guardedDirectories = useZdrLockStore((state) => state.directories);
   // Store reads the closed drawer does not need. They hold the last value seen
   // while presented rather than dropping to empty: the drawer stays mounted
   // through its exit slide, and swapping pins, order or branches to empty at
@@ -960,8 +966,8 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     // Archived sessions never show on mobile (no archived view here): the live
     // overlay can carry them for the active directory, and they'd otherwise
     // surface in search and then "disappear" once the overlay refreshes.
-    return merged.filter((session) => !session.time?.archived);
-  }, [globalActiveSessions, liveSessions]);
+    return merged.filter((session) => !session.time?.archived && lockLoaded && !(pinSet && !unlocked && isPathGuarded(guardedDirectories, session.directory)));
+  }, [globalActiveSessions, liveSessions, lockLoaded, pinSet, unlocked, guardedDirectories]);
 
   // Archive and delete take a session's subagents with it. Lineage is resolved
   // over the whole active list rather than the rendered bucket: a subagent can

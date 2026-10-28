@@ -5,6 +5,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import { readSavedViewRows } from './notion-saved-view.mjs';
 import { resolveNotionTaskReferences, NotionReferenceError } from './notion-task-references.mjs';
+import { createPersonalOutlook } from './personal-outlook.mjs';
 
 const ORIGIN = 'https://mcp.notion.com';
 const tokenSchema = z.object({ access_token: z.string().min(1), refresh_token: z.string().optional(), expires_in: z.number().optional() });
@@ -153,6 +154,7 @@ export function parseBoardSource(text) {
 }
 
 export function createPersonalHome({ filePath, safeStorage, openExternal, isBlocked, fetchImpl = fetch, calendar }) {
+  const outlook = createPersonalOutlook({ filePath: path.join(path.dirname(filePath), 'personal-outlook.json'), safeStorage, isBlocked, fetchImpl });
   let settings;
   let pendingAuth;
   let refreshPromise;
@@ -735,12 +737,20 @@ export function createPersonalHome({ filePath, safeStorage, openExternal, isBloc
     automation,
     // Private in-process reader. Credentials and write-capable MCP calls never
     // cross this boundary. The server verifies persisted consent before use.
-    readAwareness: async ({ offset = 0, accounts = [] } = {}) => {
+    awarenessConnections: async () => {
+      checkBoundary();
+      const current = await load();
+      const mail = await outlook.handle({ op: 'status' });
+      const calendarStatus = await calendar({ op: 'status' });
+      return { notion: Boolean(current.token), calendar: calendarStatus.access === 'connected',
+        mailAccounts: [...new Set([...mail.accounts, ...(mail.native.access === 'connected' ? mail.native.accounts : [])].map((account) => account.address))] };
+    },
+    readAwareness: async ({ offset = 0, accounts = [], sources = [] } = {}) => {
       checkBoundary();
       const result = [];
-      const current = await load();
-      if (!current.token) result.push({ source: 'notion', status: 'needs-connection', records: [] });
-      else {
+      const current = sources.includes('notion') ? await load() : {};
+      if (sources.includes('notion') && !current.token) result.push({ source: 'notion', status: 'needs-connection', records: [] });
+      else if (sources.includes('notion')) {
         try {
           const pages = [];
           for (const query of ['', 'deadline', 'assignment']) {
@@ -768,20 +778,19 @@ export function createPersonalHome({ filePath, safeStorage, openExternal, isBloc
             nextOffset: offset + 4 < pages.length ? offset + 4 : 0 });
         } catch { result.push({ source: 'notion', status: 'error', records: [] }); }
       }
-      try {
+      if (sources.includes('calendar')) try {
         const value = await calendar({ op: 'read' });
-        result.push({ source: 'calendar', status: value.access === 'connected' ? 'ready' : 'needs-connection',
+        result.push({ source: 'calendar', status: value.access === 'connected' ? (value.events?.length > 50 ? 'partial' : 'ready') : 'needs-connection',
           records: (value.events ?? []).slice(0, 50).map((event) => ({ id: event.id, title: event.title, text: JSON.stringify(event), truncated: false })) });
       } catch { result.push({ source: 'calendar', status: 'error', records: [] }); }
-      // Native Outlook's scripting interface did not expose the requested
-      // accounts in live verification. Require supported provider connections.
-      result.push({ source: 'outlook', status: 'needs-connection', records: [],
-        accounts: accounts.map((address) => ({ address, status: 'needs-connection' })) });
+      if (sources.includes('outlook')) try { result.push(await outlook.readAwareness(accounts)); }
+      catch { result.push({ source: 'outlook', status: 'error', records: [], accounts: accounts.map((address) => ({ address, status: 'error' })) }); }
       return result;
     },
-    close: () => { pendingAuth?.close(); pendingAuth = undefined; },
+    close: () => { pendingAuth?.close(); pendingAuth = undefined; outlook.close(); },
     handle: async (raw) => {
       const action = z.object({ action: z.string() }).parse(raw).action;
+      if (action === 'outlook') return outlook.handle(raw);
       if (action === 'calendar' || action === 'reminders') return calendar(raw);
       if (action === 'disconnect') {
         await save({ token: undefined, clientId: undefined, expiresAt: undefined });

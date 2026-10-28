@@ -11,7 +11,6 @@ import type { ProjectEntry } from '@/lib/api/types';
 import {
     buildGuardrailPoliciesAndPermissions,
     summarizeFolderGuardrails,
-    FriendRevisionConflict,
     type FolderGuardrailEffect,
     type FolderGuardrailState,
     type FriendAppearance,

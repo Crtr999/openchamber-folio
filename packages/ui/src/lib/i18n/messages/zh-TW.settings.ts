@@ -4,6 +4,7 @@ import { linearIntegrationI18n } from './linear-integration.i18n';
 import { thirdPartyIntegrationI18n } from './third-party-integrations.i18n';
 import { extensionCatalogI18n } from './extension-catalog.i18n';
 export const settingsDict = {
+  ...outlookI18n['zh-TW'],
   'settings.themeImport.selectAll': '全選',
   'settings.themeImport.deselectAll': '取消全選',
   'settings.themeImport.complete': '匯入完成',
@@ -2379,3 +2380,4 @@ export const settingsDict = {
   'settings.openchamber.tools.field.browserMcpServersSummary': '應用使用自己的瀏覽器，這些伺服器不會在應用內啟動。',
   'settings.openchamber.tools.field.browserMcpServersInfo': 'OpenCode 會為每個代理啟動每個 MCP 伺服器的一份副本，於是三個瀏覽器伺服器變成了 59 份副本，佔用約 2GB 記憶體。應用自帶瀏覽器面板和 openchamber_web 工具，所以這裡不啟動它們。你自己的設定不變：在其他用戶端裡它們照常運作。',
 } as const;
+import { outlookI18n } from './outlook.i18n';

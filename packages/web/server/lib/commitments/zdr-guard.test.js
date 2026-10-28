@@ -10,6 +10,7 @@ describe('legal / ZDR guard', () => {
   it('blocks folders bound to the ZDR provider, alone or with others', async () => {
     expect(await guard(['openrouter-zdr']).check('/Users/c/Open Carter/Work')).toEqual({ ok: false, reason: 'zdr-bound' });
     expect(await guard(['openai', 'openrouter-zdr']).check('/Users/c/Work')).toEqual({ ok: false, reason: 'zdr-bound' });
+    expect(await guard(['other-ZDR']).check('/Users/c/Work')).toEqual({ ok: false, reason: 'zdr-bound' });
   });
 
   it('blocks by name even when the binding cannot be read', async () => {
@@ -35,5 +36,16 @@ describe('legal / ZDR guard', () => {
   it('allows ordinary and provider-bound non-ZDR folders', async () => {
     expect((await guard([]).check('/Users/c/School')).ok).toBe(true);
     expect((await guard(['claude-code']).check('/Users/c/Open Carter/Claude')).ok).toBe(true);
+  });
+  it('rejects a bound parent before reading a child configuration', async () => {
+    const read = [];
+    const g = createFolderGuard({ listProjectPaths: async () => ['/synthetic/private'],
+      resolveAllowedProviders: async (directory) => { read.push(directory); return ['openrouter-zdr']; },
+    });
+    expect(await g.check('/synthetic/private/child')).toEqual({ ok: false, reason: 'zdr-bound' });
+    expect(read).toEqual(['/synthetic/private']);
+    read.length = 0;
+    expect((await g.check('/synthetic/ZDR/matter')).ok).toBe(false);
+    expect(read).toEqual([]);
   });
 });

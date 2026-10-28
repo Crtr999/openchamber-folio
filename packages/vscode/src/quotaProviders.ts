@@ -1296,7 +1296,7 @@ const fetchGoogleQuota = async (): Promise<ProviderResult> => {
 const CLAUDE_DEFAULT_COOLDOWN_MS = 5 * 60 * 1000;
 const CLAUDE_MAX_COOLDOWN_MS = 60 * 60 * 1000;
 let claudeCredentialFingerprint: string | null = null;
-let claudeCachedUsage: ProviderUsage | null = null;
+let claudeCachedResult: ProviderResult | null = null;
 let claudeCooldownUntil = 0;
 
 const claudeCooldownFromResponse = (response: Response): number => {
@@ -1315,14 +1315,8 @@ const claudeCooldownFromResponse = (response: Response): number => {
 };
 
 const buildClaudeRateLimitResult = (): ProviderResult => (
-  claudeCachedUsage
-    ? buildResult({
-        providerId: 'claude',
-        providerName: 'Claude',
-        ok: true,
-        configured: true,
-        usage: claudeCachedUsage,
-      })
+  claudeCachedResult
+    ? { ...claudeCachedResult, ok: false, error: 'Rate limited. Retrying soon.' }
     : buildResult({
         providerId: 'claude',
         providerName: 'Claude',
@@ -1418,7 +1412,7 @@ const fetchClaudeQuota = async (): Promise<ProviderResult> => {
   const fingerprint = `${accessToken}\0${refreshToken}`;
   if (claudeCredentialFingerprint !== fingerprint) {
     claudeCredentialFingerprint = fingerprint;
-    claudeCachedUsage = null;
+    claudeCachedResult = null;
     claudeCooldownUntil = 0;
   }
   if (Date.now() < claudeCooldownUntil) return buildClaudeRateLimitResult();
@@ -1459,14 +1453,18 @@ const fetchClaudeQuota = async (): Promise<ProviderResult> => {
 
     const payload = await response.json() as Record<string, unknown>;
     const usage = buildClaudeUsage(payload);
-    claudeCachedUsage = usage;
-    return buildResult({
+    if (Object.keys(usage.windows).length === 0 && Object.keys(usage.models ?? {}).length === 0) {
+      return buildResult({ providerId: 'claude', providerName: 'Claude', ok: false, configured: true, error: 'Unexpected response from Anthropic' });
+    }
+    const result = buildResult({
       providerId: 'claude',
       providerName: 'Claude',
       ok: true,
       configured: true,
       usage,
     });
+    claudeCachedResult = result;
+    return result;
   } catch (error) {
     return buildResult({
       providerId: 'claude',

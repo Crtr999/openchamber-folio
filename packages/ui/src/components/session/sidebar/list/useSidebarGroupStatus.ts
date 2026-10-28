@@ -7,6 +7,42 @@ import type { ProjectSection } from '../projects/sessionProjectRender';
 import { getSessionFolderScopes } from '../sessions/sessionFolderIdentity';
 import type { SessionSidebarGroupStatus } from '../sessionSidebarRowModel';
 
+// A runtime that was still starting, or briefly restarted, fails a directory's
+// bootstrap or initialization. Those failures are transient, so they retry on
+// their own with backoff instead of waiting for someone to press Retry. OS
+// permission failures never retry: only the person can grant that access.
+const AUTO_RETRY_DELAYS_MS = [2_000, 5_000, 15_000, 30_000, 60_000];
+// A failure this long after the last retry is a new outage, not the same one.
+const AUTO_RETRY_RESET_MS = 5 * 60_000;
+
+const useAutoRetryFailedDirectories = (
+  childStores: ChildStoreManager,
+  statuses: ReadonlyMap<string, SessionSidebarGroupStatus>,
+) => {
+  const attemptsRef = React.useRef(new Map<string, { count: number; at: number }>());
+  const failedKey = React.useMemo(() => [...new Set(
+    [...statuses.values()]
+      .filter((status) => (status.state === 'load-failed' || status.state === 'initialization-failed') && status.directory)
+      .map((status) => status.directory as string),
+  )].sort().join('\u0001'), [statuses]);
+
+  React.useEffect(() => {
+    const failed = failedKey ? failedKey.split('\u0001') : [];
+    const attempts = attemptsRef.current;
+    const timers = failed.flatMap((directory) => {
+      const previous = attempts.get(directory);
+      const attempt = previous && Date.now() - previous.at < AUTO_RETRY_RESET_MS ? previous.count : 0;
+      const delay = AUTO_RETRY_DELAYS_MS[attempt];
+      if (delay === undefined) return [];
+      return [window.setTimeout(() => {
+        attempts.set(directory, { count: attempt + 1, at: Date.now() });
+        childStores.requestBootstrap({ directory, priority: 'background', reason: 'action-demand', force: true });
+      }, delay)];
+    });
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [childStores, failedKey]);
+};
+
 export const useSidebarGroupStatus = ({
   childStores,
   sections,
@@ -68,5 +104,6 @@ export const useSidebarGroupStatus = ({
     }
     return statuses;
   }, [bootstrapSnapshot, canGrantAccess, childStores, groups, globalStatus, hasLoadedGlobalSessions]);
+  useAutoRetryFailedDirectories(childStores, groupStatusByKey);
   return { groupStatusByKey, bootstrapSnapshot };
 };

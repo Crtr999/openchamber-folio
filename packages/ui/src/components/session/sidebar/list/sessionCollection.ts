@@ -318,13 +318,14 @@ export const useSessionProjectCollection = ({
 
   // While a ZDR folder is locked its chats stay out of every sidebar list, so their titles are not readable.
   const zdrPinSet = useZdrLockStore((state) => state.pinSet);
+  const zdrLoaded = useZdrLockStore((state) => state.loaded);
   const zdrUnlocked = useZdrLockStore((state) => state.unlocked);
   const zdrDirectories = useZdrLockStore((state) => state.directories);
   const hideLocked = React.useCallback(<T extends { directory?: string | null }>(items: readonly T[]): T[] => (
-    zdrPinSet && !zdrUnlocked && zdrDirectories.length > 0
+    !zdrLoaded ? [] : zdrPinSet && !zdrUnlocked
       ? items.filter((item) => !isPathGuarded(zdrDirectories, item.directory))
       : [...items]
-  ), [zdrDirectories, zdrPinSet, zdrUnlocked]);
+  ), [zdrDirectories, zdrLoaded, zdrPinSet, zdrUnlocked]);
   const visibleOrdered = React.useMemo(() => hideLocked(orderedSessions), [hideLocked, orderedSessions]);
   const visibleSessions = React.useMemo(() => hideLocked(sessions), [hideLocked, sessions]);
   const visibleRoots = React.useMemo(() => hideLocked(structure.rootSessions), [hideLocked, structure.rootSessions]);

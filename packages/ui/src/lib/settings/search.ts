@@ -32,6 +32,20 @@ interface SettingsSearchAvailabilityContext extends SettingsRuntimeContext {
 
 const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
   {
+    id: 'integrations.personal-awareness', page: 'integrations',
+    titleKey: 'awareness.title', descriptionKey: 'awareness.disclosure',
+    keywords: ['personal', 'review', 'consent', 'suggestions', 'calendar', 'outlook'],
+    isAvailable: (ctx) => !ctx.isVSCode,
+  },
+  {
+    id: 'integrations.outlook',
+    page: 'integrations',
+    titleKey: 'outlook.title',
+    descriptionKey: 'outlook.consent',
+    keywords: ['microsoft', 'outlook', 'mail', 'calendar', 'oauth'],
+    isAvailable: (ctx) => ctx.isDesktopLocalOrigin,
+  },
+  {
     id: 'chat.activity-default',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.section.activityDefault',

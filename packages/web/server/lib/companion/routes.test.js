@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import { registerCompanionRoutes } from './routes.js';
+import { createFolderGuard } from '../commitments/zdr-guard.js';
 const makeApp = () => {
   const saved = [];
   const tasks = [{ id: 'companion:12345678', name: 'Follow up', enabled: true, execution: { prompt: 'check', permissionAutoAccept: false }, schedule: { kind: 'daily' }, state: {} }, { id: 'ordinary', name: 'Other schedule' }];
@@ -9,13 +10,35 @@ const makeApp = () => {
   // Represents the production API auth gate, ahead of these routes.
   app.use((req, res, next) => req.get('Authorization') === 'Bearer fixture' ? next() : res.sendStatus(401));
   registerCompanionRoutes(app, { scheduledTaskService: {
+    listProjects: async () => [{ id: 'project', path: '/synthetic/ordinary' }],
     async list(project) { if (project !== 'project') throw Object.assign(new Error('missing'), { statusCode: 404 }); return tasks; },
     async upsert(project, task) { saved.push({ project, task }); return { task, created: true }; },
-  } });
+  }, folderGuard: { check: async () => ({ ok: true }) } });
   return { app, saved };
 };
 const body = { id: 'companion:12345678', name: 'Check opportunity', prompt: 'Check selected project', time: '09:00', timezone: 'America/New_York', providerID: 'openai', modelID: 'fixture', enabled: true };
 describe('companion project schedules', () => {
+  it('refuses named, bound, nested and unreadable private folders before any project read or mutation', async () => {
+    for (const directory of ['/synthetic/ZDR Legal', '/synthetic/private', '/synthetic/private/child', '/synthetic/unreadable']) {
+      const touched = [];
+      const app = express();
+      const guard = createFolderGuard({
+        listProjectPaths: async () => ['/synthetic/private'],
+        resolveAllowedProviders: async (target) => {
+          if (target.includes('ZDR')) throw new Error('Named private folder must never be inspected');
+          if (target.includes('unreadable')) throw new Error('Unavailable');
+          return target === '/synthetic/private' ? ['openrouter-zdr'] : [];
+        },
+      });
+      registerCompanionRoutes(app, { folderGuard: guard,
+        scheduledTaskService: { listProjects: async () => [{ id: 'private', path: directory }], list: async () => { touched.push('sync'); return []; } },
+        projectConfigRuntime: { readCompanionState: async () => { touched.push('read'); }, updateCompanionState: async () => { touched.push('write'); } },
+      });
+      await request(app).get('/api/projects/private/companion/inbox').expect(403).expect(({ body }) => expect(body.code).toBe('private_folder'));
+      await request(app).patch('/api/projects/private/companion/inbox/result').send({ dismissed: true }).expect(403);
+      expect(touched).toEqual([]);
+    }
+  });
   it('keeps auth and project boundaries and excludes unrelated schedules', async () => {
     const { app } = makeApp();
     await request(app).get('/api/projects/project/companion').expect(401);

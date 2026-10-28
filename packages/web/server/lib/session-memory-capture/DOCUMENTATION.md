@@ -90,6 +90,9 @@ refuses, a store that cannot be read, a session that was deleted mid-read. The
 worst case is that a folder does not learn something, which is the state the
 app was in before this existed.
 
+Provider policy resolution treats unreadable or malformed configuration as an
+error, not an unbound folder. Capture stops before sending text to a model.
+
 ## Turning it off
 
 Two switches, and they are not the same thing:

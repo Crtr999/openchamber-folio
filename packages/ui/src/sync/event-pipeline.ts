@@ -16,7 +16,7 @@
 
 import type { OpenCodeClient, OpenCodeEvent } from "@opencode/client"
 import { z } from "zod"
-import { opencodeClient } from "@/lib/opencode/client"
+import { createRuntimeOpencodeClient, opencodeClient } from "@/lib/opencode/client"
 import { GLOBAL_EVENT_DIRECTORY, routeWireEvent, syncEventSessionID, type SyncEvent } from "@/lib/opencode/events"
 import type { Metadata } from "@/lib/opencode/model"
 import { getRuntimeUrlResolver } from "@/lib/runtime-url"
@@ -63,6 +63,7 @@ type EventPipelineDelivery = {
 
 export type EventPipelineInput = {
   sdk: OpenCodeClient
+  privateEventDirectory?: () => string | undefined
   routeDirectory?: (directory: string, payload: SyncEvent) => string
   /** Called after stream reconnects (visibility restore or heartbeat timeout). */
   onReconnect?: (details: { replayReset: boolean }) => void
@@ -624,7 +625,9 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
 
   const runSseAttempt = async (signal: AbortSignal) => {
     // Keepalive comments carry no event but prove the socket is alive.
-    const events = sdk.event.subscribe({ signal, onActivity: noteStreamActivity })
+    const privateDirectory = input.privateEventDirectory?.()
+    const streamSdk = privateDirectory ? createRuntimeOpencodeClient({ baseUrl: opencodeClient.getBaseUrl(), privateEventDirectory: privateDirectory }) : sdk
+    const events = streamSdk.event.subscribe({ signal, onActivity: noteStreamActivity })
 
     let connected = false
     let yielded = Date.now()
@@ -825,7 +828,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
 
   const resolveTransport = (): "ws" | "sse" => {
     // The VS Code webview bridges only HTTP/SSE; there is no WebSocket bridge.
-    if (typeof WebSocket !== "function" || isVSCodeRuntime()) {
+    if (typeof WebSocket !== "function" || isVSCodeRuntime() || input.privateEventDirectory?.()) {
       return "sse"
     }
     if (transport === "ws") {

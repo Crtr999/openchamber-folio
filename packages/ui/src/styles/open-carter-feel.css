@@ -145,9 +145,9 @@
 /* Home cards: one radius, a translucent hairline, a soft drop, and a lift
    layer that fades in on hover. Cards are sortable, so they never move. */
 [data-oc-personal-interactions] .oc-home-card {
-    border-color: var(--oc-hairline);
-    border-radius: var(--oc-radius-card);
-    box-shadow: var(--oc-shadow-card);
+    border-color: var(--interactive-border);
+    border-radius: 14px;
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--surface-background) 18%, transparent);
 }
 [data-oc-personal-interactions] .oc-home-card::after,
 [data-oc-personal-interactions] .oc-friend-card::after {
@@ -160,11 +160,9 @@
     pointer-events: none;
     transition: opacity 180ms var(--oc-ease-settle);
 }
-[data-oc-personal-interactions] .oc-home-card:hover,
 [data-oc-personal-interactions] .oc-friend-card:hover {
     border-color: var(--oc-hairline-strong);
 }
-[data-oc-personal-interactions] .oc-home-card:hover::after,
 [data-oc-personal-interactions] .oc-friend-card:hover::after { opacity: 1; }
 [data-oc-personal-interactions] .oc-home-card.oc-home-dragging::after { opacity: 1; }
 

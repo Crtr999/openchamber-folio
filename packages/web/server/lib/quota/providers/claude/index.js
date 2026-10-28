@@ -28,7 +28,7 @@ const MAX_COOLDOWN_MS = 60 * 60 * 1000;
  * Keyed by credential fingerprint so a second account never sees the first
  * account's numbers.
  *
- * @type {{ fingerprint: string, usage: object, planLabel: string|null }|null}
+ * @type {{ fingerprint: string, result: ReturnType<typeof buildResult> }|null}
  */
 let cachedUsage = null;
 let cooldownUntil = 0;
@@ -52,23 +52,21 @@ const cooldownFromHeader = (response) => {
 
 const cachedResultFor = (fingerprint, planLabel) => {
   if (!cachedUsage || cachedUsage.fingerprint !== fingerprint) return null;
-  return buildResult({
-    providerId,
-    providerName,
-    ok: true,
-    configured: true,
-    usage: cachedUsage.usage,
-    planLabel: planLabel ?? cachedUsage.planLabel
-  });
+  return {
+    ...cachedUsage.result,
+    ok: false,
+    error: 'Rate limited. Retrying soon.',
+    planLabel: planLabel ?? cachedUsage.result.planLabel
+  };
 };
 
 const failure = (error, { configured = true } = {}) =>
   buildResult({ providerId, providerName, ok: false, configured, error });
 
-export const isConfigured = () => Boolean(loadClaudeCredential());
+export const isConfigured = ({ readCredential = loadClaudeCredential } = {}) => Boolean(readCredential());
 
-const fetchQuotaUncoalesced = async () => {
-  const credential = loadClaudeCredential();
+const fetchQuotaUncoalesced = async ({ readCredential = loadClaudeCredential, fetchImpl = fetch } = {}) => {
+  const credential = readCredential();
   if (!credential) {
     return failure('Not configured', { configured: false });
   }
@@ -86,7 +84,7 @@ const fetchQuotaUncoalesced = async () => {
 
   let response;
   try {
-    response = await fetch(USAGE_URL, {
+    response = await fetchImpl(USAGE_URL, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${credential.accessToken}`,
@@ -119,10 +117,11 @@ const fetchQuotaUncoalesced = async () => {
   }
 
   const { windows, models } = toClaudeUsage(payload);
+  if (Object.keys(windows).length === 0 && Object.keys(models).length === 0) {
+    return failure('Unexpected response from Anthropic');
+  }
   const usage = Object.keys(models).length > 0 ? { windows, models } : { windows };
-  cachedUsage = { fingerprint, usage, planLabel: credential.planLabel };
-
-  return buildResult({
+  const result = buildResult({
     providerId,
     providerName,
     ok: true,
@@ -130,12 +129,14 @@ const fetchQuotaUncoalesced = async () => {
     usage,
     planLabel: credential.planLabel
   });
+  cachedUsage = { fingerprint, result };
+  return result;
 };
 
-export const fetchQuota = () => {
+export const fetchQuota = (options) => {
   if (pendingFetch) return pendingFetch;
 
-  const request = fetchQuotaUncoalesced();
+  const request = fetchQuotaUncoalesced(options);
   const pending = request.finally(() => {
     if (pendingFetch === pending) pendingFetch = null;
   });

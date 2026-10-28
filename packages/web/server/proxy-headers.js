@@ -3,6 +3,8 @@ const filteredRequestHeaders = new Set([
   // never reach the managed OpenCode upstream — it only accepts its own auth,
   // so a forwarded client bearer turns every upstream response into a 401.
   'authorization',
+  'x-openchamber-zdr-access',
+  'x-openchamber-zdr-directory',
   'host',
   'connection',
   'content-length',

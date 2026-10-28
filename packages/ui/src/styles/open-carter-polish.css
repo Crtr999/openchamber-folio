@@ -320,19 +320,17 @@
 }
 
 /* ── Empty states ─────────────────────────────────────────────────────── */
-/* A short serif line on a faint stipple band, like the poster's dust. */
+/* Empty widget copy uses the same quiet reading style as populated lists. */
 :root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-oc-personal-interactions] .oc-home-empty {
     position: relative;
     padding: 12px 8px 10px;
-    border-radius: 12px;
-    background:
-        radial-gradient(circle, color-mix(in srgb, var(--primary-base) 18%, transparent) 0.6px, transparent 1px) 0 0 / 6px 6px;
-    -webkit-mask-image: linear-gradient(to right, #000 0%, #000 70%, rgb(0 0 0 / 0.85) 100%);
+    border-radius: 8px;
+    background: var(--surface-subtle);
     color: var(--surface-muted-foreground);
-    font-family: var(--oc-font-serif);
-    font-size: 15px;
-    font-style: italic;
-    line-height: 1.35;
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    font-style: normal;
+    line-height: 1.6;
 }
 :root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) .oc-empty-badge {
     color: var(--oc-ink-cobalt);

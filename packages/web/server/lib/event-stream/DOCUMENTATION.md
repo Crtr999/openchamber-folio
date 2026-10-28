@@ -1,6 +1,8 @@
 # Event Stream Module Documentation
 
 ## Purpose
+Browser delivery uses the ZDR transport classifier from `../zdr-lock/privacy.js`. Global live events and replay stay private-folder-free regardless of PIN grants. Directory WebSockets recheck their requested directory and each event. Private conversations use explicitly scoped HTTP/SSE instead. See `../zdr-lock/DOCUMENTATION.md` for grant, canonical-path and runtime behavior.
+
 This module contains the OpenChamber message-stream WebSocket protocol and runtime bridge. It keeps the browser-facing WebSocket transport separate from the upstream OpenCode SSE transport.
 
 ## Entrypoints and structure

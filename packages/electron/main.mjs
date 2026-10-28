@@ -11,6 +11,7 @@ import { canReuseManagedOpenCodePreflight } from './opencode-readiness.mjs';
 import { createMacAiHost } from './mac-ai-host.mjs';
 import { createLocalTeamBridge } from './local-team-bridge.mjs';
 import { createChatGPTAutomationsBridge } from './chatgpt-automations.mjs';
+import { createImessageBridge } from './imessage-bridge.mjs';
 import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, MessageChannelMain, nativeImage, nativeTheme, net as electronNet, Notification, powerMonitor, powerSaveBlocker, protocol, safeStorage, session, shell, Tray, webContents } from 'electron';
 import contextMenu from 'electron-context-menu';
 import log from 'electron-log/main.js';
@@ -402,6 +403,20 @@ setImmediate(() => {
   } catch {}
 });
 const localTeamBridge = createLocalTeamBridge({ getTeam: () => state.serverHandle?.getTeam() ?? null });
+// Texts are ordinary chats in a folder. The bridge keeps only the number, the
+// conversation ids and a read cursor; it never stores message bodies.
+const openchamberConfigRoot = typeof process.env.OPENCHAMBER_DATA_DIR === 'string' && process.env.OPENCHAMBER_DATA_DIR.trim()
+  ? process.env.OPENCHAMBER_DATA_DIR.trim()
+  : path.join(os.homedir(), '.config', 'openchamber');
+const openchamberChatsRoot = path.join(openchamberConfigRoot, 'chats');
+const imessageBridge = createImessageBridge({
+  filePath: path.join(app.getPath('userData'), 'imessage-bridge.json'),
+  getApiBaseUrl: () => state.sidecarUrl || state.localOrigin || '',
+  allChatsDirectory: openchamberChatsRoot,
+  // The morning text reads the same commitments list the app keeps.
+  commitmentsFilePath: path.join(openchamberConfigRoot, 'commitments.json'),
+  log,
+});
 // Read-only mirror of Carter's ChatGPT/Codex automations. It never writes under ~/.codex.
 const chatGPTAutomationsBridge = createChatGPTAutomationsBridge();
 
@@ -454,6 +469,7 @@ const shutdownBackgroundServices = () => {
     const hostStopped = macAiHost.stop();
     shellEnvironmentAbort.abort();
     teachingSkills.cancel();
+    imessageBridge.dispose();
     state.backgroundShutdownPromise = Promise.all([
       meetingBoundary.dispose(),
       personalTeaching.dismiss().catch(() => { log.warn('[teaching] recording cleanup could not be confirmed'); }),
@@ -1360,6 +1376,13 @@ const maybeShowNativeNotification = (rawInput) => {
     ? payload.directory.trim()
     : null;
 
+  // Opt-in: a notification that arrived while the app was in the background can
+  // also reach the phone. Off by default, and never for a session the texting
+  // bridge already answers, or the same answer would arrive twice.
+  if (imessageBridge && !imessageBridge.ownsSession(sessionId)) {
+    void imessageBridge.mirrorNotification({ title, body, sessionId }).catch(() => {});
+  }
+
   const notification = new Notification({
     title,
     body,
@@ -1424,6 +1447,15 @@ const inheritUserShellEnv = async () => {
 const shouldSkipLocalServer = async () => {
   await inheritUserShellEnv();
   return process.env.OPENCHAMBER_SKIP_LOCAL_SERVER === '1';
+};
+
+// Only a local runtime owns the chat sessions the bridge dispatches into; a
+// remote host keeps its own server and this Mac only carries Messages.
+const beginImessageBridge = () => {
+  if (!state.sidecarUrl) return;
+  void imessageBridge.start().catch((error) => {
+    log.warn(`[imessage] bridge did not start: ${error?.message || error}`);
+  });
 };
 
 const spawnLocalServer = () => {
@@ -1524,7 +1556,7 @@ const startLocalServer = async () => {
       : undefined,
     onDesktopNotification: (payload) => maybeShowNativeNotification(payload),
     getIsWindowFocused: isAnyWindowFocused,
-    personalAwareness: { readSources: (input) => personalHome.readAwareness(input) },
+    personalAwareness: { readSources: (input) => personalHome.readAwareness(input), readConnections: () => personalHome.awarenessConnections() },
     aiTaskConnection: {
       filePath: path.join(app.getPath('userData'), 'ai-tasks.json'),
       notion: personalHome.automation,
@@ -3815,6 +3847,39 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       await session.fromPartition('open-carter-teaching').cookies.set({ url: credentials.origin, name: 'cb_key', value: credentials.token, httpOnly: true, sameSite: 'strict', secure: credentials.origin.startsWith('https:') });
       return result;
     }
+    case 'desktop_imessage': {
+      const input = z.discriminatedUnion('action', [
+        z.object({ action: z.literal('status') }).strict(),
+        z.object({
+          action: z.literal('configure'),
+          enabled: z.boolean().optional(),
+          handles: z.array(z.string().min(1).max(200)).max(10).optional(),
+          defaultFriend: z.string().min(1).max(200).nullable().optional(),
+          forwardNotifications: z.boolean().optional(),
+          morningEnabled: z.boolean().optional(),
+          morningTime: z.string().min(4).max(5).optional(),
+        }).strict(),
+        z.object({ action: z.literal('reset'), friend: z.string().min(1).max(200) }).strict(),
+        z.object({ action: z.literal('test'), handle: z.string().min(1).max(200).optional() }).strict(),
+        z.object({ action: z.literal('morning-test') }).strict(),
+      ]).parse(args);
+      if (isEnterpriseMode()) throw new Error('iMessage is not available under this policy.');
+      if (input.action === 'status') return imessageBridge.status();
+      if (input.action === 'reset') return imessageBridge.resetConversation(input.friend);
+      if (input.action === 'test') {
+        try {
+          return await imessageBridge.sendTest(input.handle);
+        } catch (error) {
+          throw new Error(error?.message || 'Messages did not accept the text.');
+        }
+      }
+      if (input.action === 'morning-test') {
+        const result = await imessageBridge.sendMorning({ force: true });
+        if (!result?.sent) throw new Error(result?.reason || 'The morning text did not send.');
+        return result;
+      }
+      return imessageBridge.configure(input);
+    }
     case 'desktop_ai_host_status':
       z.object({}).strict().parse(args);
       return macAiHost.status();
@@ -5253,7 +5318,7 @@ ipcMain.handle('openchamber:invoke', async (event, command, args) => {
       throw new Error(`${code}: ${safeCode ? error.message : 'The meeting operation failed.'}`);
     }
   }
-  if (['desktop_openrouter_credits', 'desktop_personal_home'].includes(command) && event.senderFrame !== event.sender.mainFrame) throw new Error('This desktop connection is available only to the main application.');
+  if (['desktop_openrouter_credits', 'desktop_personal_home', 'desktop_imessage'].includes(command) && event.senderFrame !== event.sender.mainFrame) throw new Error('This desktop connection is available only to the main application.');
   if (command === 'desktop_openrouter_credits') {
     if (!authorizeOpenRouterCredits(event)) {
       throw new Error('Billing is available only in the trusted local main application.');
@@ -5758,6 +5823,7 @@ app.whenReady().then(async () => {
     state.initScript = buildInitScript(localOrigin, state.bootOutcome, apiBaseUrl, clientToken, state.requestHeaders);
     log.info('[electron] started in background without window');
     replayDeferredAppEvents();
+    beginImessageBridge();
     return;
   }
 
@@ -5768,6 +5834,7 @@ app.whenReady().then(async () => {
   const { initialUrl, localOrigin, bootOutcome, apiBaseUrl, clientToken, requestHeaders } = await resolveInitialUrl();
   await activateMainWindow(initialUrl, localOrigin, bootOutcome, { apiBaseUrl, clientToken, requestHeaders });
   replayDeferredAppEvents();
+  beginImessageBridge();
 
 }).catch((error) => {
   if (state.quitInProgress) return;

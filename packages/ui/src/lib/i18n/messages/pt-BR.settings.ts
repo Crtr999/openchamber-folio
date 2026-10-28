@@ -4,6 +4,7 @@ import { linearIntegrationI18n } from './linear-integration.i18n';
 import { thirdPartyIntegrationI18n } from './third-party-integrations.i18n';
 import { extensionCatalogI18n } from './extension-catalog.i18n';
 export const settingsDict = {
+  ...outlookI18n['pt-BR'],
   'settings.themeImport.selectAll': 'Selecionar tudo',
   'settings.themeImport.deselectAll': 'Desmarcar tudo',
   'settings.themeImport.complete': 'Importação concluída',
@@ -2379,3 +2380,4 @@ export const settingsDict = {
   'settings.openchamber.tools.field.browserMcpServersSummary': 'O app usa o próprio navegador; estes servidores não são iniciados dentro do app.',
   'settings.openchamber.tools.field.browserMcpServersInfo': 'O OpenCode inicia uma cópia de cada servidor MCP para cada agente, então três servidores de navegador viraram cinquenta e nove cópias e cerca de dois gigabytes de memória. O app tem seu próprio painel de navegador e a ferramenta openchamber_web, então eles ficam desligados aqui. Sua configuração não muda: continuam funcionando para qualquer outro cliente.',
 } as const;
+import { outlookI18n } from './outlook.i18n';

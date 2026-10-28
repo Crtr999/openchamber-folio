@@ -43,6 +43,8 @@ import { z } from 'zod';
  * - Desktop personal-home Notion OAuth, data access, chat export and AI task
  *   pickup/result writeback are off
  *   (`packages/electron/personal-home.mjs`); local EventKit remains available.
+ *   Native Outlook device authorization, token refresh and Graph source reads
+ *   are also off (`packages/electron/personal-outlook.mjs`).
  * - Meeting summaries are off (`meetings/summary.js`), even after user approval.
  * - CarterBot teaching capture, playback, skill drafting, installation and tests
  *   are off (`personal-teaching.js`, `teaching-skills.js`).

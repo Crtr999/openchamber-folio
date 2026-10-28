@@ -8,6 +8,7 @@ const createFixture = ({ enrolled = true, previous = 'Earlier idea', reply = 'Ne
     return id === 'previous' ? previous : reply;
   });
   const delivery = createCompanionDelivery({
+    folderGuard: { check: async () => ({ ok: true }) }, canReadProject: async () => true,
     readSessionMetadata: async () => enrolled ? { openchamber: { companion: { taskId: 'companion:12345678', previousSessionId: 'previous' } } } : {},
     persistEnrollment, readLastReply,
   });
@@ -43,7 +44,19 @@ describe('companion result delivery', () => {
     expect(noHistory).toContain('No previous result is available');
   });
   it('refuses dispatch preparation when enrollment cannot be stored', async () => {
-    const delivery = createCompanionDelivery({ readSessionMetadata: async () => ({}), readLastReply: async () => '', persistEnrollment: async () => { throw new Error('disk unavailable'); } });
+    const delivery = createCompanionDelivery({ folderGuard: { check: async () => ({ ok: true }) }, readSessionMetadata: async () => ({}), readLastReply: async () => '', persistEnrollment: async () => { throw new Error('disk unavailable'); } });
     await expect(delivery.prepareRun({ sessionID: 'current', directory: '/project', task: { id: 'companion:12345678' } })).rejects.toThrow('disk unavailable');
+  });
+  it('never reads an enrolled private result or prepares a private run', async () => {
+    const reads = [];
+    const delivery = createCompanionDelivery({
+      folderGuard: { check: async () => ({ ok: false }) }, canReadProject: async () => false,
+      readSessionMetadata: async () => ({ openchamber: { companion: { projectId: 'synthetic-private', taskId: 'companion:12345678' } } }),
+      readLastReply: async () => { reads.push('reply'); return 'Synthetic private text'; },
+      persistEnrollment: async () => { reads.push('enroll'); },
+    });
+    expect(await delivery.inspectResult('synthetic')).toEqual({ kind: 'quiet' });
+    await expect(delivery.prepareRun({ sessionID: 'synthetic', directory: '/synthetic/ZDR', task: { id: 'companion:12345678' } })).rejects.toThrow();
+    expect(reads).toEqual([]);
   });
 });

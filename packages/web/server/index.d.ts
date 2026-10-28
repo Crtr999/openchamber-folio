@@ -44,7 +44,8 @@ export interface StartWebUiServerOptions {
   aiTaskConnection?: AiTaskConnection;
   /** Private in-process read adapter. Never receives or returns credentials. */
   personalAwareness?: {
-    readSources: (input: { offset: number; accounts: string[] }) => Promise<Array<{
+    readConnections: () => Promise<{ notion: boolean; calendar: boolean; mailAccounts: string[] }>;
+    readSources: (input: { offset: number; accounts: string[]; sources: string[] }) => Promise<Array<{
       source: 'notion' | 'calendar' | 'outlook';
       status: 'ready' | 'partial' | 'error' | 'needs-connection';
       records: Array<{ id: string; title: string; url?: string; text: string; truncated: boolean }>;

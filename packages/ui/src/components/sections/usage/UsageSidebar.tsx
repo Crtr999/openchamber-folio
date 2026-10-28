@@ -28,7 +28,7 @@ const getUsagePercent = (usage: { windows?: Record<string, { usedPercent: number
 
 export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
   const { t } = useI18n();
-  const results = useQuotaStore((state) => state.results);
+  const results = useQuotaStore((state) => state.currentResults);
   const selectedProviderId = useQuotaStore((state) => state.selectedProviderId);
   const setSelectedProvider = useQuotaStore((state) => state.setSelectedProvider);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
@@ -100,7 +100,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
           const isSelected = provider.id === selectedProviderId;
           const configured = result?.configured;
 
-          const statusStyle = !configured
+          const statusStyle = !configured || percent === null
             ? { backgroundColor: 'var(--surface-muted-foreground)', opacity: 0.4 }
             : tone === 'critical'
               ? { backgroundColor: 'var(--status-error)' }

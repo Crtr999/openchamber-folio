@@ -76,6 +76,8 @@ import { MobileFullscreenSurface } from './MobileFullscreenSurface';
 import { UsageStatsView } from '@/components/views/usage/UsageStatsView';
 import { MobileWorkspaceDrawer, type MobileWorkspaceTab } from './MobileWorkspaceDrawer';
 import { DedicatedMobileAppProvider, type MobileAppActions } from './mobileAppContext';
+import { ZdrLockCurtain } from '@/components/layout/ZdrLockCurtain';
+import { useZdrAutoLock } from '@/hooks/useZdrAutoLock';
 import { autoConnectLastInstance, getAutoConnectTargetLabel, logMobileConnectEvent, reprobeActiveConnection, type AutoConnectOutcome } from './mobileConnections';
 import { isCapacitorMobileApp, useNativeAndroidBackButton, useNativeMobileChrome, useNativeMobileLifecycle } from './mobileNativeChrome';
 import { reconnectAppForTransportSwitch, resetAppForRuntimeEndpointChange } from './runtimeEndpointReset';
@@ -703,6 +705,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
 };
 
 function MobileAppContent({ apis }: MobileAppProps) {
+  useZdrAutoLock();
   const isolatedSpacesEnabled = useUIStore((state) => state.isolatedSpacesEnabled);
   const { t } = useI18n();
   const initializeApp = useConfigStore((state) => state.initializeApp);
@@ -1394,6 +1397,7 @@ function MobileAppContent({ apis }: MobileAppProps) {
                 switchRuntimeEndpoint({ apiBaseUrl: '', clientToken: null, runtimeKey: MOBILE_DISCONNECTED_RUNTIME_KEY });
                 setConnectionEpoch((value) => value + 1);
               }} />
+              <ZdrLockCurtain />
               <AppLinkConfirmDialog />
               <SharedTrustConfirmDialog />
               {isolatedSpacesEnabled ? <><SpaceAccessDialog /><SpaceActionsSheet /><SpaceDeleteDialog /><SpaceSetupOutputDialog /></> : null}

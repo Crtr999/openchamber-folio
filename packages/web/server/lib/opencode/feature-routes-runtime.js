@@ -19,7 +19,7 @@ import { registerAgentMemoryRoutes } from '../agent-memory/routes.js';
 import { registerSessionKnowledgeRoutes } from '../session-knowledge/routes.js';
 import { registerDirectorRoutes } from '../director/routes.js';
 import { registerZdrLockRoutes } from '../zdr-lock/routes.js';
-import { createZdrLock } from '../zdr-lock/runtime.js';
+import { createFolderGuard } from '../commitments/zdr-guard.js';
 import { resolveDirectoryAllowedProviders } from '../session-memory-capture/providers.js';
 import { registerHealthRoutes } from '../health/routes.js';
 import { registerComputerRoutes } from '../computer/routes.js';
@@ -146,6 +146,8 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       isAgentMemoryEnabled,
       resolveMemoryProjectId,
       listConfiguredProjectPaths,
+      zdrLock,
+      folderPrivacy,
       sessionKnowledgeRuntime,
       scheduledTasksRuntime,
       scheduledTaskService,
@@ -161,6 +163,11 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       routingRuntime,
       openchamberVersion,
     } = routeDependencies;
+
+    const privateFolderGuard = createFolderGuard({ resolveAllowedProviders: resolveDirectoryAllowedProviders, listProjectPaths: listConfiguredProjectPaths });
+    registerZdrLockRoutes(app, { lock: zdrLock, privacy: folderPrivacy, listProjectPaths: listConfiguredProjectPaths,
+      resolveAllowedProviders: resolveDirectoryAllowedProviders, path,
+    });
 
     registerSettingsUtilityRoutes(app, {
       readCustomThemesFromDisk,
@@ -223,7 +230,9 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       writeSseEvent,
     });
 
-    registerCompanionRoutes(app, { scheduledTaskService, projectConfigRuntime, companionCoordinator });
+    registerCompanionRoutes(app, { scheduledTaskService, projectConfigRuntime, companionCoordinator,
+      folderGuard: privateFolderGuard,
+    });
 
 
     registerOpenChamberSessionRoutes(app, {
@@ -374,12 +383,6 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     registerProjectSetupRoutes(app, { projectConfigRuntime });
     registerAgentMemoryRoutes(app, { agentMemoryRuntime, isAgentMemoryEnabled });
     registerSessionKnowledgeRoutes(app, { sessionKnowledgeRuntime });
-    registerZdrLockRoutes(app, {
-      lock: createZdrLock({ file: path.join(openchamberDataDir, 'zdr-lock.json') }),
-      listProjectPaths: listConfiguredProjectPaths,
-      resolveAllowedProviders: resolveDirectoryAllowedProviders,
-      path,
-    });
     registerDirectorRoutes(app, {
       fsPromises,
       path,

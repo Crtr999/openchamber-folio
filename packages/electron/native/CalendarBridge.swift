@@ -107,6 +107,10 @@ func fetchReminders(_ predicate: NSPredicate) -> [EKReminder] {
 do {
     let input = FileHandle.standardInput.readDataToEndOfFile()
     let request = try JSONDecoder().decode(Request.self, from: input)
+    if request.op == "status" {
+        emit(Result(access: canRead() ? "connected" : "not-connected"))
+        exit(0)
+    }
     if request.op == "connect" && !canRead() { waitForAccess(.event) }
     if request.op == "reminders-connect" && !canReadReminders() { waitForAccess(.reminder) }
     if request.op == "reminders-read" || request.op == "reminders-connect" || request.op == "reminder-complete" || request.op == "reminder-save" {

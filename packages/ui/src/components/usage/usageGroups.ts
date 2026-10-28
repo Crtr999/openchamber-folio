@@ -33,7 +33,7 @@ export type UsageProviderGroup = {
  */
 export const useUsageProviderGroups = (): UsageProviderGroup[] => {
   const { t } = useI18n();
-  const quotaResults = useQuotaStore((state) => state.results);
+  const quotaResults = useQuotaStore((state) => state.currentResults);
   const refreshErrors = useQuotaStore((state) => state.refreshErrors);
   const dropdownProviderIds = useQuotaStore((state) => state.dropdownProviderIds);
   const selectedQuotaModels = useQuotaStore((state) => state.selectedModels);

@@ -1,5 +1,7 @@
+import { awarenessI18n } from './awareness.i18n';
 export const companionI18n = {
 "zh-TW": {
+...awarenessI18n['zh-TW'],
 "companion.inbox": "為你準備的更新",
 "companion.empty": "新想法和更新會顯示在這裡。",
 "companion.unread": "未讀",
@@ -24,6 +26,7 @@ export const companionI18n = {
 "companion.save": "儲存追蹤",
 },
 "pt-BR": {
+...awarenessI18n['pt-BR'],
 "companion.inbox": "Novidades para você",
 "companion.empty": "Novas ideias e atualizações aparecerão aqui.",
 "companion.unread": "Não lido",
@@ -48,6 +51,7 @@ export const companionI18n = {
 "companion.save": "Salvar acompanhamento",
 },
 "de": {
+...awarenessI18n.de,
 "companion.inbox": "Neuigkeiten für dich",
 "companion.empty": "Neue Ideen und Meldungen erscheinen hier.",
 "companion.unread": "Ungelesen",
@@ -72,6 +76,7 @@ export const companionI18n = {
 "companion.save": "Nachverfolgung speichern",
 },
 "zh-CN": {
+...awarenessI18n['zh-CN'],
 "companion.inbox": "为你准备的更新",
 "companion.empty": "新想法和更新会显示在这里。",
 "companion.unread": "未读",
@@ -96,6 +101,7 @@ export const companionI18n = {
 "companion.save": "保存跟进",
 },
 "es": {
+...awarenessI18n.es,
 "companion.inbox": "Novedades para ti",
 "companion.empty": "Aquí aparecerán nuevas ideas y novedades.",
 "companion.unread": "Sin leer",
@@ -120,6 +126,7 @@ export const companionI18n = {
 "companion.save": "Guardar seguimiento",
 },
 "tr": {
+...awarenessI18n.tr,
 "companion.inbox": "Sizin için güncellemeler",
 "companion.empty": "Yeni fikirler ve güncellemeler burada görünür.",
 "companion.unread": "Okunmadı",
@@ -144,6 +151,7 @@ export const companionI18n = {
 "companion.save": "Takibi kaydet",
 },
 "en": {
+...awarenessI18n.en,
 "companion.inbox": "Updates for you",
 "companion.empty": "New ideas and updates will appear here.",
 "companion.unread": "Unread",
@@ -168,6 +176,7 @@ export const companionI18n = {
 "companion.save": "Save follow-up",
 },
 "uk": {
+...awarenessI18n.uk,
 "companion.inbox": "Оновлення для вас",
 "companion.empty": "Тут з’являтимуться нові ідеї та оновлення.",
 "companion.unread": "Непрочитане",
@@ -192,6 +201,7 @@ export const companionI18n = {
 "companion.save": "Зберегти перевірку",
 },
 "fr": {
+...awarenessI18n.fr,
 "companion.inbox": "Des nouvelles pour vous",
 "companion.empty": "Les nouvelles idées et mises à jour apparaîtront ici.",
 "companion.unread": "Non lu",
@@ -216,6 +226,7 @@ export const companionI18n = {
 "companion.save": "Enregistrer le suivi",
 },
 "nl": {
+...awarenessI18n.nl,
 "companion.inbox": "Updates voor jou",
 "companion.empty": "Nieuwe ideeën en updates verschijnen hier.",
 "companion.unread": "Ongelezen",
@@ -240,6 +251,7 @@ export const companionI18n = {
 "companion.save": "Opvolging opslaan",
 },
 "pl": {
+...awarenessI18n.pl,
 "companion.inbox": "Nowości dla Ciebie",
 "companion.empty": "Tutaj pojawią się nowe pomysły i aktualizacje.",
 "companion.unread": "Nieprzeczytane",
@@ -264,6 +276,7 @@ export const companionI18n = {
 "companion.save": "Zapisz działanie",
 },
 "ko": {
+...awarenessI18n.ko,
 "companion.inbox": "나를 위한 업데이트",
 "companion.empty": "새로운 아이디어와 업데이트가 여기에 표시됩니다.",
 "companion.unread": "읽지 않음",
@@ -288,6 +301,7 @@ export const companionI18n = {
 "companion.save": "후속 확인 저장",
 },
 "ja": {
+...awarenessI18n.ja,
 "companion.inbox": "あなたへの更新",
 "companion.empty": "新しいアイデアや更新がここに表示されます。",
 "companion.unread": "未読",

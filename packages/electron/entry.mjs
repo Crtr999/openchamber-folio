@@ -43,6 +43,9 @@ if (userDataOverride) {
 }
 app.setAppUserModelId(APP_USER_MODEL_ID);
 app.commandLine.appendSwitch('proxy-bypass-list', '<-loopback>');
+// Without a cap each browser partition's HTTP cache grew past a gigabyte. The
+// cache is only a speed-up, so bound it at 256 MB per cache.
+app.commandLine.appendSwitch('disk-cache-size', String(256 * 1024 * 1024));
 // Lift Chromium's per-host cap only for bundled UI. Applying this to Vite HMR
 // lets the renderer request most of the module graph at once, overwhelming the
 // dev server's transform pipeline and leaving the HTML splash visible for up

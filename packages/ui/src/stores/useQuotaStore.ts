@@ -7,6 +7,7 @@ import type { DesktopSettings } from '@/lib/desktop';
 import { getDefaultModels } from '@/lib/quota/model-families';
 import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
 import { fetchQuota } from '@/lib/quota/fetchQuota';
+import { currentQuotaReadings, nextQuotaResetAt } from '@/lib/quota/currentReadings';
 import { getRuntimeKey, isTransientRuntimeKey } from '@/lib/runtime-switch';
 import { useConfigStore } from '@/stores/useConfigStore';
 
@@ -19,6 +20,22 @@ let inFlightRuntimeLoad: Promise<void> | null = null;
 const quotaRequests = new Map<QuotaProviderId, { controller: AbortController; promise: Promise<boolean> }>();
 let quotaAutoRefreshConsumers = 0;
 let quotaAutoRefreshInterval: number | null = null;
+let quotaExpiryTimer: ReturnType<typeof setTimeout> | null = null;
+
+const scheduleQuotaExpiry = () => {
+  if (quotaExpiryTimer !== null) clearTimeout(quotaExpiryTimer);
+  quotaExpiryTimer = null;
+  const now = Date.now();
+  const next = nextQuotaResetAt(useQuotaStore.getState().results, now);
+  if (next === null) return;
+  const generation = quotaGeneration;
+  quotaExpiryTimer = setTimeout(() => {
+    if (generation !== quotaGeneration) return;
+    quotaExpiryTimer = null;
+    useQuotaStore.setState(state => ({ currentResults: currentQuotaReadings(state.results, Date.now()) }));
+    scheduleQuotaExpiry();
+  }, Math.min(next - now, 2_147_483_647));
+};
 
 interface QuotaSettingsState {
   displayMode: 'usage' | 'remaining';
@@ -29,6 +46,8 @@ interface QuotaSettingsState {
 
 interface QuotaStore extends QuotaSettingsState {
   results: ProviderResult[];
+  /** Current-window readings. Raw authoritative samples remain in `results`. */
+  currentResults: ProviderResult[];
   /** Instance whose quotas `results` describes, or `null` when nothing is loaded. */
   loadedRuntimeKey: string | null;
   selectedProviderId: QuotaProviderId | null;
@@ -109,6 +128,7 @@ export const useQuotaStore = create<QuotaStore>()(
   devtools(
     (set, get) => ({
       results: [],
+      currentResults: [],
       loadedRuntimeKey: null,
       selectedProviderId: null,
       isLoading: false,
@@ -167,29 +187,48 @@ export const useQuotaStore = create<QuotaStore>()(
               const message = result.error || 'Failed to fetch quota';
               set(state => {
                 const previous = state.results.find(entry => entry.providerId === providerId);
-                const results = previous?.configured
+                const hasPreviousSample = previous?.configured && previous.usage;
+                const results = hasPreviousSample
                   ? state.results
                   : [...state.results.filter(entry => entry.providerId !== providerId), result];
-                return { results, refreshErrors: { ...state.refreshErrors, [providerId]: message }, error: message };
+                return {
+                  results,
+                  currentResults: currentQuotaReadings(results, Date.now()),
+                  lastUpdated: !hasPreviousSample && result.usage
+                    ? Math.max(state.lastUpdated ?? 0, result.fetchedAt) : state.lastUpdated,
+                  refreshErrors: { ...state.refreshErrors, [providerId]: message }, error: message,
+                };
               });
               return true;
             }
             set((state) => {
+              const previous = state.results.find(entry => entry.providerId === providerId);
+              // A successful response can still be an older server-side cache
+              // sample. It is not evidence that the current window reset.
+              if (previous?.usage && result.usage && result.fetchedAt < previous.fetchedAt) return state;
               const refreshErrors = { ...state.refreshErrors };
               delete refreshErrors[providerId];
               const results = state.results.filter(entry => entry.providerId !== providerId);
               results.push(result);
-              return { results, refreshErrors, error: Object.values(refreshErrors)[0] ?? null, lastUpdated: Date.now() };
+              return {
+                results, currentResults: currentQuotaReadings(results, Date.now()), refreshErrors,
+                error: Object.values(refreshErrors)[0] ?? null,
+                lastUpdated: result.usage ? Math.max(state.lastUpdated ?? 0, result.fetchedAt) : state.lastUpdated,
+              };
             });
             return true;
           } catch (error) {
             if (generation !== quotaGeneration) return false;
             const message = error instanceof Error ? error.message : 'Failed to fetch quota';
-            set(state => ({ refreshErrors: { ...state.refreshErrors, [providerId]: message }, error: message }));
+            set(state => ({
+              currentResults: currentQuotaReadings(state.results, Date.now()),
+              refreshErrors: { ...state.refreshErrors, [providerId]: message }, error: message,
+            }));
             return false;
           } finally {
             if (quotaRequests.get(providerId)?.controller === controller) quotaRequests.delete(providerId);
             if (generation === quotaGeneration) {
+              scheduleQuotaExpiry();
               set((state) => ({
                 isFetchingProvider: { ...state.isFetchingProvider, [providerId]: false },
                 isLoading: quotaRequests.size > 0,
@@ -231,6 +270,8 @@ export const useQuotaStore = create<QuotaStore>()(
 
       resetForRuntimeSwitch: () => {
         quotaGeneration += 1;
+        if (quotaExpiryTimer !== null) clearTimeout(quotaExpiryTimer);
+        quotaExpiryTimer = null;
         for (const request of quotaRequests.values()) request.controller.abort();
         quotaRequests.clear();
         inFlightRuntimeLoad = null;
@@ -241,6 +282,7 @@ export const useQuotaStore = create<QuotaStore>()(
           // over would query the new instance through the old one's choices.
           ...defaultQuotaSettings(),
           results: [],
+          currentResults: [],
           loadedRuntimeKey: null,
           selectedProviderId: null,
           isLoading: false,

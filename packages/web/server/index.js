@@ -94,9 +94,13 @@ import { createSessionKnowledgeRuntime } from './lib/session-knowledge/runtime.j
 import { createScheduledTasksRuntime } from './lib/scheduled-tasks/runtime.js';
 import { createCompanionDelivery } from './lib/companion/delivery.js';
 import { createPersonalAwareness, PERSONAL_AWARENESS_ID } from './lib/companion/personal-awareness.js';
+import { registerAwarenessEnrollment } from './lib/companion/awareness-enrollment.js';
 import { createCompanionCoordinator } from './lib/companion/coordinator.js';
 import { createCommitmentsStore } from './lib/commitments/store.js';
 import { createFolderGuard } from './lib/commitments/zdr-guard.js';
+import { createZdrLock } from './lib/zdr-lock/runtime.js';
+import { createZdrPrivacy } from './lib/zdr-lock/privacy.js';
+import { registerZdrAccessGuard } from './lib/zdr-lock/routes.js';
 import { createCommitmentCapture } from './lib/commitments/capture-runtime.js';
 import { createCommitmentChecks } from './lib/commitments/check-runtime.js';
 import { createCommitmentActions } from './lib/commitments/actions.js';
@@ -509,6 +513,7 @@ const rejectWebSocketUpgrade = (...args) => requestSecurityRuntime.rejectWebSock
 const isRequestOriginAllowed = (...args) => requestSecurityRuntime.isRequestOriginAllowed(...args);
 
 const notificationEmitterRuntime = createNotificationEmitterRuntime({
+  filterEvent: (payload, options) => folderPrivacy.filterEvent(payload, options),
   process,
   getDesktopNotifyEnabled: () => ENV_DESKTOP_NOTIFY,
   desktopNotifyPrefix: DESKTOP_NOTIFY_PREFIX,
@@ -520,6 +525,7 @@ const notificationEmitterRuntime = createNotificationEmitterRuntime({
 const writeSseEvent = (...args) => notificationEmitterRuntime.writeSseEvent(...args);
 const emitDesktopNotification = (...args) => notificationEmitterRuntime.emitDesktopNotification(...args);
 const broadcastGlobalUiEvent = createGlobalUiEventBroadcaster({
+  filterEvent: (payload, options) => folderPrivacy.filterEvent(payload, options),
   sseClients: uiNotificationClients,
   wsClients: uiNotificationWsClients,
   writeSseEvent,
@@ -530,6 +536,7 @@ const broadcastUiNotification = (...args) => notificationEmitterRuntime.broadcas
 // control stream, not on OpenCode's event proxy. One broadcaster so every owner
 // reaches the same clients.
 const broadcastOpenChamberUiEvent = createGlobalUiEventBroadcaster({
+  filterEvent: (payload, options) => folderPrivacy.filterEvent(payload, options),
   sseClients: uiOpenChamberEventClients,
   wsClients: uiNotificationWsClients,
   writeSseEvent,
@@ -904,6 +911,11 @@ let personalAwareness = null;
 let commitmentChecks = null;
 let commitmentCapture = null;
 const companionDelivery = createCompanionDelivery({
+  folderGuard: { check: (directory) => commitmentGuard.check(directory) },
+  canReadProject: async (projectID) => {
+    const project = (await scheduledTaskService.listProjects()).find((item) => item.id === projectID);
+    return Boolean(project && (await commitmentGuard.check(project.path)).ok);
+  },
   readPersonalContext: (input) => input.task.id === PERSONAL_AWARENESS_ID
     ? personalAwareness.prepare(input) : '',
   onPersonalCompletion: (sessionID, enrollment) => enrollment.taskId === PERSONAL_AWARENESS_ID
@@ -1400,7 +1412,7 @@ const tunnelWiringRuntime = createTunnelWiringRuntime({
 const startupPipelineRuntime = createStartupPipelineRuntime({
   createTerminalRuntime,
   createDictationRuntime,
-  createMessageStreamWsRuntime,
+  createMessageStreamWsRuntime: (options) => createMessageStreamWsRuntime({ ...options, privacy: folderPrivacy }),
   createServerStartupRuntime,
 });
 
@@ -1615,7 +1627,7 @@ const resolveMemoryProjectId = createMemoryProjectResolver({
 
 // The Director works in configured folders and in the chats root, which is the General friend's folder.
 const listConfiguredProjectPaths = async () => {
-  const settings = await readSettingsFromDiskMigrated().catch(() => null);
+  const settings = await readSettingsFromDiskMigrated();
   return [
     ...sanitizeProjects(settings?.projects || []).map((project) => project.path),
     ...new Set([path.join(OPENCHAMBER_USER_CONFIG_ROOT, 'chats'), OPENCHAMBER_CHATS_DIR]),
@@ -1651,6 +1663,7 @@ const scheduledTaskService = createScheduledTaskService({
   scheduledTasksRuntime,
 });
 companionCoordinator = createCompanionCoordinator({
+  folderGuard: { check: (directory) => commitmentGuard.check(directory) },
   projectConfigRuntime, scheduledTaskService,
   inspectResult: companionDelivery.inspectResult,
   readMetadata: readStoredSessionMetadata,
@@ -1666,8 +1679,15 @@ const commitmentStore = createCommitmentsStore({
   filePath: path.join(OPENCHAMBER_DATA_DIR, 'commitments.json'),
 });
 const commitmentGuard = createFolderGuard({
+  listProjectPaths: listConfiguredProjectPaths,
   resolveAllowedProviders: (directory) => resolveDirectoryAllowedProviders(directory),
   readExcludedDirectories: async () => (await commitmentStore.read()).settings.excludedDirectories,
+});
+const zdrLock = createZdrLock({ file: path.join(OPENCHAMBER_DATA_DIR, 'zdr-lock.json') });
+const folderPrivacy = createZdrPrivacy({ lock: zdrLock, folderGuard: commitmentGuard,
+  listProjectPaths: listConfiguredProjectPaths,
+  listProjects: () => scheduledTaskService.listProjects(), realpath: (directory) => fsPromises.realpath(directory),
+  resolveSessionDirectory: (id) => openChamberControlService.resolveSessionDirectory(id),
 });
 const commitmentActions = createCommitmentActions({
   store: commitmentStore, guard: commitmentGuard,
@@ -1889,7 +1909,7 @@ const waitForPortRelease = (...args) => openCodeLifecycleRuntime.waitForPortRele
 const fetchAgentsSnapshot = (...args) => serverUtilsRuntime.fetchAgentsSnapshot(...args);
 const fetchProvidersSnapshot = (...args) => serverUtilsRuntime.fetchProvidersSnapshot(...args);
 const fetchModelsSnapshot = (...args) => serverUtilsRuntime.fetchModelsSnapshot(...args);
-const setupProxy = (...args) => serverUtilsRuntime.setupProxy(...args);
+const setupProxy = (app) => serverUtilsRuntime.setupProxy(app, { privacy: folderPrivacy });
 let aiTaskRuntime = null;
 let teamRuntime = null;
 let teamCheckInterval = null;
@@ -2230,6 +2250,10 @@ async function main(options = {}) {
   let tunnelRuntimeContextHolder = null;
 
   const bootstrapResult = bootstrapRuntime.setupBaseRoutes(app, {
+    privacy: folderPrivacy,
+    registerPrivacyGuard: (target) => registerZdrAccessGuard(target, { lock: zdrLock, path, privacy: folderPrivacy, folderGuard: commitmentGuard,
+      listProjects: () => scheduledTaskService.listProjects(), resolveSessionDirectory: (id) => openChamberControlService.resolveSessionDirectory(id),
+    }),
     process,
     openchamberVersion: OPENCHAMBER_VERSION,
     runtimeName: process.env.OPENCHAMBER_RUNTIME || 'web',
@@ -2450,6 +2474,11 @@ async function main(options = {}) {
     logger: console,
   });
 
+  registerAwarenessEnrollment(app, {
+    store: commitmentStore, guard: commitmentGuard, scheduledTaskService,
+    getClient: getSmallModelClient, resolveAllowedProviders: resolveDirectoryAllowedProviders,
+    readConnections: options.personalAwareness?.readConnections, isBlocked: isEnterpriseMode,
+  });
   await featureRoutesRuntime.registerRoutes(app, {
     crypto,
     fs,
@@ -2513,6 +2542,8 @@ async function main(options = {}) {
     isAgentMemoryEnabled,
     resolveMemoryProjectId,
     listConfiguredProjectPaths,
+    zdrLock,
+    folderPrivacy,
     sessionKnowledgeRuntime,
     scheduledTasksRuntime,
     scheduledTaskService,
@@ -2594,6 +2625,7 @@ async function main(options = {}) {
   messageStreamRuntime = startupPipelineResult.messageStreamRuntime;
 
   personalAwareness = createPersonalAwareness({
+    listProjectPaths: listConfiguredProjectPaths,
     store: commitmentStore, guard: commitmentGuard, getClient: getSmallModelClient,
     resolveAllowedProviders: resolveDirectoryAllowedProviders,
     readMetadata: readStoredSessionMetadata,

@@ -5,8 +5,9 @@ import { isElectronShell, isDesktopLocalOriginActive } from '@/lib/desktop';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 import { buildWebsiteAccountScript, buildWebsiteChatScript, buildWebsiteImageScript, websiteImageResultSchema, websiteAccountActionSchema, websiteChatSnapshotSchema, websiteChatActionSchema, waitForWebsiteSnapshot } from '@/lib/website-chat/websiteChat';
+import { validateWebsiteModelStart, websiteModelContinuationSchema, websiteModelTurn } from '@/lib/website-chat/modelJob';
 
-const jobSchema = z.object({ id: z.string().uuid(), lease: z.string().uuid(), provider: z.enum(['venice', 'gemini']), kind: z.enum(['chat', 'usage', 'models']).default('chat'), prompt: z.string().max(300_000), model: z.string().max(120).nullish(), image: z.boolean().default(false) });
+const jobSchema = z.object({ id: z.string().uuid(), lease: z.string().uuid(), provider: z.enum(['venice', 'gemini']), kind: z.enum(['chat', 'usage', 'models']).default('chat'), prompt: z.string().max(300_000), model: z.string().max(120).nullish(), image: z.boolean().default(false), continuation: websiteModelContinuationSchema.optional() });
 type Job = z.infer<typeof jobSchema>;
 const normalize = (text: string) => text.replace(/\s+/g, ' ').trim();
 const wait = (signal: AbortSignal, ms: number) => new Promise<void>((resolve, reject) => {
@@ -79,7 +80,9 @@ function WebsiteModelJob({ job, signal, finish, userFocus }: { job: Job; signal:
         const ensureActive = async () => { if (Date.now() - checkAt >= 2000) await check(); };
         const start = await waitReady(read, ensureActive, deadline, 'chat');
         if (!start || !alive || signal.aborted) throw new Error('Website account connection cancelled.');
-        if (start.busy || start.messages.length || start.draft.trim()) throw new Error('The website did not open a fresh chat. Nothing was sent; check its account connection.');
+        if (job.provider === 'gemini') await validateWebsiteModelStart(start, job.continuation);
+        else if (start.busy || start.messages.length || start.draft.trim()) throw new Error('The website did not open a fresh chat. Nothing was sent; check its account connection.');
+        if (!alive || signal.aborted) throw new Error('Website account connection cancelled.');
         // Venice keeps its last pick between visits, so a text chat must not inherit an image model from an earlier job.
         let pick: { name: string; tab?: 'text' | 'image' } | null = job.model ? { name: job.model, tab: job.provider === 'venice' ? (job.image ? 'image' : 'text') : undefined } : null;
         if (!pick && job.provider === 'venice') {
@@ -103,12 +106,15 @@ function WebsiteModelJob({ job, signal, finish, userFocus }: { job: Job; signal:
         // These outcomes mean nothing was submitted (a route change or a briefly
         // missing composer), so re-reading the page and sending once more cannot duplicate a turn.
         for (let attempt = 0; ; attempt += 1) {
+          if (!alive || signal.aborted) throw new Error('Website account connection cancelled.');
+          await check();
+          if (!alive || signal.aborted) throw new Error('Website account connection cancelled.');
           try {
             sent = websiteChatActionSchema.parse(await webview.executeJavaScript(buildWebsiteChatScript(job.provider, { kind: 'send', text: job.prompt, url: target.url, expectedDraft: target.draft }), true));
           } finally {
             if (document.activeElement === webview && focused instanceof HTMLElement && focused.isConnected) focused.focus({ preventScroll: true });
           }
-          if (sent.kind === 'submitted' || sent.kind === 'busy' || attempt >= 2) break;
+          if (job.provider === 'gemini' || sent.kind === 'submitted' || sent.kind === 'busy' || attempt >= 2) break;
           phase = 'loading';
           await wait(signal, 1500);
           const again = await waitReady(read, ensureActive, Math.min(deadline, Date.now() + 20_000), 'account');
@@ -144,16 +150,21 @@ function WebsiteModelJob({ job, signal, finish, userFocus }: { job: Job; signal:
         while (!job.image && alive && !signal.aborted && Date.now() < deadline) {
           await ensureActive();
           const snapshot = await waitForWebsiteSnapshot({ read, ensureActive, wait: () => { phase = 'waiting-for-page'; return wait(signal, 500); } });
-          const users = snapshot.messages.filter(row => row.role === 'user');
-          if (users.length > 0 || snapshot.userCount > 0 || users.some(row => normalize(row.text).endsWith(normalize(job.prompt)))) acknowledged = true;
+          const turn = websiteModelTurn(snapshot, start);
+          if (job.provider === 'gemini') acknowledged = turn.acknowledged;
+          else {
+            const users = snapshot.messages.filter(row => row.role === 'user');
+            if (users.length > 0 || snapshot.userCount > 0 || users.some(row => normalize(row.text).endsWith(normalize(job.prompt)))) acknowledged = true;
+          }
           phase = acknowledged ? 'waiting-for-answer' : 'waiting-for-message';
-          const answer = snapshot.messages.at(-1);
+          const answer = job.provider === 'gemini' ? turn.answer : snapshot.messages.at(-1);
           if (acknowledged && answer?.role === 'assistant' && answer.text.trim()) {
             if (lastText !== answer.text) { lastText = answer.text; stableSince = Date.now(); }
             // Hand the growing reply to the native chat as the website writes it.
             if (answer.text !== pushed && answer.text.length > pushed.length) { pushed = answer.text; await check(answer.text); }
             if (!snapshot.busy && Date.now() - stableSince >= (job.provider === 'venice' ? 4000 : 3000)) {
-              const response = await post('result', { text: answer.text });
+              const page = job.provider === 'gemini' && /^https:\/\/gemini\.google\.com\/app\/[^/?#]+$/.test(snapshot.url) ? { url: snapshot.url, userCount: snapshot.userCount } : undefined;
+              const response = await post('result', { text: answer.text, page });
               if (!response.ok) throw new Error('Open Carter could not receive the website reply.');
               completed = true; break;
             }
@@ -182,7 +193,7 @@ function WebsiteModelJob({ job, signal, finish, userFocus }: { job: Job; signal:
     void run();
     return () => { alive = false; };
   }, [webview, job, signal, finish, userFocus]);
-  const src = job.provider === 'venice' ? 'https://venice.ai/chat/classic' : job.kind === 'usage' ? 'https://gemini.google.com/usage' : 'https://gemini.google.com/app';
+  const src = job.provider === 'venice' ? 'https://venice.ai/chat/classic' : job.kind === 'usage' ? 'https://gemini.google.com/usage' : job.continuation?.url ?? 'https://gemini.google.com/app';
   return <webview tabIndex={-1} ref={attachWebview} src={src} partition={`persist:open-carter-${job.provider}`} webpreferences="backgroundThrottling=no" style={{ width: '1200px', height: '900px', border: 'none' }} />;
 }
 

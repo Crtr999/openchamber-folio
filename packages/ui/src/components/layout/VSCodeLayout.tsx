@@ -712,7 +712,7 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
   const { totalCost: sessionTotalCost } = useSubagentCostRollup(currentSessionId ?? null);
   const currentSessionMessages = useSessionMessages(currentSessionId ?? '');
   const currentSessionMessagesResolved = useSessionMessagesResolved(currentSessionId ?? '');
-  const quotaResults = useQuotaStore((state) => state.results);
+  const quotaResults = useQuotaStore((state) => state.currentResults);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
   const isQuotaLoading = useQuotaStore((state) => state.isLoading);
   const quotaLastUpdated = useQuotaStore((state) => state.lastUpdated);

@@ -73,3 +73,29 @@ test('a model failure comes back as an error the composer can fall back from', a
     expect(res.status).toBe(404);
   } finally { await h.close(); }
 });
+
+test.each([
+  ['openai', 'gpt-6.1-sol'],
+  ['anthropic', 'claude-sonnet'],
+  ['custom-provider', 'custom-model'],
+])('keeps the composer selection for %s in each configured folder', async (providerID, modelID) => {
+  const folders = await Promise.all([start({}), start({})]);
+  try {
+    for (const h of folders) {
+      const res = await h.post({
+        prompt: 'Improve this draft', directory: h.dir,
+        preferredProviderID: providerID, preferredModelID: modelID,
+      });
+      expect(res.status).toBe(200);
+      expect(h.calls).toHaveLength(1);
+      expect(h.calls[0]).toMatchObject({
+        directory: h.dir,
+        preferredProviderID: providerID,
+        preferredModelID: modelID,
+        restrictToPreferredProvider: true,
+      });
+    }
+  } finally {
+    await Promise.all(folders.map((h) => h.close()));
+  }
+});

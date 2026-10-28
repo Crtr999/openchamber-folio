@@ -41,6 +41,19 @@ Do not put high-frequency local component state here just because it is convenie
 
 There are multiple store categories in this directory.
 
+`useZdrLockStore` starts with unknown lock state. A failed state read revokes
+the unlock and returns to unknown; a runtime switch clears the previous state.
+Late reads and PIN responses cannot undo a lock or switch. Desktop and mobile
+show an opaque curtain while state is unknown, and their session lists omit
+guarded paths. Verified PIN responses install a process-local server grant in
+runtime HTTP authentication only after the store accepts the response's owner.
+Expiry closes the curtain and Lock now revokes the grant. A prior state read
+cannot undo a newer successful unlock. Home excludes guarded folders regardless
+of PIN state, before friend catalog requests or session collection.
+The server's addressed-request checks, global transport redaction and explicit private SSE scope are
+documented in `packages/web/server/lib/zdr-lock/DOCUMENTATION.md`. No files are
+encrypted. VS Code has no equivalent backend and exposes no PIN controls.
+
 ### Catalog refresh
 
 `catalogRefresh.ts` re-reads the lists Settings and the composer show — agents,
@@ -72,11 +85,21 @@ These are the most performance-sensitive.
 
 These stores act like centralized keyed caches. UI should consume narrow slices from them instead of re-fetching the same data in multiple places.
 
-`useQuotaStore` keeps the last authoritative provider results separately from
-`refreshErrors`. Transport failures and configured-provider errors preserve the
+`useQuotaStore` keeps raw authoritative provider `results`, derived
+`currentResults`, and `refreshErrors` separately. All quota displays consume
+`currentResults`. Transport failures and configured-provider errors preserve the
 last usage sample and its timestamp. An explicit unconfigured response replaces
-old configuration; a first-load transport failure leaves it unknown. Concurrent
-refreshes share one request per provider. Runtime reset aborts those requests,
+old configuration. Older cached provider samples cannot overwrite newer results
+or clear refresh errors. `lastUpdated` records the latest actual sample timestamp,
+not the time a cache or failed refresh answered. A new-period provider-reported
+zero takes effect immediately. At `resetAt`, one store-owned timer clears expired
+percentages and value labels from current readings, including model windows,
+without changing raw samples or waiting for another fetch. Reset cancels the timer.
+An elapsed reset timestamp never implies zero usage. Subscription rings
+keep unknown rate windows in place with a dashed track rather than substituting
+the shorter window's reading for the weekly one. A first-load transport failure
+leaves configuration unknown. Concurrent refreshes share one request per provider.
+Runtime reset aborts those requests,
 and generation checks prevent their completions from changing the next runtime.
 `lib/quota/fetchQuota.ts` validates response payloads and bounds the complete
 request, including JSON body delivery. Compact usage cards and Settings display

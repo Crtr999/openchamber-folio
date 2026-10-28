@@ -15,19 +15,24 @@ const isQuiet = (time, settings) => {
 // cross-process write lock. The coordinator never owns conversation messages.
 export const createCompanionCoordinator = ({
   projectConfigRuntime, scheduledTaskService, inspectResult, readMetadata,
-  readLastReply, isRootSession, notifyUpdate, now = Date.now, logger = console,
+  readLastReply, isRootSession, notifyUpdate, folderGuard, now = Date.now, logger = console,
 }) => {
   let timer;
   let ticking = false;
   let stopped = false;
   const read = projectConfigRuntime.readCompanionState;
   const update = projectConfigRuntime.updateCompanionState;
+  const allowed = async (projectID) => {
+    const project = (await scheduledTaskService.listProjects()).find((item) => item.id === projectID);
+    return Boolean(project && folderGuard && (await folderGuard.check(project.path)).ok);
+  };
 
   const considerCompletion = async (sessionID) => {
     const decision = await inspectResult(sessionID);
     if (decision.kind === 'quiet') return false;
     if (decision.kind !== 'update' || !decision.enrollment.projectId) return true;
     const projectID = decision.enrollment.projectId;
+    if (!await allowed(projectID)) return false;
     const tasks = await scheduledTaskService.list(projectID);
     const task = tasks.find((entry) => entry.id === decision.enrollment.taskId);
     const fingerprint = createHash('sha256').update(decision.reply.trim().replace(/\s+/g, ' ')).digest('hex');
@@ -59,7 +64,8 @@ export const createCompanionCoordinator = ({
     const resolved = path.resolve(directory);
     const project = projects.filter((entry) => resolved === path.resolve(entry.path) || resolved.startsWith(`${path.resolve(entry.path)}${path.sep}`))
       .sort((a, b) => b.path.length - a.path.length)[0];
-    if (!project || !(await read(project.id)).settings.activityEnabled) return;
+    if (!project || !folderGuard || !(await folderGuard.check(directory)).ok || !await allowed(project.id)
+      || !(await read(project.id)).settings.activityEnabled) return;
     if ((await readMetadata(sessionID))?.openchamber?.companion) return;
     if (!await isRootSession(sessionID, directory)) return;
     const time = now();
@@ -71,6 +77,7 @@ export const createCompanionCoordinator = ({
   };
 
   const requestCheck = async (projectID) => {
+    if (!await allowed(projectID)) return { queued: false };
     let queued = false;
     await update(projectID, (state) => {
       if (!state.settings.activityEnabled) return state;
@@ -82,6 +89,7 @@ export const createCompanionCoordinator = ({
 
   const activityContext = async (projectID, taskID) => {
     if (!projectID) return '';
+    if (!await allowed(projectID)) throw new Error('Companion context is unavailable for this folder');
     const state = await read(projectID);
     if (taskID === PROJECT_MONITOR_ID && !state.settings.activityEnabled) throw new Error('Project companion is paused');
     const history = state.inbox.filter((entry) => entry.taskId === taskID).slice(-8)
@@ -150,6 +158,7 @@ export const createCompanionCoordinator = ({
     try {
       const projects = await scheduledTaskService.listProjects();
       const outcomes = await Promise.allSettled(projects.map(async (project) => {
+        if (!folderGuard || !(await folderGuard.check(project.path)).ok) return;
         const state = await read(project.id);
         // Empty defaults should not cause a new file or timer per project.
         if (state.inbox.some((entry) => !entry.seen && !entry.dismissed && !entry.attemptedAt)) await flushProject(project.id);

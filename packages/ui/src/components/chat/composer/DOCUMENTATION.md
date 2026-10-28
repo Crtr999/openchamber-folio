@@ -17,10 +17,22 @@ animation. Do not restore separate draft and session composer branches:
 remounting the editor loses focus and interrupts the transition. Keep the
 existing mobile fixed-position rules unchanged.
 
-The full Home draft renders widgets directly beneath the composer, without the
-starter-chip row or its add button. Stored global and project starters remain
-untouched; compact drafts keep their existing starter UI. The scenic top inset
-and widget divider resizing are unchanged.
+The full Home draft renders `HomeSuggestions` between the composer and widgets,
+without the starter-chip row or its add button. These unboxed rows show at most
+three unread companion results from permitted, non-ZDR folders. Hover or keyboard
+focus reveals the source folder, date and excerpt. Opening a row selects its
+original result conversation without sending or copying content into another
+folder. Dismissal is persisted by the existing companion inbox PATCH endpoint;
+failed saves keep the row and show retry. The rows read no message bodies or native
+sources. Calendar and Outlook evidence reaches them through authorized personal
+awareness reviews. Empty inboxes render no suggestion chrome. Runtime switches
+discard old results, and partial reads preserve only the failed folders' previous
+results with an error notice. While full Home is visible, inbox receipts refresh
+once a minute and when the window becomes visible. This never requests a new
+review or invokes source readers. Web and Electron full Home share `runtimeFetch`;
+VS Code, hosted-mobile and Capacitor compact drafts do not mount suggestions.
+Stored global and project starters remain untouched; compact drafts keep their
+existing starter UI. The scenic top inset and widget divider resizing are unchanged.
 
 `ComposerFloatingPanel` is the shared frame for `BtwPanel`, `PermissionDock`,
 `FormDock` and `QueuedMessageChips`. They mount inside the composer form, outside both the

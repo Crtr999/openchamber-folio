@@ -53,6 +53,7 @@ export const registerNotificationRoutes = (app, dependencies) => {
     markUserMessageSent,
     setPushInitialized,
     setAutoAcceptSession,
+    privacy,
   } = dependencies;
 
   const ensureSessionWatcher = async () => {
@@ -282,16 +283,18 @@ export const registerNotificationRoutes = (app, dependencies) => {
     }
   });
 
-  app.get('/api/session-activity', (_req, res) => {
+  const publicSnapshot = async (snapshot) => privacy ? privacy.filterActive(snapshot) : snapshot;
+
+  app.get('/api/session-activity', async (_req, res) => {
     void ensureSessionWatcher();
-    res.json(getSessionActivitySnapshot());
+    res.json(await publicSnapshot(getSessionActivitySnapshot()));
   });
 
   app.get('/api/sessions/snapshot', async (_req, res) => {
     await ensureSessionWatcher();
     res.json({
-      statusSessions: getSessionStateSnapshot(),
-      attentionSessions: getSessionAttentionSnapshot(),
+      statusSessions: await publicSnapshot(getSessionStateSnapshot()),
+      attentionSessions: await publicSnapshot(getSessionAttentionSnapshot()),
       serverTime: Date.now(),
     });
   });
@@ -301,10 +304,10 @@ export const registerNotificationRoutes = (app, dependencies) => {
   // waiting for an answer. Both come from the server's single upstream stream.
   app.get('/api/sessions/status', async (_req, res) => {
     await ensureSessionWatcher();
-    const snapshot = getSessionStateSnapshot();
+    const snapshot = await publicSnapshot(getSessionStateSnapshot());
     res.json({
       sessions: snapshot,
-      pending: typeof getPendingBlockingRequestsSnapshot === 'function' ? getPendingBlockingRequestsSnapshot() : {},
+      pending: await publicSnapshot(typeof getPendingBlockingRequestsSnapshot === 'function' ? getPendingBlockingRequestsSnapshot() : {}),
       serverTime: Date.now(),
     });
   });
@@ -329,7 +332,7 @@ export const registerNotificationRoutes = (app, dependencies) => {
 
   app.get('/api/sessions/attention', async (_req, res) => {
     await ensureSessionWatcher();
-    const snapshot = getSessionAttentionSnapshot();
+    const snapshot = await publicSnapshot(getSessionAttentionSnapshot());
     res.json({
       sessions: snapshot,
       serverTime: Date.now(),

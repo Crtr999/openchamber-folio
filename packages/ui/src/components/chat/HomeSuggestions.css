@@ -1,0 +1,14 @@
+/* Unboxed suggestions belong to the composer, never the widget grid. */
+.oc-home-suggestions { margin: 0.65rem 0 1.25rem; min-width: 0; color: var(--surface-foreground); }
+.oc-home-suggestions ul { list-style: none; margin: 0; padding: 0; }
+.oc-home-suggestion { min-width: 0; }
+.oc-home-suggestion-line { display: flex; align-items: center; gap: 0.25rem; }
+.oc-home-suggestion-main { min-width: 0; flex: 1; justify-content: flex-start; font-weight: 400; letter-spacing: 0; }
+.oc-home-suggestion-dismiss { flex-shrink: 0; color: var(--surface-muted-foreground); }
+.oc-home-suggestion-detail { display: none; padding: 0.1rem 2.5rem 0.65rem 2rem; font-size: 12px; line-height: 1.5; }
+.oc-home-suggestion:hover .oc-home-suggestion-detail,
+.oc-home-suggestion:focus-within .oc-home-suggestion-detail { display: block; }
+.oc-home-suggestion-source { color: var(--surface-muted-foreground); margin-bottom: 0.3rem; overflow-wrap: anywhere; }
+.oc-home-suggestion-excerpt { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 70ch; }
+.oc-home-suggestion-detail button { margin-top: 0.25rem; }
+.oc-home-suggestions-status { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; padding-inline: 0.75rem; color: var(--surface-muted-foreground); font-size: 12px; }

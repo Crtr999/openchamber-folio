@@ -277,6 +277,8 @@ export const OPENCODE_DIRECTORY_HEADER = "x-opencode-directory"
 type RuntimeOpencodeClientConfig = {
   baseUrl: string
   directory?: string
+  /** Explicit private-folder event subscription; never used by global lists. */
+  privateEventDirectory?: string
   /** Read-request timeout in ms. Overridable so tests can use short value. */
   requestTimeoutMs?: number
 }
@@ -290,9 +292,12 @@ const toOpencodeClientRoot = (baseUrl: string): string => baseUrl.replace(/\/api
 
 export const createRuntimeOpencodeClient = (config: RuntimeOpencodeClientConfig): OpenCodeClient => {
   const requestTimeoutMs = config.requestTimeoutMs ?? OPENCODE_REQUEST_TIMEOUT_MS
+  const headers: { [name: string]: string } = {}
+  if (config.directory) headers[OPENCODE_DIRECTORY_HEADER] = encodeURIComponent(config.directory)
+  if (config.privateEventDirectory) headers['x-openchamber-zdr-directory'] = encodeURIComponent(config.privateEventDirectory)
   return OpenCode.make({
     baseUrl: toOpencodeClientRoot(config.baseUrl),
-    headers: config.directory ? { [OPENCODE_DIRECTORY_HEADER]: encodeURIComponent(config.directory) } : undefined,
+    headers,
     fetch: async (input: string | URL | Request, init?: RequestInit) => {
       const url = input instanceof URL ? input : new URL(typeof input === "string" ? input : input.url)
       const method = String(init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase()

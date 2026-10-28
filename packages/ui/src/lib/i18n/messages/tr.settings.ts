@@ -4,6 +4,7 @@ import { linearIntegrationI18n } from './linear-integration.i18n';
 import { thirdPartyIntegrationI18n } from './third-party-integrations.i18n';
 import { extensionCatalogI18n } from './extension-catalog.i18n';
 export const settingsDict = {
+  ...outlookI18n.tr,
   'settings.themeImport.selectAll': 'Tümünü seç',
   'settings.themeImport.deselectAll': 'Tümünün seçimini kaldır',
   'settings.themeImport.complete': 'İçe aktarma tamamlandı',
@@ -2369,3 +2370,4 @@ export const settingsDict = {
   'settings.openchamber.tools.field.browserMcpServersSummary': 'Uygulama kendi tarayıcısını kullanır; bu sunucular uygulama içinde başlatılmaz.',
   'settings.openchamber.tools.field.browserMcpServersInfo': 'OpenCode her ajan için her MCP sunucusunun bir kopyasını başlatıyor, bu yüzden üç tarayıcı sunucusu elli dokuz kopyaya ve yaklaşık iki gigabayt belleğe dönüştü. Uygulamanın kendi tarayıcı paneli ve openchamber_web aracı var, bu yüzden burada açık kalmıyorlar. Kendi ayarların değişmiyor: başka istemcilerde eskisi gibi çalışırlar.',
 };
+import { outlookI18n } from './outlook.i18n';

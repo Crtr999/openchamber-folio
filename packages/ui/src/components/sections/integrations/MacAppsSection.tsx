@@ -2,6 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { SettingsSection } from '@/components/sections/shared/SettingsSection';
 import { personalHomeSupported, readHomeCalendar, readHomeReminders } from '@/lib/personal-home';
+import { OutlookConnectionSection } from './OutlookConnectionSection';
 
 type Access = 'unknown' | 'connected' | 'not-connected' | 'unsupported';
 
@@ -39,14 +40,14 @@ export function MacAppsSection(): React.ReactNode {
         }
     };
 
-    return <SettingsSection title="Mac apps" info="A friend may use an app only after you connect it here, and only for the folders you leave it on." divider settingsItem="integrations.mac-apps" contentClassName="space-y-3">
+    return <><SettingsSection title="Mac apps" info="A friend may use an app only after you connect it here, and only for the folders you leave it on." divider settingsItem="integrations.mac-apps" contentClassName="space-y-3">
         {!supported ? <p className="text-sm text-muted-foreground">Mac apps are available in the desktop app.</p> : <>
             <MacAppRow name="Calendar" detail="Agenda and events you choose to save." access={calendar} busy={busy === 'calendar'} onConnect={() => void connect('calendar')} />
             <MacAppRow name="Reminders" detail="Incomplete reminders due this week. Checking one completes it." access={reminders} busy={busy === 'reminders'} onConnect={() => void connect('reminders')} />
-            <p className="text-xs text-muted-foreground">Mail, Notes, Messages, Contacts, Location, and Home are not connected. This build does not read them.</p>
+            <p className="text-xs text-muted-foreground">Mail, Notes, Contacts, Location, and Home are not connected. This build does not read them. Messages is used only for texting below.</p>
             {error ? <p role="alert" className="text-xs text-destructive">{error}</p> : null}
         </>}
-    </SettingsSection>;
+    </SettingsSection><OutlookConnectionSection /></>;
 }
 
 function MacAppRow({ name, detail, access, busy, onConnect }: { name: string; detail: string; access: Access; busy: boolean; onConnect: () => void }): React.ReactNode {

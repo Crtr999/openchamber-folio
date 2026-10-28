@@ -33,6 +33,92 @@ afterEach(() => {
 afterAll(() => network.mockRestore());
 
 describe('quota refresh failure is not empty success', () => {
+  test('expires a displayed window without another network request and retains its original sample', async () => {
+    const snapshot = result();
+    if (!snapshot.usage) throw new Error('Missing synthetic usage');
+    snapshot.usage.windows.session.resetAt = Date.now() + 100;
+    handleRequest = async () => json(snapshot);
+    await useQuotaStore.getState().fetchProviderQuota('claude');
+    expect(useQuotaStore.getState().currentResults[0].usage?.windows.session.usedPercent).toBe(42);
+    const raw = useQuotaStore.getState().results;
+    await new Promise(resolve => setTimeout(resolve, 150));
+    expect(useQuotaStore.getState().currentResults[0].usage?.windows.session.usedPercent).toBeNull();
+    expect(useQuotaStore.getState().results).toBe(raw);
+    expect(useQuotaStore.getState().lastUpdated).toBe(snapshot.fetchedAt);
+    expect(network.mock.calls).toHaveLength(1);
+  });
+
+  test('a first-load cooldown response keeps the real sample timestamp and shows expired usage as unknown', async () => {
+    const cached = { ...result(), ok: false, error: 'Rate limited. Retrying soon.' };
+    handleRequest = async () => json(cached);
+    await useQuotaStore.getState().fetchProviderQuota('claude');
+    expect(useQuotaStore.getState().results[0].fetchedAt).toBe(123);
+    expect(useQuotaStore.getState().lastUpdated).toBe(123);
+    expect(useQuotaStore.getState().currentResults[0].usage?.windows.session.usedPercent).toBeNull();
+    expect(useQuotaStore.getState().refreshErrors.claude).toBe(cached.error);
+  });
+
+  test('a repeated cached sample does not advance Last updated', async () => {
+    await useQuotaStore.getState().fetchProviderQuota('claude');
+    expect(useQuotaStore.getState().lastUpdated).toBe(123);
+    await useQuotaStore.getState().fetchProviderQuota('claude');
+    expect(useQuotaStore.getState().lastUpdated).toBe(123);
+  });
+
+  test('a cooldown sample can fill a previous failure that had no usage', async () => {
+    handleRequest = async () => json({ ...result(), ok: false, usage: null, fetchedAt: 456, error: 'offline' });
+    await useQuotaStore.getState().fetchProviderQuota('claude');
+    handleRequest = async () => json({ ...result(), ok: false, error: 'Rate limited. Retrying soon.' });
+    await useQuotaStore.getState().fetchProviderQuota('claude');
+    expect(useQuotaStore.getState().results[0].usage?.windows.session.usedPercent).toBe(42);
+    expect(useQuotaStore.getState().lastUpdated).toBe(123);
+  });
+
+  test('runtime reset cancels the pending expiry without later store changes', async () => {
+    const snapshot = result();
+    if (!snapshot.usage) throw new Error('Missing synthetic usage');
+    snapshot.usage.windows.session.resetAt = Date.now() + 100;
+    handleRequest = async () => json(snapshot);
+    await useQuotaStore.getState().fetchProviderQuota('claude');
+    useQuotaStore.getState().resetForRuntimeSwitch();
+    const resetState = useQuotaStore.getState();
+    await new Promise(resolve => setTimeout(resolve, 150));
+    expect(useQuotaStore.getState()).toBe(resetState);
+    expect(useQuotaStore.getState().currentResults).toEqual([]);
+  });
+
+  test('an older cached zero cannot replace a newer usage sample or clear its refresh error', async () => {
+    await useQuotaStore.getState().fetchProviderQuota('claude');
+    handleRequest = async () => { throw new Error('offline'); };
+    await useQuotaStore.getState().fetchProviderQuota('claude');
+    const before = useQuotaStore.getState();
+    const cached = result();
+    cached.fetchedAt = 122;
+    if (!cached.usage) throw new Error('Missing synthetic usage');
+    cached.usage.windows.session.usedPercent = 0;
+    cached.usage.windows.session.remainingPercent = 100;
+    handleRequest = async () => json(cached);
+    await useQuotaStore.getState().fetchProviderQuota('claude');
+    expect(useQuotaStore.getState().results).toBe(before.results);
+    expect(useQuotaStore.getState().lastUpdated).toBe(before.lastUpdated);
+    expect(useQuotaStore.getState().refreshErrors.claude).toBe('offline');
+  });
+
+  test('a newer authoritative zero replaces usage immediately, without a cooldown', async () => {
+    await useQuotaStore.getState().fetchProviderQuota('claude');
+    const reset = result();
+    reset.fetchedAt = 124;
+    if (!reset.usage) throw new Error('Missing synthetic usage');
+    reset.usage.windows.session.usedPercent = 0;
+    reset.usage.windows.session.remainingPercent = 100;
+    reset.usage.windows.session.resetAt = Date.now() + 3_600_000;
+    handleRequest = async () => json(reset);
+    await useQuotaStore.getState().fetchProviderQuota('claude');
+    expect(useQuotaStore.getState().results[0].usage?.windows.session.usedPercent).toBe(0);
+    expect(useQuotaStore.getState().currentResults[0].usage?.windows.session.usedPercent).toBe(0);
+    expect(useQuotaStore.getState().results[0].fetchedAt).toBe(124);
+  });
+
   test('keeps the exact previous snapshot, configuration and timestamp on network failure', async () => {
     await useQuotaStore.getState().fetchQuotas(['claude']);
     const before = useQuotaStore.getState();

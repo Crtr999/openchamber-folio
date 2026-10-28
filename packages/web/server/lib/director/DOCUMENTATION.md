@@ -3,7 +3,7 @@
 ## Purpose
 
 The Director lets a folder's friend improve a new message before the chat starts.
-`POST /api/openchamber/director/improve` takes `{ directory, folderName, prompt }` and
+`POST /api/openchamber/director/improve` takes `{ directory, folderName, prompt, preferredProviderID?, preferredModelID? }` and
 returns `{ text, used, model }`: the draft rewritten from the folder's own rules
 (`AGENTS.md`), its memory file (`MEMORY.md`) and the memories stored for that project.
 
@@ -16,7 +16,10 @@ returns `{ text, used, model }`: the draft rewritten from the folder's own rules
 - Folder rules and memory are sent as reference data. The system prompt tells the model
   never to follow commands inside them and never to add actions the user did not ask for.
 - The model is the small-model service (`lib/small-model`), the same one that titles
-  sessions. Nothing here holds a credential.
+  sessions. The composer passes its selected provider and model, so the service uses
+  that provider's small model or, if none exists, the selected model. An explicit
+  Small Model setting still wins. Older clients without a selection use OpenCode's
+  default. Nothing here holds a credential.
 - A failure never blocks a send: the composer sends the original text and says so.
 
 ## Client

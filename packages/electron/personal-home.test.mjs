@@ -42,7 +42,7 @@ async function fixture(options = {}) {
     else { if (name === 'update_page' && options.failMove) return Response.json({ result: { isError: true, content: [] } }); if ((name === 'update_page' || name === 'delete_page') && options.wrappedUpdates) { assert.deepEqual(Object.keys(body.params.arguments), ['data']); assert.match(body.params.arguments.data.page_id, /^[0-9a-f]{32}$/); } result = { saved: true }; }
     return Response.json({ result: { content: [{ type: 'text', text: JSON.stringify(result) }] } });
   };
-  const service = createPersonalHome({ filePath, safeStorage, fetchImpl, isBlocked: () => blocked, openExternal: (url) => { authUrl = url; }, calendar: () => ({ access: 'unsupported' }) });
+  const service = createPersonalHome({ filePath, safeStorage, fetchImpl, isBlocked: () => blocked, openExternal: (url) => { authUrl = url; }, calendar: options.calendar ?? (() => ({ access: 'unsupported' })) });
   return { service, calls, filePath, block: () => { blocked = true; }, authUrl: () => authUrl, clean: async () => { service.close(); await rm(dir, { recursive: true, force: true }); } };
 }
 test('Fetched status groups preserve workflow order and identifiers escape safely', () => {
@@ -240,7 +240,7 @@ test('Absent or ambiguous dates are not synthesized; failed moves leave fetched 
 test('private awareness reader uses only bounded Notion reads, exposes source health and never credentials', async () => {
   const f = await fixture({ recentResults: Array.from({ length: 8 }, (_, i) => ({ url: `https://www.notion.so/${String(i + 1).padStart(32, '0')}`, title: `Course ${i}` })) });
   try {
-    const value = await f.service.readAwareness({ offset: 0 });
+    const value = await f.service.readAwareness({ offset: 0, sources: ['notion', 'calendar', 'outlook'] });
     assert.equal(value.find((item) => item.source === 'notion').records.filter((item) => item.id !== 'daily-board').length, 4);
     assert.equal(value.find((item) => item.source === 'notion').nextOffset, 4);
     assert.equal(value.find((item) => item.source === 'calendar').status, 'needs-connection');
@@ -256,8 +256,26 @@ test('private awareness reader uses only bounded Notion reads, exposes source he
 test('private awareness reader reports disconnected Notion without trying OAuth or inventing empty success', async () => {
   const f = await fixture({ connected: false });
   try {
-    const value = await f.service.readAwareness();
+    const value = await f.service.readAwareness({ sources: ['notion'] });
     assert.equal(value.find((item) => item.source === 'notion').status, 'needs-connection');
+    assert.equal(f.calls.length, 0);
+  } finally { await f.clean(); }
+});
+test('private awareness reader never reads unselected sources and reports calendar overflow as partial', async () => {
+  const operations = [];
+  const f = await fixture({ calendar: async ({ op }) => {
+    operations.push(op);
+    return { access: 'connected', events: Array.from({ length: 51 }, (_, index) => ({ id: String(index), title: 'Synthetic event' })) };
+  } });
+  try {
+    assert.deepEqual(await f.service.readAwareness(), []);
+    assert.deepEqual(operations, []);
+    assert.equal(f.calls.length, 0);
+    const value = await f.service.readAwareness({ sources: ['calendar'] });
+    assert.deepEqual(operations, ['read']);
+    assert.equal(value.length, 1);
+    assert.equal(value[0].status, 'partial');
+    assert.equal(value[0].records.length, 50);
     assert.equal(f.calls.length, 0);
   } finally { await f.clean(); }
 });

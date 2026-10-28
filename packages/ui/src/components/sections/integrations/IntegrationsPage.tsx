@@ -13,6 +13,8 @@ import { LinearSettings } from './LinearSettings';
 import { ThirdPartyIntegrationsSection } from './ThirdPartyIntegrationsSection';
 import { CatalogExtensionsSection } from './CatalogExtensionsSection';
 import { MacAppsSection } from './MacAppsSection';
+import { ImessageSection } from './ImessageSection';
+import { PersonalAwarenessSection } from './PersonalAwarenessSection';
 
 export const IntegrationsPage: React.FC = () => {
   const { t } = useI18n();
@@ -47,6 +49,8 @@ export const IntegrationsPage: React.FC = () => {
         </SettingsSection>
       ) : null}
       <MacAppsSection />
+      {!isVSCodeRuntime() ? <PersonalAwarenessSection /> : null}
+      <ImessageSection />
       <ThirdPartyIntegrationsSection divider={hasBuiltIn} />
       <CatalogExtensionsSection />
       <GuestIntegrationsSection />

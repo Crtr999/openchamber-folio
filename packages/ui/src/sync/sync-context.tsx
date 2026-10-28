@@ -14,6 +14,8 @@ import type {
   StructuredError,
 } from "@/lib/opencode/model"
 import { createEventPipeline } from "./event-pipeline"
+import { useZdrLockStore } from "@/stores/useZdrLockStore"
+import { isPathGuarded } from "@/lib/zdrLock"
 import { isVSCodeRuntime } from "@/lib/desktop"
 import { isSurfaceAttended } from "@/lib/surfaceAttention"
 import { isMobileSurfaceRuntime } from "@/lib/runtimeSurface"
@@ -2362,6 +2364,16 @@ export function SyncProvider(props: {
   const resyncingDirectoriesRef = useRef(new Set<string>())
   const blockingRequestResyncingDirectoriesRef = useRef(new Set<string>())
   const pipelineReconnectRef = useRef<((reason?: string) => void) | null>(null)
+  const privateEventDirectory = useZdrLockStore((lock) => {
+    const directory = props.directory
+    return !isVSCodeRuntime() && directory && lock.loaded && (!lock.pinSet || lock.unlocked) && isPathGuarded(lock.directories, directory) ? directory : undefined
+  })
+  const privateEventDirectoryRef = useRef(privateEventDirectory)
+  const privateAccessRevision = useZdrLockStore((lock) => privateEventDirectory ? lock.accessRevision : 0)
+  privateEventDirectoryRef.current = privateEventDirectory
+  useEffect(() => {
+    pipelineReconnectRef.current?.("private_scope_changed")
+  }, [privateEventDirectory, privateAccessRevision])
   const pipelineHasConnectedRef = useRef(false)
   const pipelineDisconnectedBeforeFirstConnectRef = useRef(false)
 
@@ -2598,6 +2610,7 @@ export function SyncProvider(props: {
     }
     const pipeline = createEventPipeline({
       sdk: props.sdk,
+      privateEventDirectory: () => privateEventDirectoryRef.current,
       transport: messageStreamTransport,
       routeDirectory: (directory, payload) => {
         return resolveDirectoryFromRoutingIndex(routingIndex, directory, payload, childStores)

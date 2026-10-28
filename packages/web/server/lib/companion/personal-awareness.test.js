@@ -3,7 +3,7 @@ import { createPersonalAwareness, PERSONAL_AWARENESS_ID } from './personal-aware
 
 const fixture = () => {
   let state = { settings: { enabled: true, timezone: 'America/New_York' }, items: [],
-    awareness: { enabled: true, approvedAt: 1, projectId: 'home', providerID: 'openai', modelID: 'approved', reviewed: [] } };
+    awareness: { enabled: true, approvedAt: 1, projectId: 'home', providerID: 'openai', modelID: 'approved', sources: ['past-chats', 'follow-ups', 'notion', 'calendar', 'outlook'], reviewed: [] } };
   const calls = [];
   let blocked = false;
   let broken = false;
@@ -34,9 +34,10 @@ const fixture = () => {
 
 describe('approved personal source review', () => {
   it('refuses unapproved, disabled, enterprise, wrong project/model/provider and excluded reviews before any read', async () => {
-    for (const change of ['missing', 'disabled', 'enterprise', 'project', 'model', 'provider', 'folder']) {
+    for (const change of ['missing', 'sources', 'disabled', 'enterprise', 'project', 'model', 'provider', 'folder']) {
       const f = fixture();
       if (change === 'missing') f.mutate((state) => ({ ...state, awareness: undefined }));
+      if (change === 'sources') f.mutate((state) => ({ ...state, awareness: { ...state.awareness, sources: undefined } }));
       if (change === 'disabled') f.mutate((state) => ({ ...state, awareness: { ...state.awareness, enabled: false } }));
       if (change === 'enterprise') f.block();
       if (change === 'project') f.request.projectID = 'other';
@@ -94,5 +95,16 @@ describe('approved personal source review', () => {
     expect(await f.awareness.prepare({ ...f.request, sessionID: 'next' })).toContain('2026-10-27 allDay:true');
     f.source.records[0].text = '2026-10-28 allDay:true';
     expect(await f.awareness.prepare({ ...f.request, sessionID: 'changed' })).toContain('2026-10-28 allDay:true');
+  });
+  it('excludes calendar references to ZDR before evidence or review receipts are collected', async () => {
+    const f = fixture();
+    f.source.source = 'calendar';
+    f.source.records[0].title = 'Synthetic ZDR meeting';
+    f.source.records[0].text = 'Synthetic private reference';
+    const result = await f.awareness.prepare(f.request);
+    expect(result).not.toContain('Synthetic ZDR meeting');
+    expect(result).not.toContain('Synthetic private reference');
+    await f.awareness.complete('check');
+    expect(f.state().awareness.reviewed).toHaveLength(4);
   });
 });

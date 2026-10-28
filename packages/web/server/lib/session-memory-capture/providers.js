@@ -32,14 +32,8 @@ export const extractAllowedProviders = (config) => {
  * bound to one.
  */
 export const resolveDirectoryAllowedProviders = async (directory) => {
-  if (typeof directory !== 'string' || !directory.trim()) return [];
-  let config = {};
-  try {
-    config = readConfigLayers(directory).mergedConfig ?? {};
-  } catch {
-    // A configuration that cannot be read is not a binding: the folder's own
-    // agent still has to be able to work.
-    return [];
-  }
-  return extractAllowedProviders(config);
+  if (typeof directory !== 'string' || !directory.trim()) throw new Error('Directory is required');
+  const layers = readConfigLayers(directory);
+  if (layers.layerErrors.length) throw new Error('Provider policy could not be read');
+  return extractAllowedProviders(layers.mergedConfig);
 };

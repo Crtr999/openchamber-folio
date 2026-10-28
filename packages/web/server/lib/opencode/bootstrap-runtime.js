@@ -69,6 +69,8 @@ export const createBootstrapRuntime = (dependencies) => {
       pluginNotificationEmitter,
       desktopUpdater,
       skipBodyParsing,
+      privacy,
+      registerPrivacyGuard,
     } = options;
 
     const uiAuthController = createUiAuth({
@@ -122,6 +124,7 @@ export const createBootstrapRuntime = (dependencies) => {
       normalizeTunnelSessionTtlMs,
     });
 
+    registerPrivacyGuard?.(app);
     notificationEmitRoutes.registerApiRoute();
 
     registerTtsRoutes(app, { sayTTSCapability });
@@ -129,6 +132,7 @@ export const createBootstrapRuntime = (dependencies) => {
     registerMediaRoutes(app);
 
     registerNotificationRoutes(app, {
+      privacy,
       uiAuthController,
       ensurePushInitialized,
       ensureGlobalWatcherStarted,

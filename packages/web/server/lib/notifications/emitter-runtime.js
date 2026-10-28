@@ -6,6 +6,7 @@ export const createNotificationEmitterRuntime = (dependencies) => {
     getUiNotificationClients,
     getOpenChamberEventClients = () => new Set(),
     getBroadcastGlobalUiEvent,
+    filterEvent = null,
     // Optional: in-process desktop shells (Electron main) inject a callback so
     // notifications are delivered as a direct function call instead of a stdout
     // stringly-typed IPC.
@@ -23,9 +24,18 @@ export const createNotificationEmitterRuntime = (dependencies) => {
     onDesktopNotification = typeof cb === 'function' ? cb : null;
   };
 
-  const writeSseEvent = (res, payload, serializedPayload = JSON.stringify(payload)) => {
+  const rawWriteSseEvent = (res, payload, serializedPayload = JSON.stringify(payload)) => {
     res.write(`data: ${serializedPayload}\n\n`);
   };
+  const writes = new WeakMap();
+  const writeSseEvent = filterEvent ? (res, payload) => {
+    const pending = (writes.get(res) ?? Promise.resolve()).then(async () => {
+      const visible = await filterEvent(payload);
+      if (visible && !res.writableEnded && !res.destroyed) rawWriteSseEvent(res, visible);
+    }).catch(() => {});
+    writes.set(res, pending);
+    return pending;
+  } : rawWriteSseEvent;
 
   const emitDesktopNotification = (payload) => {
     const desktopNotifyEnabled = getDesktopNotifyEnabled();

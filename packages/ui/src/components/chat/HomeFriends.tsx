@@ -94,11 +94,6 @@ export function HomeFriendCards({ friends, busyAgent, onOpen, onNew, onDetails }
     const { t } = useI18n();
     const cards = React.useRef(new Map<string, HTMLLIElement>());
     const originOf = (agent: string): Origin => cards.current.get(agent)?.getBoundingClientRect() ?? null;
-    const zdrPinSet = useZdrLockStore((state) => state.pinSet);
-    const zdrUnlocked = useZdrLockStore((state) => state.unlocked);
-    const zdrDirectories = useZdrLockStore((state) => state.directories);
-    // A locked ZDR friend still appears, but says nothing about its chats.
-    const isLockedCard = (agent: string) => zdrPinSet && !zdrUnlocked && agent.startsWith('folder:') && isPathGuarded(zdrDirectories, agent.slice('folder:'.length));
     return <ul className="oc-friend-grid" aria-label={t('friends.title')}>{friends.map(friend => {
         const busy = Boolean(busyAgent);
         return <li key={friend.agent} className="oc-friend-card" data-friend={friend.agent} data-busy={busyAgent === friend.agent ? 'true' : undefined}
@@ -127,7 +122,7 @@ export function HomeFriendCards({ friends, busyAgent, onOpen, onNew, onDetails }
                     )}
                     <span id={`friend-status-${friend.agent}`} className="oc-friend-card-status" data-kind={friend.status.kind}>
                         {(friend.status.kind === 'working' || friend.status.kind === 'retrying' || friend.status.kind === 'waiting') && <span className="oc-friend-status-dot" aria-hidden="true" />}
-                        <span className="truncate">{busyAgent === friend.agent ? t('friends.opening') : isLockedCard(friend.agent) ? 'Locked' : friend.status.text}</span>
+                        <span className="truncate">{busyAgent === friend.agent ? t('friends.opening') : friend.status.text}</span>
                     </span>
                 </span>
             </Button>
@@ -210,12 +205,17 @@ export function HomeFriends() {
     const projects = useProjectsStore(s => s.projects);
     const updateProjectMeta = useProjectsStore(s => s.updateProjectMeta);
     const chatsRoot = useChatsRoot();
+    const privacyReady = useZdrLockStore(state => state.loaded);
+    const privateDirectories = useZdrLockStore(state => state.directories);
     // All Chats is a friend as well: the conversations that belong to no
     // folder are one relationship, with a name, a face and a memory of their own.
     const friendProjects = React.useMemo<ProjectEntry[]>(() => {
         const allChats = allChatsProject(chatsRoot);
-        return allChats ? [...projects, allChats] : projects;
-    }, [projects, chatsRoot]);
+        // Home is cross-folder context, never an entry into private folders.
+        // Exclusion remains in force with no PIN or a valid unlock grant.
+        return privacyReady ? (allChats ? [...projects, allChats] : projects)
+            .filter(project => !isPathGuarded(privateDirectories, project.path)) : [];
+    }, [projects, chatsRoot, privacyReady, privateDirectories]);
     const statuses = useAllSessionStatuses();
     const pending = useGlobalBlockingRequestsStore(state => state.bySession);
     const liveSessions = useAllLiveSessions();
@@ -339,8 +339,10 @@ export function HomeFriends() {
     }, [reloadLinks]);
 
     const sessionsByFolder = React.useMemo(() => {
-        const byId = new Map<string, Session>(cachedSessions.map(session => [session.id, session]));
-        for (const session of liveSessions) byId.set(session.id, session);
+        const byId = new Map<string, Session>();
+        for (const session of [...cachedSessions, ...liveSessions]) {
+            if (privacyReady && session.directory && !isPathGuarded(privateDirectories, session.directory)) byId.set(session.id, session);
+        }
         const byFolder = new Map<string, Session[]>();
         for (const project of friendProjects) {
             const matching = [...byId.values()]
@@ -352,7 +354,7 @@ export function HomeFriends() {
             byFolder.set(project.id, matching);
         }
         return { byId, byFolder };
-    }, [cachedSessions, liveSessions, friendProjects]);
+    }, [cachedSessions, liveSessions, friendProjects, privacyReady, privateDirectories]);
 
     const cards = React.useMemo<FriendCard[]>(() => {
         const now = Date.now();

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import path from 'node:path';
 
 export const PERSONAL_AWARENESS_ID = 'companion:personal-awareness';
 const recordSchema = z.object({
@@ -15,6 +16,7 @@ const stateSchema = z.object({
   enabled: z.boolean(), approvedAt: z.number().positive(), projectId: z.string().min(1),
   providerID: z.literal('openai'), modelID: z.string().min(1),
   mailAccounts: z.array(z.string().email()).max(5).default([]),
+  sources: z.array(z.enum(['past-chats', 'follow-ups', 'notion', 'calendar', 'outlook'])).min(1).max(5),
   cursor: z.string().optional(), notionOffset: z.number().int().nonnegative().default(0),
   reviewed: z.array(z.string()).max(2000).default([]),
   pending: z.object({ sessionID: z.string(), fingerprints: z.array(z.string()),
@@ -37,7 +39,7 @@ const fingerprint = (value) => createHash('sha256').update(JSON.stringify(value)
 // are added; source bodies remain in their owners and ordinary result sessions.
 export const createPersonalAwareness = ({
   store, guard, getClient, resolveAllowedProviders, readMetadata, isArchived,
-  readSources, readInbox, isBlocked, now = Date.now,
+  readSources, readInbox, isBlocked, listProjectPaths = async () => [], now = Date.now,
 }) => {
   const allowed = async (directory) => {
     if (!(await guard.check(directory)).ok) return false;
@@ -54,9 +56,20 @@ export const createPersonalAwareness = ({
     let sources;
     try {
       if (!readSources) throw new Error('Native sources unavailable');
-      sources = sourcesSchema.parse(await readSources({ offset: consent.notionOffset, accounts: consent.mailAccounts }));
+      const privateReferences = [];
+      for (const project of await listProjectPaths()) {
+        if (!(await guard.check(project)).ok) privateReferences.push(project.toLowerCase(), path.basename(project).toLowerCase());
+      }
+      sources = sourcesSchema.parse(await readSources({ offset: consent.notionOffset, accounts: consent.mailAccounts, sources: consent.sources }))
+        .filter((source) => consent.sources.includes(source.source));
+      // Calendar/Notion records can refer to a private folder without being a
+      // conversation in that folder. Never pass those references into a review.
+      sources = sources.map((source) => ({ ...source, records: source.records.filter((record) => {
+        const reference = JSON.stringify(record).toLowerCase();
+        return !/zdr/i.test(reference) && !privateReferences.some((value) => value && reference.includes(value));
+      }) }));
     } catch {
-      sources = ['notion', 'calendar', 'outlook'].map((source) => ({ source, status: 'error', records: [] }));
+      sources = ['notion', 'calendar', 'outlook'].filter((source) => consent.sources.includes(source)).map((source) => ({ source, status: 'error', records: [] }));
     }
     const records = sources.flatMap((source) => {
       health.push({ source: source.source, status: source.status });
@@ -72,7 +85,7 @@ export const createPersonalAwareness = ({
       return record.source === 'calendar' || !consent.reviewed.includes(hash);
     });
     let nextCursor = consent.cursor;
-    try {
+    if (consent.sources.includes('past-chats')) try {
       const client = getClient();
       if (!client) throw new Error('OpenCode unavailable');
       const query = { limit: 100, order: 'desc' };
@@ -104,10 +117,11 @@ export const createPersonalAwareness = ({
       health.push({ source: 'past-chats', status: remaining || page.cursor.next ? 'partial' : 'ready' });
     } catch { nextCursor = undefined; health.push({ source: 'past-chats', status: 'error' }); }
     let inbox = [];
-    try { inbox = await readInbox(); health.push({ source: 'follow-ups', status: 'ready' }); }
+    if (consent.sources.includes('follow-ups')) try { inbox = await readInbox(); health.push({ source: 'follow-ups', status: 'ready' }); }
     catch { health.push({ source: 'follow-ups', status: 'error' }); }
     const commitments = [];
     for (const item of state.items.filter((item) => item.status === 'active' || item.status === 'snoozed')) {
+      if (!consent.sources.includes('follow-ups')) break;
       if (!await allowed(item.sourceDirectory)) continue;
       commitments.push({ id: item.id, title: item.title, dueAt: item.dueAt, status: item.status, notes: item.notes, lastFinding: item.finding });
     }

@@ -16,10 +16,12 @@ export class DirectorError extends Error {
 }
 
 /** Asks the folder's friend to rewrite a draft using that folder's rules and memory. */
-export async function improveWithDirector({ directory, folderName, prompt, signal }: {
+export async function improveWithDirector({ directory, folderName, prompt, preferredProviderID, preferredModelID, signal }: {
   directory: string;
   folderName: string;
   prompt: string;
+  preferredProviderID?: string;
+  preferredModelID?: string;
   signal?: AbortSignal;
 }): Promise<DirectorResult> {
   let response: Response;
@@ -27,7 +29,7 @@ export async function improveWithDirector({ directory, folderName, prompt, signa
     response = await runtimeFetch('/api/openchamber/director/improve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ directory, folderName, prompt }),
+      body: JSON.stringify({ directory, folderName, prompt, preferredProviderID, preferredModelID }),
       signal,
     });
   } catch (error) {

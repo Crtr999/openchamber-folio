@@ -4,6 +4,7 @@ import { linearIntegrationI18n } from './linear-integration.i18n';
 import { thirdPartyIntegrationI18n } from './third-party-integrations.i18n';
 import { extensionCatalogI18n } from './extension-catalog.i18n';
 export const settingsDict = {
+  ...outlookI18n.ja,
   'settings.themeImport.selectAll': 'すべて選択',
   'settings.themeImport.deselectAll': 'すべて選択解除',
   'settings.themeImport.complete': 'インポート完了',
@@ -2379,3 +2380,4 @@ export const settingsDict = {
   "settings.openchamber.tools.field.browserMcpServersSummary": "アプリは独自のブラウザーを使うため、これらのサーバーはアプリ内では起動しません。",
   "settings.openchamber.tools.field.browserMcpServersInfo": "OpenCode はエージェントごとに MCP サーバーのコピーを起動するため、ブラウザー系 3 台が 59 個のコピーになり約 2GB のメモリを消費していました。アプリには独自のブラウザーパネルと openchamber_web ツールがあるため、ここでは起動しません。設定自体は変更しておらず、他のクライアントでは従来どおり動きます。",
 } as const;
+import { outlookI18n } from './outlook.i18n';

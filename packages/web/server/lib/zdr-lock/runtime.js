@@ -21,14 +21,25 @@ export const isValidPin = (value) => typeof value === 'string' && /^\d{4}$/.test
 const derive = (pin, salt) => crypto.pbkdf2Sync(pin, salt, ITERATIONS, KEY_LENGTH, 'sha256');
 
 export const createZdrLock = ({ file, now = Date.now }) => {
+  const grants = new Map();
+  const grant = () => {
+    const accessToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = now() + 10 * 60_000;
+    for (const [token, expires] of grants) if (expires <= now()) grants.delete(token);
+    grants.set(accessToken, expiresAt);
+    return { accessToken, expiresAt };
+  };
   const read = () => {
     try {
       const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
-      if (typeof parsed?.salt === 'string' && typeof parsed?.hash === 'string') {
+      if (/^[0-9a-f]{32}$/i.test(parsed?.salt) && /^[0-9a-f]{64}$/i.test(parsed?.hash)) {
         return { salt: parsed.salt, hash: parsed.hash, failures: Number(parsed.failures) || 0, blockedUntil: Number(parsed.blockedUntil) || 0 };
       }
-    } catch { /* No PIN has been set. */ }
-    return null;
+      throw new Error('Invalid lock record');
+    } catch (error) {
+      if (error.code === 'ENOENT') return null;
+      throw new Error('Lock record unavailable');
+    }
   };
   const write = (record) => {
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -45,6 +56,8 @@ export const createZdrLock = ({ file, now = Date.now }) => {
 
   return {
     isSet: () => read() !== null,
+    isAuthorized: (token) => (grants.get(token) ?? 0) > now(),
+    revoke: (token) => { grants.delete(token); },
     retryAfterMs: () => {
       const record = read();
       return record ? Math.max(0, record.blockedUntil - now()) : 0;
@@ -57,7 +70,7 @@ export const createZdrLock = ({ file, now = Date.now }) => {
       if (wait > 0) return { ok: false, retryAfterMs: wait };
       if (isValidPin(pin) && matches(record, pin)) {
         if (record.failures || record.blockedUntil) write({ ...record, failures: 0, blockedUntil: 0 });
-        return { ok: true, retryAfterMs: 0 };
+        return { ok: true, retryAfterMs: 0, ...grant() };
       }
       const failures = record.failures + 1;
       const blockedUntil = failures >= FREE_ATTEMPTS ? now() + Math.min(MAX_WAIT_MS, BASE_WAIT_MS * 2 ** (failures - FREE_ATTEMPTS)) : 0;
@@ -73,13 +86,15 @@ export const createZdrLock = ({ file, now = Date.now }) => {
       }
       const salt = crypto.randomBytes(16);
       write({ salt: salt.toString('hex'), hash: derive(pin, salt).toString('hex'), failures: 0, blockedUntil: 0 });
-      return { ok: true };
+      grants.clear();
+      return { ok: true, ...grant() };
     },
     clear(pin) {
       if (!read()) return { ok: true };
       const check = this.verify(pin);
       if (!check.ok) return { ok: false, error: 'The PIN is wrong.', retryAfterMs: check.retryAfterMs };
       try { fs.rmSync(file, { force: true }); } catch { return { ok: false, error: 'The PIN could not be removed.' }; }
+      grants.clear();
       return { ok: true };
     },
   };

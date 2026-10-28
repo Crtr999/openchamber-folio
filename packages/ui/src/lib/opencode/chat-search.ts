@@ -50,12 +50,14 @@ export async function searchChats(filters: ChatSearchFilters, loaders: Loaders, 
     while (next < sessions.length && !state.limited) {
       signal.throwIfAborted();
       const session = sessions[next++];
+      if (useZdrLockStore.getState().isLocked(session.directory)) continue;
       try {
         let messageCursor: string | undefined;
         const seen = new Set<string>();
         const messageIds = new Set<string>();
         do {
           signal.throwIfAborted();
+          if (useZdrLockStore.getState().isLocked(session.directory)) break;
           const key = JSON.stringify([session.directory, session.id, messageCursor ?? '', session.time.updated]);
           let page = cache?.pages.get(key);
           if (!page) {
@@ -66,6 +68,7 @@ export async function searchChats(filters: ChatSearchFilters, loaders: Loaders, 
             if (cache && cache.characters + characters <= CACHE_CHARACTER_LIMIT) { cache.pages.set(key, page); cache.characters += characters; }
           }
           signal.throwIfAborted();
+          if (useZdrLockStore.getState().isLocked(session.directory)) break;
           for (const item of page.items) {
             if (messageIds.has(item.id)) continue;
             messageIds.add(item.id);

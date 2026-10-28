@@ -16,7 +16,8 @@ const requestSchema = z.object({
   tools: z.array(toolSchema).max(256).optional(), tool_choice: z.unknown().optional(),
 });
 const imageSchema = z.object({ mime: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']), base64: z.string().max(14_000_000), alt: z.string().max(500).optional() });
-const resultSchema = z.object({ id: z.string().uuid(), lease: z.string().uuid(), text: z.string().max(500_000).optional(), error: z.string().max(1000).optional(), data: z.unknown().optional(), image: imageSchema.optional() });
+const geminiPageSchema = z.object({ url: z.string().regex(/^https:\/\/gemini\.google\.com\/app\/[^/?#]+$/), userCount: z.number().int().positive() });
+const resultSchema = z.object({ id: z.string().uuid(), lease: z.string().uuid(), text: z.string().max(500_000).optional(), error: z.string().max(1000).optional(), data: z.unknown().optional(), image: imageSchema.optional(), page: geminiPageSchema.optional() });
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 // Venice's own image picker. Selecting one of these in the native model picker makes the message an image prompt.
 const IMAGE_MODEL_NAMES = ['Flux 3', 'Flux 2 Max', 'GPT Image 2.5 Flare', 'GPT Image 2.5 Sunburst', 'GPT Image 2', 'Grok Imagine 2.0', 'Krea 2 Turbo', 'Luma Uni-1 Max', 'Nano Banana 2', 'Nano Banana 2 Lite', 'Qwen Image 3', 'Qwen Image 3 Pro', 'Qwen Image 2 Pro', 'Seedream V5 Pro', 'Z-Image Turbo'];
@@ -45,6 +46,17 @@ const saveImage = ({ mime, base64, alt }, name) => {
 };
 const loopback = address => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(address);
 const fail = (message, status = 422) => Object.assign(new Error(message), { status });
+// Inputs are schema-parsed requests or JSON-parsed arguments. Sort plain-object
+// keys recursively so argument key order cannot bypass repeated-call detection.
+const canonical = value => JSON.stringify(value, (_key, entry) => entry != null && Object.getPrototypeOf(entry) === Object.prototype ? Object.fromEntries(Object.entries(entry).sort(([a], [b]) => a.localeCompare(b))) : entry);
+const transcriptKey = (model, messages) => crypto.createHash('sha256').update(canonical({ model, messages: messages.map(message => ({ ...message, content: message.content || null })) })).digest('hex');
+const toolKey = call => {
+  let args; try { args = JSON.parse(call.function.arguments); } catch { args = call.function.arguments; }
+  return canonical([call.function.name, args]);
+};
+const GEMINI_MAX_TOOL_ROUNDS = 4;
+const GEMINI_RETENTION_MS = 10 * 60_000;
+const GEMINI_MAX_RECENT = 128;
 const stripDescriptions = (key, value) => ['description', '$schema', 'additionalProperties'].includes(key) ? undefined : value;
 const compactTool = tool => {
   const entry = { name: tool.function.name };
@@ -136,8 +148,8 @@ export function streamableLength(text, hasTools) {
 }
 
 /** One ordinary OpenCode model request, delivered to exactly one local renderer.
- * Requests start a fresh website turn with the full native transcript, so no
- * website conversation is guessed or shared between native sessions.
+ * Fresh requests carry the full native transcript. Gemini tool continuations
+ * reuse only an observed page tied to the exact preceding native response.
  * The same worker also reads each account's usage and model list.
  */
 export function createWebsiteModelsRuntime({ enabled = false, blocked = isEnterpriseMode, timeoutMs = 240_000, catalogFile = null } = {}) {
@@ -146,6 +158,9 @@ export function createWebsiteModelsRuntime({ enabled = false, blocked = isEnterp
   const waiters = new Set();
   const active = new Set();
   const recent = [];
+  // Hashes and observed continuation metadata only, in memory for ten minutes.
+  const geminiAttempts = new Map();
+  const geminiContinuations = new Map();
   let lastWorkerSeen = 0;
   let catalog = readCatalogFile(catalogFile);
   let catalogTimer = null;
@@ -168,7 +183,9 @@ export function createWebsiteModelsRuntime({ enabled = false, blocked = isEnterp
     if (!job) return null;
     active.add(job.provider); job.lease = crypto.randomUUID();
     armWorkerTimer(job);
-    return { id: job.id, lease: job.lease, provider: job.provider, kind: job.kind, prompt: job.prompt, model: job.model, image: Boolean(job.image) };
+    const result = { id: job.id, lease: job.lease, provider: job.provider, kind: job.kind, prompt: job.prompt, model: job.model, image: Boolean(job.image) };
+    if (job.continuation) result.continuation = job.continuation;
+    return result;
   };
   const workerConnected = () => Date.now() - lastWorkerSeen <= 45_000;
   /** Usage and model-list reads share the chat worker; they never send a message. */
@@ -230,7 +247,8 @@ export function createWebsiteModelsRuntime({ enabled = false, blocked = isEnterp
       let job, started = false, sent = 0;
       try {
         const built = buildWebsitePrompt(req.body);
-        const { request, compaction } = built;
+        let { request } = built;
+        const { compaction } = built;
         let prompt = built.prompt;
         const label = modelLabel(req.params.provider, request.model);
         const image = req.params.provider === 'venice' && request.model.startsWith('image-');
@@ -255,11 +273,42 @@ export function createWebsiteModelsRuntime({ enabled = false, blocked = isEnterp
         console.info('[website-models] request', { provider: req.params.provider, model: request.model, inputCharacters: prompt.length, toolCount: request.tools?.length ?? 0 });
         if (!workerConnected()) throw fail('Open Carter’s website account bridge is not connected. Open the app on this Mac and retry.');
         if (jobs.size >= 8) throw fail('The website accounts are busy. Wait for a current reply before retrying.', 409);
-        const hasTools = (request.tools?.length ?? 0) > 0;
+        let continuation = null, geminiRounds = 0;
+        if (req.params.provider === 'gemini') {
+          const now = Date.now();
+          for (const [key, expires] of geminiAttempts) if (expires <= now) geminiAttempts.delete(key);
+          for (const [key, entry] of geminiContinuations) if (entry.expires <= now) geminiContinuations.delete(key);
+          const key = transcriptKey(request.model, request.messages);
+          if (geminiAttempts.has(key)) throw fail('This Gemini request was already attempted. No answer was regenerated. Send a new message to continue.');
+          if (geminiAttempts.size >= GEMINI_MAX_RECENT) throw fail('Gemini has reached the local request safety limit. Wait ten minutes before sending another message.');
+          let end = request.messages.length;
+          while (end && request.messages[end - 1].role === 'tool') end -= 1;
+          if (end < request.messages.length && !compaction) {
+            const previousKey = transcriptKey(request.model, request.messages.slice(0, end));
+            const previous = geminiContinuations.get(previousKey);
+            if (!previous) throw fail('The Gemini tool continuation is no longer available. No new website chat was created. Send a new message to continue.');
+            continuation = previous.page;
+            geminiRounds = previous.rounds;
+            geminiContinuations.delete(previousKey);
+          }
+          const lastUser = request.messages.findLastIndex(message => message.role === 'user');
+          const rounds = request.messages.slice(lastUser + 1).filter(message => message.tool_calls?.length).length;
+          geminiRounds = Math.max(rounds, geminiRounds);
+          if (geminiRounds > GEMINI_MAX_TOOL_ROUNDS) throw fail('Gemini reached the tool round limit. No further website request was made.');
+          if (geminiRounds === GEMINI_MAX_TOOL_ROUNDS) {
+            request = { ...request, tools: [] };
+            prompt = buildWebsitePrompt(request).prompt;
+          }
+          // The verified website conversation already holds the native prefix.
+          // Send only new tool results instead of duplicating that entire history.
+          if (continuation) prompt = buildWebsitePrompt({ ...request, messages: request.messages.slice(end) }).prompt;
+          geminiAttempts.set(key, now + GEMINI_RETENTION_MS);
+        }
+        const hasTools = (built.request.tools?.length ?? 0) > 0;
         const created = Math.floor(Date.now() / 1000);
         const enqueue = text => {
           const queued = new Promise((resolve, reject) => {
-            job = { id: crypto.randomUUID(), kind: 'chat', image, provider: req.params.provider, model: label, prompt: text, resolve, reject, lease: null, timer: null, startedAt: Date.now(), phase: 'queued' };
+            job = { id: crypto.randomUUID(), kind: 'chat', image, provider: req.params.provider, model: label, prompt: text, continuation, resolve, reject, lease: null, timer: null, startedAt: Date.now(), phase: 'queued' };
             jobs.set(job.id, job);
             const owned = job;
             job.timer = setTimeout(() => settle(owned, fail('The website did not finish in time. Check its account connection before retrying.', 422)), timeoutMs);
@@ -291,16 +340,28 @@ export function createWebsiteModelsRuntime({ enabled = false, blocked = isEnterp
           let text = await reply;
           if (compaction) {
             let summary = extractCompactionSummary(text);
-            if (!summary) {
+            if (!summary && req.params.provider !== 'gemini') {
               console.info('[website-models] compaction reply missed the template, asking once more', { provider: req.params.provider, outputCharacters: text.length });
               text = await (reply = enqueue(prompt + '\n\nYour previous reply did not follow the template. Reply again with ONLY the filled template, starting with "## Objective".'));
               summary = extractCompactionSummary(text);
             }
-            if (!summary) throw fail('The website did not return the compaction template twice. Nothing was lost; switch to a different model, or compact again.', 422);
+            if (!summary) throw fail('The website did not return the compaction template. Nothing was lost; switch to a different model, or compact again.', 422);
             text = summary;
           }
           console.info('[website-models] reply', { provider: req.params.provider, outputCharacters: text.length });
           const message = websiteReplyMessage(text, request.tools ?? []);
+          if (req.params.provider === 'gemini' && message.tool_calls) {
+            const lastUser = request.messages.findLastIndex(row => row.role === 'user');
+            const previousCalls = new Set(request.messages.slice(lastUser + 1).flatMap(row => row.tool_calls ?? []).map(toolKey));
+            for (const call of message.tool_calls) {
+              const key = toolKey(call);
+              if (previousCalls.has(key)) throw fail('Gemini repeated a tool request in the same turn. The repeated tool was not executed.');
+              previousCalls.add(key);
+            }
+            if (!job.page) throw fail('Gemini did not report a reusable conversation. No tools were executed. Send a new message to continue.');
+            if (geminiContinuations.size >= GEMINI_MAX_RECENT) throw fail('Gemini reached the local continuation safety limit. No tools were executed.');
+            geminiContinuations.set(transcriptKey(request.model, [...request.messages, message]), { page: { ...job.page, answerHash: crypto.createHash('sha256').update(text).digest('hex') }, rounds: geminiRounds + 1, expires: Date.now() + GEMINI_RETENTION_MS });
+          }
           const finish = message.tool_calls ? 'tool_calls' : 'stop';
           if (!request.stream) return res.json({ id, object: 'chat.completion', created, model: request.model, choices: [{ index: 0, message, finish_reason: finish }] });
           begin();
@@ -355,6 +416,7 @@ export function createWebsiteModelsRuntime({ enabled = false, blocked = isEnterp
         settle(job, null, result.data);
       }
       else if (result.text?.trim()) {
+        if (job.provider === 'gemini' && result.page) job.page = result.page;
         if (job.provider === 'gemini' && /^Sorry,\s*something went wrong\.\s*Please try your request again\.?$/i.test(result.text.trim())) settle(job, fail('Gemini returned its website error. Confirm a normal message works in its account connection before retrying.', 422));
         else settle(job, null, result.text);
       }
@@ -379,6 +441,6 @@ export function createWebsiteModelsRuntime({ enabled = false, blocked = isEnterp
       res.json({ active: live });
     });
   };
-  const close = () => { closed = true; clearTimeout(catalogTimer); setWebsiteUsageRequester(null); for (const job of jobs.values()) settle(job, fail('Website account bridge stopped.')); for (const waiter of [...waiters]) waiter.cancel(); };
+  const close = () => { closed = true; clearTimeout(catalogTimer); geminiAttempts.clear(); geminiContinuations.clear(); setWebsiteUsageRequester(null); for (const job of jobs.values()) settle(job, fail('Website account bridge stopped.')); for (const waiter of [...waiters]) waiter.cancel(); };
   return { providers, registerCompletionRoutes, registerWorkerRoutes, close, get pendingCount() { return jobs.size; }, get workerCount() { return waiters.size; }, get catalog() { return catalog; }, requestUsage: provider => runAux(provider, 'usage') };
 }

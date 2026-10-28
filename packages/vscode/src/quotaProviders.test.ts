@@ -554,9 +554,10 @@ describe('Claude quota provider (VS Code parity)', () => {
       {
         ok: false,
         status: 429,
-        headers: new Headers({ 'retry-after': '120' }),
+        headers: new Headers({ 'retry-after': '1800' }),
         json: async () => ({}),
       } as Response,
+      mockResponse({ five_hour: { utilization: 0, resets_at: '2026-08-20T17:00:00Z' } }),
     ];
     let requestCount = 0;
     globalThis.fetch = (async () => {
@@ -565,15 +566,33 @@ describe('Claude quota provider (VS Code parity)', () => {
       return response;
     }) as typeof fetch;
 
-    const initial = await fetchQuotaForProvider('claude');
-    const rateLimited = await fetchQuotaForProvider('claude');
-    const duringCooldown = await fetchQuotaForProvider('claude');
+    const originalNow = Date.now;
+    let now = Date.UTC(2026, 7, 20, 11);
+    Date.now = () => now;
+    try {
+      const initial = await fetchQuotaForProvider('claude');
+      now += 60_000;
+      const rateLimited = await fetchQuotaForProvider('claude');
+      now += 29 * 60_000;
+      const duringCooldown = await fetchQuotaForProvider('claude');
 
-    assert.equal(initial.ok, true);
-    assert.equal(rateLimited.ok, true);
-    assert.equal(duringCooldown.ok, true);
-    assert.equal(duringCooldown.usage?.windows['5h']?.usedPercent, 12);
-    assert.equal(requestCount, 2);
+      assert.equal(initial.ok, true);
+      assert.equal(rateLimited.ok, false);
+      assert.equal(duringCooldown.ok, false);
+      assert.equal(duringCooldown.error, 'Rate limited. Retrying soon.');
+      assert.equal(rateLimited.fetchedAt, initial.fetchedAt);
+      assert.equal(duringCooldown.fetchedAt, initial.fetchedAt);
+      assert.equal(duringCooldown.usage?.windows['5h']?.usedPercent, 12);
+      assert.equal(requestCount, 2);
+      now += 60_000;
+      const fresh = await fetchQuotaForProvider('claude');
+      assert.equal(fresh.ok, true);
+      assert.equal(fresh.fetchedAt, now);
+      assert.equal(fresh.usage?.windows['5h']?.usedPercent, 0);
+      assert.equal(requestCount, 3);
+    } finally {
+      Date.now = originalNow;
+    }
   });
 });
 

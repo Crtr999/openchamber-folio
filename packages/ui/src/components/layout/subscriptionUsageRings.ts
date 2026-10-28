@@ -18,7 +18,12 @@ const finiteNumber = (value: number | null): number | null => (
   value !== null && Number.isFinite(value) ? value : null
 );
 
-const hasUsedPercent = (window: UsageWindow): boolean => finiteNumber(window.usedPercent) !== null;
+const isRateWindow = (key: string, window: UsageWindow): boolean => (
+  finiteNumber(window.usedPercent) !== null
+  || SHORT_WINDOW_KEYS.has(key)
+  || LONG_WINDOW_KEYS.has(key)
+  || (finiteNumber(window.windowSeconds) ?? 0) > 0
+);
 
 const duration = (window: UsageWindow): number => finiteNumber(window.windowSeconds) ?? Number.POSITIVE_INFINITY;
 
@@ -28,13 +33,15 @@ const duration = (window: UsageWindow): number => finiteNumber(window.windowSeco
  * The outer ring is the longer window (weekly or 7-day). The inner ring is
  * the shorter one (5-hour, or whatever shorter window the provider reports).
  * A provider that reports a single pool gets one ring. Windows without a used
- * percent, such as a credit balance, are not rings.
+ * percent keep their place when they describe a rate window: unknown is not
+ * zero, and must not promote the short window into the weekly ring's place.
+ * Balance-only windows are not rings.
  */
 export const pickSubscriptionRings = (
   windows: Record<string, UsageWindow> | null | undefined,
 ): SubscriptionRings => {
   const entries = Object.entries(windows ?? {})
-    .filter((entry): entry is [string, UsageWindow] => hasUsedPercent(entry[1]))
+    .filter(([key, window]) => isRateWindow(key, window))
     .map(([key, window]) => ({ key, window }));
 
   if (entries.length === 0) return NONE;

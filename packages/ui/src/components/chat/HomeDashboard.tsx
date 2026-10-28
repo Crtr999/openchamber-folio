@@ -21,6 +21,8 @@ import { HomeFriends } from './HomeFriends';
 import { HomeThisWeek } from './HomeThisWeek';
 import { openMeetingWorkspace } from '@/lib/meetings/workspace';
 import { meetingsSupported } from '@/lib/meetings/contract';
+import { useZdrLockStore } from '@/stores/useZdrLockStore';
+import { isPathGuarded } from '@/lib/zdrLock';
 
 /** The illustrated hero scene the greeting, composer and cards float over.
  *  The desktop shell hides this copy and shows the window-wide
@@ -45,7 +47,19 @@ export const HomeGreeting: React.FC = () => {
     const { t, locale } = useI18n();
     const statuses = useAllSessionStatuses();
     const pending = useGlobalBlockingRequestsStore(state => state.bySession);
-    const running = React.useMemo(() => Object.entries(statuses).filter(([id, status]) => status && status.type !== 'idle' && !pending.get(id)?.permissions.length && !pending.get(id)?.forms.length).length, [statuses, pending]);
+    const sessions = useAllLiveSessions();
+    const cached = useGlobalSessionsStore(state => state.activeSessions);
+    const privacyLoaded = useZdrLockStore(state => state.loaded);
+    const guarded = useZdrLockStore(state => state.directories);
+    const running = React.useMemo(() => {
+        if (!privacyLoaded) return 0;
+        const directories = new Map([...cached, ...sessions].map(session => [session.id, session.directory]));
+        return Object.entries(statuses).filter(([id, status]) => {
+            const directory = directories.get(id);
+            return directory && !isPathGuarded(guarded, directory) && status && status.type !== 'idle'
+                && !pending.get(id)?.permissions.length && !pending.get(id)?.forms.length;
+        }).length;
+    }, [statuses, pending, sessions, cached, privacyLoaded, guarded]);
     const [now, setNow] = React.useState(() => new Date());
     React.useEffect(() => {
         const timer = setInterval(() => setNow(new Date()), 60_000);
@@ -119,7 +133,10 @@ export const HomeDashboard: React.FC = () => {
     const pending = useGlobalBlockingRequestsStore(state => state.bySession);
     const ranks = useSessionOrderingStore((state) => state.rankById);
     const pinnedIds = useSessionPinnedStore((state) => state.ids);
-    const projects = useProjectsStore((state) => state.projects);
+    const allProjects = useProjectsStore((state) => state.projects);
+    const privacyLoaded = useZdrLockStore(state => state.loaded);
+    const guarded = useZdrLockStore(state => state.directories);
+    const projects = React.useMemo(() => privacyLoaded ? allProjects.filter(project => !isPathGuarded(guarded, project.path)) : [], [allProjects, privacyLoaded, guarded]);
     const recent = React.useMemo(() => {
         const byId = new Map(cachedSessions.map((session) => [session.id, session]));
         for (const session of liveSessions) {
@@ -127,14 +144,14 @@ export const HomeDashboard: React.FC = () => {
             byId.set(session.id, cached ? mergeLiveSessionWithGlobalSession(session, cached) : session);
         }
         return [...byId.values()]
-            .filter((session) => !session.parentID && !session.time.archived)
+            .filter((session) => privacyLoaded && session.directory && !isPathGuarded(guarded, session.directory) && !session.parentID && !session.time.archived)
             .sort((a, b) => compareSessionsByLifecycleOrder(a, b, pinnedIds, ranks))
             .slice(0, 4);
-    }, [cachedSessions, liveSessions, pinnedIds, ranks]);
+    }, [cachedSessions, liveSessions, pinnedIds, ranks, privacyLoaded, guarded]);
     const working = React.useMemo(() => liveSessions
-        .filter((session) => !session.time.archived && statuses[session.id] && statuses[session.id].type !== 'idle')
+        .filter((session) => privacyLoaded && session.directory && !isPathGuarded(guarded, session.directory) && !session.time.archived && statuses[session.id] && statuses[session.id].type !== 'idle')
         .sort((a, b) => compareSessionsByLifecycleOrder(a, b, pinnedIds, ranks)),
-    [liveSessions, statuses, pinnedIds, ranks]);
+    [liveSessions, statuses, pinnedIds, ranks, privacyLoaded, guarded]);
 
     return (
         <div className="flex min-w-0 flex-col gap-4">

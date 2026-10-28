@@ -80,14 +80,15 @@
 }
 
 /* ── Type ─────────────────────────────────────────────────────────────── */
-/* Widget titles: a wide, heavy grotesk, tight-tracked like poster type. */
+/* Home widgets stay quieter than the greeting and composer. Keep the
+   typography here, where the personal theme wins the shared card cascade. */
 [data-oc-personal-interactions] :is(.oc-home-card-heading, .oc-home-card-heading h2) {
     color: var(--surface-elevated-foreground);
-    font-family: var(--oc-font-display);
-    font-size: 14.5px;
-    font-stretch: 116%;
-    font-weight: 800;
-    letter-spacing: -0.025em;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-stretch: normal;
+    font-weight: 600;
+    letter-spacing: 0.01em;
 }
 [data-oc-personal-interactions] .oc-home-card-heading :is(.oc-home-count, button, [data-slot="select-trigger"], span.ml-auto) {
     font-family: var(--font-sans);
@@ -96,7 +97,7 @@
     letter-spacing: normal;
 }
 [data-oc-personal-interactions] .oc-home-card-heading > svg,
-[data-oc-personal-interactions] .oc-home-card-heading h2 > svg { color: var(--primary-text, var(--primary-base)); }
+[data-oc-personal-interactions] .oc-home-card-heading h2 > svg { color: var(--surface-muted-foreground); }
 
 /* The Home greeting and the draft title: big editorial serif. */
 [data-oc-personal-interactions] .oc-home-greeting-title {
@@ -307,11 +308,11 @@ html:not(.dark)[data-oc-home] [data-oc-personal-interactions]:has(> .oc-scene-ba
 }
 [data-oc-personal-interactions] .oc-home-scene-button { margin-top: 6px; }
 
-/* Cards float over the scene as translucent frosted cream (or ink) panels. */
+/* A nearly opaque reading surface keeps lists legible over every scene. */
 [data-oc-personal-interactions] .oc-home-card {
-    background: color-mix(in srgb, var(--surface-elevated) 84%, transparent);
-    -webkit-backdrop-filter: blur(22px) saturate(1.18);
-    backdrop-filter: blur(22px) saturate(1.18);
+    background: color-mix(in srgb, var(--surface-elevated) 96%, transparent);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
 }
 
 @media (prefers-reduced-transparency: reduce) {

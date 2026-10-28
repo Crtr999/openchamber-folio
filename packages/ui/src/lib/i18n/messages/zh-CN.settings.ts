@@ -4,6 +4,7 @@ import { linearIntegrationI18n } from './linear-integration.i18n';
 import { thirdPartyIntegrationI18n } from './third-party-integrations.i18n';
 import { extensionCatalogI18n } from './extension-catalog.i18n';
 export const settingsDict = {
+  ...outlookI18n['zh-CN'],
   'settings.themeImport.selectAll': '全选',
   'settings.themeImport.deselectAll': '取消全选',
   'settings.themeImport.complete': '导入完成',
@@ -2379,3 +2380,4 @@ export const settingsDict = {
   'settings.openchamber.tools.field.browserMcpServersSummary': '应用使用自己的浏览器，这些服务器不会在应用内启动。',
   'settings.openchamber.tools.field.browserMcpServersInfo': 'OpenCode 会为每个智能体启动每个 MCP 服务器的一份副本，于是三个浏览器服务器变成了 59 份副本，占用约 2GB 内存。应用自带浏览器面板和 openchamber_web 工具，所以这里不启动它们。你自己的配置不变：在其他客户端里它们照常运行。',
 } as const;
+import { outlookI18n } from './outlook.i18n';

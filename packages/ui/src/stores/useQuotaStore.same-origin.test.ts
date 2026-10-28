@@ -34,6 +34,10 @@ test('Electron dev loads usage through its same-origin proxy before Settings ope
         } } },
       });
     }
+    const providerId = path.slice('/api/quota/'.length);
+    if (['gemini-website', 'venice-website'].includes(providerId)) {
+      return Response.json({ providerId, providerName: providerId, ok: false, configured: false, usage: null, fetchedAt: 123 });
+    }
     throw new Error(`Unexpected request: ${path}`);
   });
 
@@ -44,14 +48,17 @@ test('Electron dev loads usage through its same-origin proxy before Settings ope
     useQuotaStore.getState().resetForRuntimeSwitch();
     await useQuotaStore.getState().ensureLoadedForRuntime();
 
-    expect(requests).toEqual(['/api/config/settings?surface=desktop', '/api/quota/codex']);
+    expect(requests).toEqual([
+      '/api/config/settings?surface=desktop', '/api/quota/codex',
+      '/api/quota/gemini-website', '/api/quota/venice-website',
+    ]);
     expect(getRuntimeKey()).toBe('local');
     expect(getRuntimeApiBaseUrl()).toBe('');
     expect(useQuotaStore.getState().loadedRuntimeKey).toBe('local');
     expect(useQuotaStore.getState().results[0]?.usage?.windows['5h'].remainingPercent).toBe(58);
 
     await useQuotaStore.getState().ensureLoadedForRuntime();
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(4);
   } finally {
     useQuotaStore.getState().resetForRuntimeSwitch();
     useConfigStore.setState({ isInitialized: previousInitialized });

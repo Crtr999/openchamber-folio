@@ -24,6 +24,7 @@ const fixture = async () => {
     scheduledTasksRuntime: { syncProject: (id) => config.listScheduledTasks(id), runNow: async (project, task) => { runs.push({ project, task }); return { ok: true, sessionID: 'ses_run' }; } },
   });
   const make = () => createCompanionCoordinator({
+    folderGuard: { check: async () => ({ ok: true }) },
     projectConfigRuntime: config, scheduledTaskService: service, now: () => time,
     inspectResult: async (id) => ({ kind: 'update', enrollment: { projectId: 'project', taskId: 'companion:12345678' }, reply: id === 'ses_changed' ? 'A changed opportunity' : 'A useful opportunity' }),
     readMetadata: async (id) => id === 'own' ? { openchamber: { companion: {} } } : {},
@@ -34,7 +35,9 @@ const fixture = async () => {
   const coordinator = make();
   const app = express();
   app.use((req, res, next) => req.get('Authorization') === 'Bearer fixture' ? next() : res.sendStatus(401));
-  registerCompanionRoutes(app, { scheduledTaskService: service, projectConfigRuntime: config, companionCoordinator: coordinator });
+  registerCompanionRoutes(app, { scheduledTaskService: service, projectConfigRuntime: config, companionCoordinator: coordinator,
+    folderGuard: { check: async () => ({ ok: true }) },
+  });
   app.use((error, _req, res, _next) => res.status(error.statusCode || 500).json({ error: error.message }));
   return { config, coordinator, make, service, app, notices, runs, now: () => time, advance: (ms) => { time += ms; }, failNotice: (value) => { failNotice = value; } };
 };

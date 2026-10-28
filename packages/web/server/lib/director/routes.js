@@ -7,6 +7,7 @@
  */
 
 import express from 'express';
+import { z } from 'zod';
 
 const parseJsonBody = express.json({ limit: '1mb' });
 
@@ -16,7 +17,13 @@ const MAX_MEMORY_FILE_CHARS = 16_000;
 const MAX_ENTRIES = 40;
 const MAX_ENTRY_CHARS = 700;
 
-const asNonEmptyString = (value) => (typeof value === 'string' && value.trim().length > 0 ? value.trim() : '');
+const requestSchema = z.object({
+  prompt: z.string().trim().catch(''),
+  directory: z.string().trim().catch(''),
+  folderName: z.string().trim().catch(''),
+  preferredProviderID: z.string().trim().catch(''),
+  preferredModelID: z.string().trim().catch(''),
+});
 
 const clip = (text, limit) => (text.length > limit ? text.slice(0, limit) + '\n[trimmed]' : text);
 
@@ -60,9 +67,9 @@ export const registerDirectorRoutes = (app, dependencies) => {
   };
 
   app.post('/api/openchamber/director/improve', parseJsonBody, async (req, res) => {
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const draft = asNonEmptyString(body.prompt);
-    const directory = asNonEmptyString(body.directory);
+    const parsed = requestSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Write a message first.' });
+    const { prompt: draft, directory, folderName, preferredProviderID, preferredModelID } = parsed.data;
     if (!draft) return res.status(400).json({ error: 'Write a message first.' });
     if (draft.length > MAX_DRAFT_CHARS) return res.status(413).json({ error: 'That message is too long for the Director.' });
     if (!directory || !path.isAbsolute(directory)) return res.status(400).json({ error: 'A configured folder is required.' });
@@ -91,10 +98,13 @@ export const registerDirectorRoutes = (app, dependencies) => {
     try {
       const { generateSmallModelText } = await getSmallModelService();
       const result = await generateSmallModelText({
-        prompt: buildDirectorPrompt({ folderName: asNonEmptyString(body.folderName), rules, memoryFile, entries, draft }),
+        prompt: buildDirectorPrompt({ folderName, rules, memoryFile, entries, draft }),
         system: DIRECTOR_SYSTEM,
         maxOutputTokens: 1800,
         directory: resolved,
+        preferredProviderID: preferredProviderID || undefined,
+        preferredModelID: preferredModelID || undefined,
+        restrictToPreferredProvider: true,
         timeoutMs: 45_000,
       });
       const text = cleanImprovedPrompt(result?.text);

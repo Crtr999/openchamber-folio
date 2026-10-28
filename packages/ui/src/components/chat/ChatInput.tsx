@@ -93,6 +93,7 @@ import { GitHubPrPickerDialog } from '@/components/session/GitHubPrPickerDialog'
 import { LinearIssuePickerDialog } from '@/components/session/LinearIssuePickerDialog';
 import { Icon } from "@/components/icon/Icon";
 import { HomeDashboard, HomeGreeting, HomeQuickActions } from './HomeDashboard';
+import { HomeSuggestions } from './HomeSuggestions';
 import { useChatSearchDirectory } from '@/hooks/useChatSearchDirectory';
 import { useGuestAttachItems, useGuestCommands } from '@/hooks/useGuestSurfaces';
 import { useGuestDialogStore } from '@/lib/guests/dialog-store';
@@ -1569,7 +1570,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         const startedAt = Date.now();
         let outgoing = original;
         try {
-            const result = await improveWithDirector({ directory: target.path, folderName: name, prompt: original, signal: controller.signal });
+            const result = await improveWithDirector({
+                directory: target.path,
+                folderName: name,
+                prompt: original,
+                preferredProviderID: currentProviderId || undefined,
+                preferredModelID: currentModelId || undefined,
+                signal: controller.signal,
+            });
             // A short beat so the scan reads as deliberate even when the model answers at once.
             await pause(Math.max(0, 2300 - (Date.now() - startedAt)));
             if (!wasSkipped()) {
@@ -4278,6 +4286,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             </div>
             {showDesktopDraftPresentation ? (
                 <div className={draftPresentationClassName}>
+                    <HomeSuggestions />
                     <HomeDashboard />
                 </div>
             ) : null}

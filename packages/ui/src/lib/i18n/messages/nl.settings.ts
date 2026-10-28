@@ -4,6 +4,7 @@ import { linearIntegrationI18n } from './linear-integration.i18n';
 import { thirdPartyIntegrationI18n } from './third-party-integrations.i18n';
 import { extensionCatalogI18n } from './extension-catalog.i18n';
 export const settingsDict = {
+  ...outlookI18n.nl,
   'settings.openchamber.tunnel.enterpriseMode': 'Externe tunnels zijn niet beschikbaar in enterprise-modus, omdat de tunneldienst het verkeer zou kunnen lezen. Koppel andere apparaten via uw netwerk of de relay van uw organisatie om deze server te bereiken.',
   'settings.voice.page.enterpriseMode': 'In enterprise-modus blijft voorlezen op deze computer. Gebruik een lokale stem of een aangepaste server die hier draait.',
   'settings.themeImport.selectAll': 'Alles selecteren',
@@ -2369,3 +2370,4 @@ export const settingsDict = {
   'settings.openchamber.tools.field.browserMcpServersSummary': 'De app gebruikt zijn eigen browser; deze servers starten niet binnen de app.',
   'settings.openchamber.tools.field.browserMcpServersInfo': 'OpenCode start voor elke agent een kopie van elke MCP-server, waardoor drie browserservers negenenvijftig kopieën werden en ongeveer twee gigabyte geheugen. De app heeft een eigen browserpaneel en de openchamber_web-tool, dus hier blijven ze uit. Je eigen configuratie verandert niet: ze draaien nog voor elke andere client.',
 } as const;
+import { outlookI18n } from './outlook.i18n';

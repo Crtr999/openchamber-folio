@@ -9,6 +9,14 @@ export type RuntimeAuthCredentialProvider = () => RuntimeAuthCredential | Promis
 
 let credentialProvider: RuntimeAuthCredentialProvider = () => null;
 let runtimeBearerToken = '';
+let zdrAccessToken = '';
+let zdrAccessExpiresAt = 0;
+export const setZdrAccessGrant = (token = '', expiresAt = 0): string => {
+  const previous = zdrAccessToken;
+  zdrAccessToken = token;
+  zdrAccessExpiresAt = expiresAt;
+  return previous;
+};
 let runtimeExtraHeaders: Record<string, string> = {};
 let runtimeUrlAuthToken = '';
 let runtimeUrlAuthTokenExpiresAt = 0;
@@ -94,6 +102,7 @@ export const clearRuntimeUrlAuthToken = (): void => {
 };
 
 const resetRuntimeAuthGeneration = (): void => {
+  setZdrAccessGrant();
   runtimeAuthGeneration += 1;
   runtimeUrlAuthRefreshPromise = null;
   clearRuntimeUrlAuthToken();
@@ -451,6 +460,7 @@ export const subscribeRuntimeUrlAuthToken = (listener: () => void): (() => void)
 
 export const buildRuntimeAuthHeaders = async (headers?: HeadersInit): Promise<Headers> => {
   const next = new Headers(headers);
+  if (!next.has('x-openchamber-zdr-access') && zdrAccessToken && zdrAccessExpiresAt > Date.now()) next.set('x-openchamber-zdr-access', zdrAccessToken);
   for (const [key, value] of Object.entries(getRuntimeExtraHeadersSync())) {
     if (!next.has(key)) next.set(key, value);
   }

@@ -1,6 +1,8 @@
 # Notifications Module Documentation
 
 ## Purpose
+Global status, activity, attention and pending-request snapshots apply the ZDR transport classifier before responding. OpenChamber SSE/control broadcasts use the same classifier. Unlocking a folder does not widen these global responses. See `../zdr-lock/DOCUMENTATION.md` for scoped reads and private SSE.
+
 This module provides notification message preparation utilities for the web server runtime, including text truncation and plain-text normalization for system notifications.
 
 ## Entrypoints and structure

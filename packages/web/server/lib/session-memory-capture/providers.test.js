@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractAllowedProviders } from './providers.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { extractAllowedProviders, resolveDirectoryAllowedProviders } from './providers.js';
 
 /**
  * A folder's provider policy is the same policy the server enforces on every
@@ -11,6 +14,13 @@ import { extractAllowedProviders } from './providers.js';
 const withPolicies = (policies) => ({ experimental: { policies } });
 
 describe('the providers a folder is bound to', () => {
+  it('refuses malformed configuration rather than treating it as unbound', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'provider-policy-test-'));
+    try {
+      fs.writeFileSync(path.join(dir, 'opencode.json'), '{broken');
+      await expect(resolveDirectoryAllowedProviders(dir)).rejects.toThrow('Provider policy could not be read');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
   it('reads the allowed provider out of a deny-all policy', () => {
     expect(extractAllowedProviders(withPolicies([
       { action: 'provider.use', resource: '*', effect: 'deny' },

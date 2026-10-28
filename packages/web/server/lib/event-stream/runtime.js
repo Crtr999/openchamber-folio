@@ -20,8 +20,9 @@ export function createGlobalUiEventBroadcaster({
   sseClients,
   wsClients,
   writeSseEvent,
+  filterEvent = null,
 }) {
-  return (payload, options = {}) => {
+  const broadcast = (payload, options = {}) => {
     const hasSseClients = sseClients.size > 0;
     const hasWsClients = wsClients.size > 0;
     if (!hasSseClients && !hasWsClients) {
@@ -51,6 +52,15 @@ export function createGlobalUiEventBroadcaster({
       }
     }
   };
+  if (!filterEvent) return broadcast;
+  let queue = Promise.resolve();
+  return (payload, options = {}) => {
+    queue = queue.then(async () => {
+      const visible = await filterEvent(payload, { directory: options.directory });
+      if (visible) broadcast(visible, options);
+    }).catch(() => {});
+    return queue;
+  };
 }
 
 export function createMessageStreamWsRuntime({
@@ -68,6 +78,7 @@ export function createMessageStreamWsRuntime({
   upstreamReconnectDelayMs = DEFAULT_UPSTREAM_RECONNECT_DELAY_MS,
   fetchImpl = fetch,
   globalEventHub = null,
+  privacy = null,
 }) {
   const wsServer = new WebSocketServer({
     noServer: true,
@@ -89,6 +100,7 @@ export function createMessageStreamWsRuntime({
   });
 
   const globalBridge = createGlobalMessageStreamWsBridge({
+    filterEvent: privacy ? (payload, options) => privacy.filterEvent(payload, options) : null,
     globalHub,
     ownsGlobalHub,
     wsClients,
@@ -117,7 +129,8 @@ export function createMessageStreamWsRuntime({
       directorySockets.delete(socket);
     });
 
-    acceptDirectoryMessageStreamWsConnection({
+      acceptDirectoryMessageStreamWsConnection({
+        privacy,
       socket,
       requestedLastEventId,
       requestedDirectory,
@@ -151,6 +164,16 @@ export function createMessageStreamWsRuntime({
           const originAllowed = await isRequestOriginAllowed(req);
           if (!originAllowed) {
             rejectWebSocketUpgrade(socket, 403, 'Invalid origin');
+            return;
+          }
+        }
+
+        // Browser WS upgrades cannot attach the private HTTP grant. Private
+        // conversations deliberately use the explicitly scoped SSE transport.
+        if (privacy && pathname === MESSAGE_STREAM_DIRECTORY_WS_PATH) {
+          const directory = new URL(req.url, 'http://127.0.0.1').searchParams.get('directory');
+          if (!directory || !await privacy.allowsDirectory(directory)) {
+            rejectWebSocketUpgrade(socket, 403, 'Private folders require scoped HTTP transport');
             return;
           }
         }

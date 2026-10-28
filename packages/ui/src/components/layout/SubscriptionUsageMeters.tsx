@@ -30,7 +30,7 @@ const toneColor = (usedPercent: number | null): string => {
   const tone = resolveUsageTone(usedPercent);
   if (tone === 'critical') return 'var(--status-error)';
   if (tone === 'warn') return 'var(--status-warning)';
-  return 'var(--status-success)';
+  return usedPercent === null ? 'var(--interactive-border)' : 'var(--status-success)';
 };
 
 const UsageRing: React.FC<{
@@ -50,7 +50,7 @@ const UsageRing: React.FC<{
         fill="none"
         stroke={failed && used === null ? 'var(--status-error)' : 'var(--interactive-border)'}
         strokeWidth={STROKE}
-        strokeDasharray={failed && used === null ? '3 2' : undefined}
+        strokeDasharray={used === null ? '3 2' : undefined}
       />
       {used !== null && used > 0 ? (
         <circle
@@ -250,7 +250,7 @@ const MeterButton: React.FC<{
  */
 export const SubscriptionUsageMeters: React.FC<{ className?: string }> = ({ className }) => {
   const { t } = useI18n();
-  const results = useQuotaStore((state) => state.results);
+  const results = useQuotaStore((state) => state.currentResults);
   const refreshErrors = useQuotaStore((state) => state.refreshErrors);
   const isFetchingProvider = useQuotaStore((state) => state.isFetchingProvider);
   const fetchProviderQuota = useQuotaStore((state) => state.fetchProviderQuota);

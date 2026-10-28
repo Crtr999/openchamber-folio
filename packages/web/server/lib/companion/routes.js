@@ -21,12 +21,22 @@ const bodySchema = z.object({
 
 // These are ordinary project schedules, not a second execution engine or
 // database of conversations. The scheduler owns claiming, recovery and state.
-export const registerCompanionRoutes = (app, { scheduledTaskService, projectConfigRuntime, companionCoordinator }) => {
+export const registerCompanionRoutes = (app, { scheduledTaskService, projectConfigRuntime, companionCoordinator, folderGuard }) => {
   const json = express.json({ limit: '16kb' });
   const base = '/api/projects/:projectId/companion';
   const handle = (work) => async (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
-    try { return await work(req, res); } catch (error) {
+    try {
+      // Resolve only the settings index first. list() synchronizes project
+      // files, so it must not be used to establish this privacy boundary.
+      const projects = await scheduledTaskService.listProjects();
+      const project = projects.find((item) => item.id === req.params.projectId);
+      if (!project) return res.status(404).json({ error: 'Project not found' });
+      if (!folderGuard || !(await folderGuard.check(project.path)).ok) {
+        return res.status(403).json({ error: 'Companion follow-ups are unavailable for this folder.', code: 'private_folder' });
+      }
+      return await work(req, res);
+    } catch (error) {
       if (error?.statusCode) return res.status(error.statusCode).json({ error: error.message });
       return next(error);
     }

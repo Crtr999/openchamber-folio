@@ -12,6 +12,8 @@ Registered through feature routes behind the existing API authentication boundar
 
 Project resolution, persistence locks, duplicate-occurrence claiming and run status remain owned by the scheduled task service. The same records can be inspected in desktop Scheduled Tasks. Results are regular root conversations and use the existing notifications and artifact paths. An unavailable list remains an error, not a successful empty list. UI responses are schema-parsed, refresh failures preserve existing rows and runtime changes close the panel.
 
+Companion routes first resolve the project from the settings index and apply the permanent folder guard. Named ZDR folders, ZDR-bound folders, descendants of configured ZDR roots and unreadable bindings return `403 private_folder` before schedule synchronization or companion state reads/writes. PIN verification never relaxes this exclusion. The coordinator applies the same guard before activity tracking, timer reads, context collection and notification indexing. Delivery refuses private run preparation and checks project eligibility before reading an enrolled result. Existing private inbox records are left on disk but are not returned or delivered.
+
 Every newly saved companion row requests goal mode with a 10,000-token budget and never opts into permission auto-accept. This uses the existing goal accounting and settings; it is not an independent provider billing cap or a guarantee that a single model turn cannot exceed a threshold. Project provider restrictions and ordinary tool authorization still apply in OpenCode. The prompt reminds the agent to use scoped memory, verify current facts and avoid unsupported or repeated suggestions. That prompt is guidance, not an authorization boundary.
 
 ## Runtime behavior
@@ -57,11 +59,43 @@ Saving monitoring preferences preserves an existing monitor responsibility and i
 
 ## Approved personal awareness review
 
+Settings > Connections > Personal suggestions is the explicit enrollment path.
+`awareness-enrollment.js` owns authenticated `GET`, `PUT` and `DELETE` at
+`/api/companion/personal-awareness`. GET lists permitted indexed folders and
+their currently configured, enabled OpenAI models. The private native status
+callback reports saved connections and calendar authorization without reading
+source bodies or requesting OS access. Opening settings never opts in.
+
+PUT requires `approved: true`, the exact folder/model, a nonempty `sources`
+allowlist and verified connected mailbox addresses. It first disables old
+consent, creates the ordinary `companion:personal-awareness` daily 09:00
+schedule, then saves new consent. Failed schedule or consent persistence leaves
+consent disabled and attempts schedule cleanup, preserving any prior schedule
+and its history in the paused state. DELETE disables consent before
+pausing the schedule and stays available under enterprise policy. Revocation
+stops future preparation, not a model request already sent. Old approvals
+without an explicit source allowlist fail closed and require approval again.
+
+Native collection and engine evidence both honor the source allowlist.
+Unselected chat, follow-up, Notion, calendar and Outlook sources are not read.
+Calendar output exceeding the 50-event review cap is partial, never ready.
+No consent, credentials or schedules are created by installing the feature.
+
+| Runtime | Enrollment and sources |
+| --- | --- |
+| Web | Existing Connections page and authenticated server routes; native sources only when supplied by its host. |
+| Electron | Same routes/page; local native connections remain separately approved. |
+| Hosted mobile | Same server approval and results, no phone-native source connection. |
+| Capacitor | Same connected-server approval and results, no phone-native source connection. |
+| VS Code | No enrollment UI or native reader; no companion route bridge. |
+
 `personal-awareness.js` prepares only `companion:personal-awareness`, after checking a persisted `commitments.json.awareness` approval, exact project and OpenAI model, current enterprise policy and folder exclusions. It uses the existing scheduled-task runner, result sessions, companion inbox, quiet hours and notification attempts. It adds no listener or polling timer. Session permissions deny every tool except the managed OpenChamber tool; control then limits that enrolled conversation to commitment actions.
 
 The optional Electron in-process reader retains ownership of its encrypted Notion connection. It returns at most four page excerpts per run, a bounded configured task-board snapshot and the native calendar reader's next seven days. The server requests one 100-session page, reads at most four eligible root conversations, excludes live/archived/companion/ZDR/provider-bound conversations, and includes bounded existing commitments and follow-up inbox entries. This is partial, rotating coverage, not a claim that every historical message or every Notion page was reviewed. Notion search starts with recently opened pages and deadline/assignment searches. Outlook remains `needs-connection` for each selected address until supported provider connections are implemented and authenticated. Live testing found that Outlook’s local scripting API did not expose the selected accounts even while its CBC calendar window was connected. That experimental reader is retained outside the release, not shipped. A signed-in Outlook window is insufficient.
 
 Review receipts, source health, a Notion offset and a chat cursor are stored in the existing commitments file. Source bodies are not duplicated there. Receipts advance only after a nonempty completed review reaches the companion delivery inspector. A failed dispatch keeps sources eligible. Changed excerpts are supplied again; unchanged calendar events remain visible as time passes. Missing source reads remain errors or partial coverage. The prompt distinguishes newly changed connection failures from previously reported ones. Exact result deduplication remains server-owned; semantic significance and suppression of reworded suggestions still depend on the model.
+
+External source records mentioning ZDR or a denied configured folder's path/name are removed before evidence and review fingerprints are collected. This is reference filtering, not a claim that an unlabelled calendar event can be classified as confidential. Native IPC readers remain responsible for their own collection and display boundary.
 
 New obligations added by this review are pinned to its approved OpenAI model and cannot use web research. Exact active-title duplicates update their date rather than create a second obligation. Follow-up checks recheck the folder's provider policy. Normal user-created commitments keep their existing model behavior.
 

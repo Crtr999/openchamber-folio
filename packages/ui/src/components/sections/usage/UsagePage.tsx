@@ -39,7 +39,7 @@ interface ModelInfo {
 export const UsagePage: React.FC = () => {
   const { t } = useI18n();
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
-  const results = useQuotaStore((state) => state.results);
+  const results = useQuotaStore((state) => state.currentResults);
   const selectedProviderId = useQuotaStore((state) => state.selectedProviderId);
   const setSelectedProvider = useQuotaStore((state) => state.setSelectedProvider);
   const loadSettings = useQuotaStore((state) => state.loadSettings);

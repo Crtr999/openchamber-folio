@@ -70,9 +70,9 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    margin: 0 0 10px;
-    min-height: 32px;
-    padding-bottom: 10px;
+    margin: 0 0 12px;
+    min-height: 34px;
+    padding-bottom: 12px;
     border-bottom: 1px solid color-mix(in srgb, var(--oc-hairline, var(--interactive-border)) 72%, transparent);
     color: var(--surface-muted-foreground);
     font-size: 12px;
@@ -103,8 +103,8 @@
     height: 20px;
     padding: 0 7px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--primary-base) 10%, var(--surface-subtle));
-    color: var(--primary-text, var(--surface-muted-foreground));
+    background: var(--surface-subtle);
+    color: var(--surface-muted-foreground);
     font-size: 10.5px;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
@@ -114,9 +114,9 @@
     width: 100%;
     min-width: 0;
     justify-content: flex-start;
-    gap: 8px;
-    padding: 7px 10px;
-    border-radius: 11px;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
     text-transform: none;
     font-weight: 450;
     font-size: 12.5px;
@@ -124,7 +124,7 @@
 }
 
 .oc-home-row:hover {
-    background: color-mix(in srgb, var(--primary-base) 7%, var(--interactive-hover));
+    background: var(--interactive-hover);
 }
 
 .oc-home-context-row {
@@ -150,7 +150,6 @@
     color: var(--surface-muted-foreground);
     font-size: 11px;
     line-height: 1.45;
-    opacity: 0.86;
 }
 
 .oc-home-dot {
@@ -167,7 +166,9 @@
 }
 
 .oc-home-empty {
-    padding: 12px 6px;
+    padding: 14px 10px;
+    border-radius: 8px;
+    background: var(--surface-subtle);
     font-size: 12.5px;
     line-height: 1.6;
     color: var(--surface-muted-foreground);
@@ -208,7 +209,7 @@
     .oc-home-layout-bar { opacity: 0; transition: opacity 140ms ease; }
     .oc-home-dashboard-wrap:hover .oc-home-layout-bar, .oc-home-dashboard-wrap:focus-within .oc-home-layout-bar { opacity: 1; }
 }
-.oc-home-widget-content { padding: 16px 18px 18px; }
+.oc-home-widget-content { padding: 18px; }
 .oc-home-columns { display: grid; grid-template-columns: minmax(240px, var(--home-left-width, 1fr)) 16px minmax(240px, var(--home-right-width, 1fr)); min-width: 0; }
 .oc-home-dashboard-wrap { container-type: inline-size; }
 .oc-home-divider { position: relative; min-width: 0; cursor: col-resize; touch-action: none; outline: none; }
@@ -262,22 +263,21 @@
 @container (max-width: 420px) { .oc-ai-task { grid-template-columns: 24px minmax(0, 1fr); } .oc-ai-task > div:last-child { grid-column: 2; justify-content: flex-end; } }
 @media (prefers-reduced-motion: reduce) { .oc-home-task-skeleton > div, .oc-home-task-error, .oc-ai-group-rows { animation: none; } }
 .oc-home-agenda { display: flex; flex-direction: column; gap: 4px; max-height: 295px; overflow-y: auto; }
-.oc-home-event { width: 100%; height: auto; display: flex; align-items: flex-start; flex-direction: column; gap: 3px; padding: 9px 10px; border-radius: 11px; text-align: left; font-weight: 400; }
+.oc-home-event { width: 100%; height: auto; display: flex; align-items: flex-start; flex-direction: column; gap: 3px; padding: 9px 10px; border-radius: 8px; text-align: start; font-weight: 400; }
 .oc-home-event + .oc-home-event { border-top: 1px solid color-mix(in srgb, var(--oc-hairline, var(--interactive-border)) 55%, transparent); }
-.oc-home-event-time { max-width: 100%; color: var(--primary-text, var(--surface-muted-foreground)); font-size: 10.5px; font-weight: 550; font-variant-numeric: tabular-nums; white-space: normal; overflow-wrap: anywhere; }
+.oc-home-event-time { max-width: 100%; color: var(--surface-muted-foreground); font-size: 11px; font-weight: 550; font-variant-numeric: tabular-nums; white-space: normal; overflow-wrap: anywhere; }
 .oc-home-event-title { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; font-weight: 450; }
 .oc-home-event:disabled { opacity: 1; }
 .oc-home-habits { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; max-height: 295px; overflow-y: auto; padding: 4px 2px; }
 .oc-home-habits > label {
     padding: 8px 10px;
     border: 1px solid color-mix(in srgb, var(--oc-hairline, var(--interactive-border)) 55%, transparent);
-    border-radius: 11px;
+    border-radius: 8px;
     background: color-mix(in srgb, var(--surface-subtle) 50%, transparent);
-    transition: background-color 90ms ease, border-color 90ms ease;
 }
 .oc-home-habits > label:hover {
     border-color: var(--oc-hairline-strong, var(--interactive-border));
-    background: color-mix(in srgb, var(--primary-base) 6%, var(--surface-subtle));
+    background: var(--interactive-hover);
 }
 @container (max-width: 360px) { .oc-home-habits { grid-template-columns: minmax(0, 1fr); } }
 

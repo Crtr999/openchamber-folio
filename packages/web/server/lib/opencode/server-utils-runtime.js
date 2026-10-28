@@ -208,8 +208,9 @@ export const createServerUtilsRuntime = (dependencies) => {
   const fetchProvidersSnapshot = () => fetchArraySnapshot('/api/provider', 'providers snapshot');
   const fetchModelsSnapshot = () => fetchArraySnapshot('/api/model', 'models snapshot');
 
-  const setupProxy = (app) => {
+  const setupProxy = (app, { privacy } = {}) => {
     registerOpenCodeProxy(app, {
+      privacy,
       fs,
       os,
       path,

@@ -26,6 +26,7 @@ export function acceptDirectoryMessageStreamWsConnection({
   upstreamStallTimeoutMs,
   upstreamReconnectDelayMs,
   fetchImpl,
+  privacy = null,
 }) {
   const controller = new AbortController();
   let upstreamConnected = false;
@@ -71,17 +72,28 @@ export function acceptDirectoryMessageStreamWsConnection({
   });
 
   const run = async () => {
-    const forwardEvent = ({ envelope, payload }) => {
+    let delivery = Promise.resolve();
+    const forward = async ({ envelope, payload }) => {
+      if (privacy && !await privacy.allowsDirectory(requestedDirectory)) return;
+      const visible = privacy ? await privacy.filterEvent(payload, { directory: envelope?.directory }) : payload;
+      if (!visible || controller.signal.aborted) return;
       const directory = requestedDirectory || envelope?.directory || 'global';
 
-      sendMessageStreamWsEvent(socket, payload, {
+      sendMessageStreamWsEvent(socket, visible, {
         directory,
         eventId: typeof envelope?.eventId === 'string' && envelope.eventId.length > 0 ? envelope.eventId : undefined,
       });
 
-      processForwardedEventPayload(payload, (syntheticPayload) => {
-        sendMessageStreamWsEvent(socket, syntheticPayload, { directory: 'global' });
-      });
+      const synthetic = [];
+      processForwardedEventPayload(visible, (payload) => synthetic.push(payload));
+      for (const payload of synthetic) {
+        const safe = privacy ? await privacy.filterEvent(payload) : payload;
+        if (safe && !controller.signal.aborted) sendMessageStreamWsEvent(socket, safe, { directory: 'global' });
+      }
+    };
+    const forwardEvent = (event) => {
+      delivery = delivery.then(() => forward(event)).catch(() => {});
+      return delivery;
     };
 
     try {

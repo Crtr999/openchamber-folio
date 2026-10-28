@@ -214,3 +214,40 @@ test('directory active-list coverage cannot finish an archived group before the 
     dom.restore();
   }
 });
+
+test('a transient initialization failure retries on its own and recovers', async () => {
+  const dom = installHookTestDom();
+  const root = createRoot(dom.container);
+  const manager = new ChildStoreManager();
+  const captured = React.createRef<ReturnType<typeof useSidebarGroupStatus>>();
+  let fail = true;
+  manager.configure({ onBootstrap: (context) => {
+    context.trackInitialization(fail ? Promise.reject(new Error('runtime still starting')) : Promise.resolve());
+  } });
+  const Harness = () => {
+    captured.current = useSidebarGroupStatus({ childStores: manager, sections, chatGroup, canGrantAccess: true });
+    return null;
+  };
+  const realSetTimeout = window.setTimeout;
+  const delays: number[] = [];
+  const queued: Array<() => void> = [];
+  window.setTimeout = ((handler: () => void, delay?: number) => {
+    delays.push(delay ?? 0);
+    queued.push(handler);
+    return queued.length;
+  }) as unknown as typeof window.setTimeout;
+  try {
+    await act(async () => root.render(<Harness />));
+    await act(async () => manager.requestBootstrap({ directory: '/chats/session', priority: 'selected', reason: 'selected-session' }));
+    expect(captured.current?.groupStatusByKey.get('activity:chats')?.state).toBe('initialization-failed');
+    expect(delays).toEqual([2_000]);
+    fail = false;
+    await act(async () => queued[0]());
+    expect(manager.getInitializationState('/chats/session')).toBe('complete');
+  } finally {
+    window.setTimeout = realSetTimeout;
+    await act(async () => root.unmount());
+    manager.disposeAll();
+    dom.restore();
+  }
+});

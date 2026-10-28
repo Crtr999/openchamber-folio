@@ -19,7 +19,7 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Button } from '@/components/ui/button';
 import { formatDirectoryName, formatPathForDisplay } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
-import { requestDirectoryAccess } from '@/lib/desktop';
+import { isVSCodeRuntime, requestDirectoryAccess } from '@/lib/desktop';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
 import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
@@ -36,6 +36,8 @@ import { RunSidebarRow } from '../sessions/RunSidebarRow';
 import { computeNodeStructureKey, nodeContainsSessionId } from '../sessions/sessionNodeItemUtils';
 import { DroppableFolderWrapper } from '../folders/sessionFolderDnd';
 import { useAllChatsFriendName } from '@/hooks/useAllChatsFriendName';
+import { useZdrLockStore } from '@/stores/useZdrLockStore';
+import { isPathGuarded } from '@/lib/zdrLock';
 import { FolderDeleteConfirmDialog, type DeleteFolderConfirmState } from '../shell/ConfirmDialogs';
 import type { SessionGroup } from '../types';
 import { SessionSidebarRows } from '../SessionSidebarRows';
@@ -152,6 +154,9 @@ function SessionProjectScrollerComponent({ model, view, actions, leadingContent 
   }, []);
   streamPerfCount('ui.sidebar_projects_list.render');
   const { t } = useI18n();
+  const privateDirectories = useZdrLockStore(state => state.directories);
+  const pinSet = useZdrLockStore(state => state.pinSet);
+  const unlocked = useZdrLockStore(state => state.unlocked);
   const childStores = useChildStoreManager();
   const toggleFolderCollapse = useSessionFoldersStore((state) => state.toggleFolderCollapse);
   const renameFolder = useSessionFoldersStore((state) => state.renameFolder);
@@ -315,7 +320,12 @@ function SessionProjectScrollerComponent({ model, view, actions, leadingContent 
         isCollapsed={row.collapsed} isRepo={Boolean(model.projectRepoStatus.get(project.id))}
         hideDirectoryControls={view.hideDirectoryControls}
         mobileVariant={view.mobileVariant} alwaysShowActions={view.alwaysShowActions}
-        statusIndicator={row.collapsed ? actions.renderProjectStatusIndicator?.(project.id, row.section.groups) : null}
+        statusIndicator={!isVSCodeRuntime() && isPathGuarded(privateDirectories, project.normalizedPath)
+          ? <span title={t(pinSet ? unlocked ? 'zdr.unlocked' : 'zdr.locked' : 'zdr.noPin')}
+              aria-label={t(pinSet ? unlocked ? 'zdr.unlocked' : 'zdr.locked' : 'zdr.noPin')}>
+              <Icon name="lock" className="size-3.5" />
+            </span>
+          : row.collapsed ? actions.renderProjectStatusIndicator?.(project.id, row.section.groups) : null}
         openSidebarMenuKey={model.state.openSidebarMenuKey} setOpenSidebarMenuKey={model.state.setOpenSidebarMenuKey}
         projectPickerOptions={model.singleProjectMode ? projectPickerOptions : undefined}
         onProjectSelect={model.singleProjectMode ? actions.setSingleProjectId : undefined}
@@ -460,7 +470,7 @@ function SessionProjectScrollerComponent({ model, view, actions, leadingContent 
     return <div className="py-1 pl-[26px] text-left typography-micro text-muted-foreground">
       {row.emptyKind === 'archived' ? t('sessions.sidebar.group.empty.noArchivedSessions') : row.group?.emptyMessage ?? t('sessions.sidebar.group.empty.noSessionsInWorkspace')}
     </div>;
-  }, [actions, deleteFolder, model, projectPickerOptions, renameFolder, renderStatus, showDeletionDialog, t, toggleFolderCollapse, view]);
+  }, [actions, allChatsFriendName, deleteFolder, model, pinSet, privateDirectories, projectPickerOptions, renameFolder, renderStatus, showDeletionDialog, t, toggleFolderCollapse, unlocked, view]);
 
   const structuralIds = React.useMemo(() => model.rowModel.rows.flatMap((row) => row.kind === 'project-header' ? [row.section.project.id] : row.kind === 'group-header' ? [row.groupKey] : row.kind === 'website-folder' ? [row.websiteId] : []), [model.rowModel.rows]);
   const projectDragIds = React.useMemo(() => new Set(model.sectionsForRender.map((section) => section.project.id)), [model.sectionsForRender]);

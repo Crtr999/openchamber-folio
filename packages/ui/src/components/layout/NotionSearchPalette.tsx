@@ -129,12 +129,13 @@ export function NotionSearchPalette() {
 
   const allActiveSessions = useGlobalSessionsStore((state) => (open ? state.activeSessions : EMPTY));
   const zdrPinSet = useZdrLockStore((state) => state.pinSet);
+  const zdrLoaded = useZdrLockStore((state) => state.loaded);
   const zdrUnlocked = useZdrLockStore((state) => state.unlocked);
   const zdrDirectories = useZdrLockStore((state) => state.directories);
   // A locked ZDR folder's chats do not show up in the palette's title matches.
   const activeSessions = React.useMemo(
-    () => (zdrPinSet && !zdrUnlocked ? allActiveSessions.filter((session) => !isPathGuarded(zdrDirectories, session.directory)) : allActiveSessions),
-    [allActiveSessions, zdrDirectories, zdrPinSet, zdrUnlocked],
+    () => (!zdrLoaded ? EMPTY : zdrPinSet && !zdrUnlocked ? allActiveSessions.filter((session) => !isPathGuarded(zdrDirectories, session.directory)) : allActiveSessions),
+    [allActiveSessions, zdrDirectories, zdrLoaded, zdrPinSet, zdrUnlocked],
   );
   const projects = useProjectsStore((state) => state.projects);
 
@@ -245,7 +246,7 @@ export function NotionSearchPalette() {
       }, sharedCache).catch(() => undefined).finally(() => { if (abortRef.current === abort) setSearching(false); });
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [open, query]);
+  }, [open, query, zdrDirectories, zdrLoaded, zdrPinSet, zdrUnlocked]);
 
   const rows = React.useMemo<Row[]>(() => {
     const trimmed = query.trim().toLocaleLowerCase();
@@ -284,6 +285,7 @@ export function NotionSearchPalette() {
     for (const { session } of scored) out.push({ kind: 'session', id: session.id, session, group: t('palette.notion.bestMatches') });
     const seen = new Set<string>();
     for (const match of matches) {
+      if (!zdrLoaded || (zdrPinSet && !zdrUnlocked && isPathGuarded(zdrDirectories, match.directory))) continue;
       if (seen.has(match.sessionId) && seen.size > 30) continue;
       if (titleIds.has(match.sessionId) && seen.has(match.sessionId)) continue;
       seen.add(match.sessionId);
@@ -291,7 +293,7 @@ export function NotionSearchPalette() {
       if (out.length > 80) break;
     }
     return out;
-  }, [activeSessions, close, matches, mode, query, switchView, t]);
+  }, [activeSessions, close, matches, mode, query, switchView, t, zdrDirectories, zdrLoaded, zdrPinSet, zdrUnlocked]);
 
   React.useEffect(() => { setSelectedIndex((index) => Math.min(index, Math.max(0, rows.length - 1))); }, [rows.length]);
   React.useEffect(() => { setSelectedIndex(0); }, [query, mode]);

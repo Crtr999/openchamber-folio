@@ -2,6 +2,8 @@
 
 ## Scope
 
+The global event stream excludes ZDR folders at the server. When the selected folder is guarded and locally unlocked, `event-pipeline.ts` opens an SDK SSE subscription with an explicit private-directory header. `sync-context.tsx` reconnects only when this private scope or its grant revision changes, not when switching between ordinary folders. Locking or leaving that folder returns to the global stream. See `packages/web/server/lib/zdr-lock/DOCUMENTATION.md` for server enforcement and runtime differences.
+
 This document covers the current client-side session/data architecture in `packages/ui/src/sync` and the rules for updating stores safely.
 
 There are **two distinct session data scopes** in the UI:

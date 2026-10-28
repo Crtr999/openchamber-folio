@@ -14,12 +14,154 @@ const start = async (options = {}) => {
   const server = app.listen(0, '127.0.0.1'); await once(server, 'listening');
   const origin = 'http://127.0.0.1:' + server.address().port;
   cleanups.push(async () => { runtime.close(); server.closeIdleConnections(); await new Promise(resolve => server.close(resolve)); });
-  const native = (body, signal) => fetch(origin + '/api/openchamber/website-models/venice/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', authorization: 'Bearer local-fixture' }, body: JSON.stringify(body), signal });
+  const native = (body, signal, provider = 'venice') => fetch(origin + '/api/openchamber/website-models/' + provider + '/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', authorization: 'Bearer local-fixture' }, body: JSON.stringify(body), signal });
   const worker = () => fetch(origin + '/api/openchamber/website-models/jobs/next', { headers: { 'x-fixture-ui': 'yes' } });
   const result = body => fetch(origin + '/api/openchamber/website-models/jobs/result', { method: 'POST', headers: { 'x-fixture-ui': 'yes', 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   return { runtime, native, worker, result, origin };
 };
 const request = { model: 'website', messages: [{ role: 'user', content: 'Hello' }] };
+const geminiTools = [{ type: 'function', function: { name: 'read', parameters: { type: 'object' } } }];
+const geminiRound = async (h, body, text, page = { url: 'https://gemini.google.com/app/observed', userCount: 1 }) => {
+  const waiting = h.worker(); await vi.waitFor(() => expect(h.runtime.workerCount).toBe(1));
+  const completion = h.native(body, undefined, 'gemini');
+  const job = await (await waiting).json();
+  const result = { id: job.id, lease: job.lease, text };
+  if (page) result.page = page;
+  await h.result(result);
+  return { response: await completion, job };
+};
+
+test('Gemini reuses exactly matched tool continuations and stops repeated tool execution', async () => {
+  const h = await start();
+  const body = { ...request, tools: geminiTools };
+  const first = await geminiRound(h, body, '{"tool_calls":[{"name":"read","arguments":{"path":"fixture"}}]}');
+  expect(first.job.continuation).toBeUndefined();
+  const message = (await first.response.json()).choices[0].message;
+  const next = { ...body, messages: [...body.messages, message, { role: 'tool', tool_call_id: message.tool_calls[0].id, content: 'Synthetic tool result' }] };
+  const second = await geminiRound(h, next, '{"tool_calls":[{"name":"read","arguments":{"path":"fixture"}}]}', { url: 'https://gemini.google.com/app/observed', userCount: 2 });
+  expect(second.job.continuation).toMatchObject({ url: 'https://gemini.google.com/app/observed', userCount: 1 });
+  expect(second.job.continuation.answerHash).toMatch(/^[a-f0-9]{64}$/);
+  expect(second.job.prompt).toContain('Synthetic tool result');
+  expect(second.job.prompt).not.toContain('Hello');
+  expect(second.response.status).toBe(422);
+  expect(await second.response.text()).toContain('repeated tool');
+  const duplicate = await h.native(next, undefined, 'gemini');
+  expect(duplicate.status).toBe(422); expect(h.runtime.pendingCount).toBe(0);
+});
+
+test('Gemini permits four tool rounds and one final answer in one observed chat', async () => {
+  const h = await start(); let body = { ...request, tools: geminiTools };
+  let freshChats = 0, generations = 0, toolExecutions = 0;
+  for (let round = 0; round < 5; round++) {
+    const text = round < 4 ? JSON.stringify({ tool_calls: [{ name: 'read', arguments: { path: 'fixture-' + round } }] }) : 'Final answer';
+    const { job, response } = await geminiRound(h, body, text, { url: 'https://gemini.google.com/app/observed', userCount: round + 1 });
+    generations++; if (!job.continuation) freshChats++;
+    expect(response.status).toBe(200);
+    const message = (await response.json()).choices[0].message;
+    if (round === 4) {
+      expect(job.prompt).toContain('No client tools are available');
+      expect(message.content).toBe('Final answer');
+      break;
+    }
+    toolExecutions += message.tool_calls.length;
+    body = { ...body, messages: [...body.messages, message, { role: 'tool', tool_call_id: message.tool_calls[0].id, content: 'Synthetic result' }] };
+  }
+  expect({ freshChats, generations, toolExecutions }).toEqual({ freshChats: 1, generations: 5, toolExecutions: 4 });
+  expect(h.runtime.pendingCount).toBe(0);
+});
+
+test('Gemini rejects duplicate pending, failed, completed and stream-mode retries without new jobs', async () => {
+  for (const outcome of [{ error: 'Quota exhausted' }, { text: 'Done' }]) {
+    const h = await start(); const waiting = h.worker(); await vi.waitFor(() => expect(h.runtime.workerCount).toBe(1));
+    const completion = h.native(request, undefined, 'gemini'); const job = await (await waiting).json();
+    for (let i = 0; i < 10; i++) expect((await h.native({ ...request, stream: i % 2 === 0 }, undefined, 'gemini')).status).toBe(422);
+    expect(h.runtime.pendingCount).toBe(1);
+    await h.result({ id: job.id, lease: job.lease, ...outcome });
+    expect((await completion).status).toBe(outcome.error ? 422 : 200);
+    expect((await h.native(request, undefined, 'gemini')).status).toBe(422);
+    expect(h.runtime.pendingCount).toBe(0);
+  }
+});
+
+test('Gemini missing continuation fails closed and malformed compaction never regenerates', async () => {
+  const h = await start();
+  const first = await geminiRound(h, { ...request, tools: geminiTools }, '{"tool_calls":[{"name":"read","arguments":{}}]}', null);
+  expect(first.response.status).toBe(422);
+  expect(await first.response.text()).toContain('No tools were executed');
+  const message = websiteReplyMessage('{"tool_calls":[{"name":"read","arguments":{}}]}', geminiTools);
+  const next = { ...request, tools: geminiTools, messages: [...request.messages, message, { role: 'tool', tool_call_id: message.tool_calls[0].id, content: 'Synthetic result' }] };
+  expect((await h.native(next, undefined, 'gemini')).status).toBe(422);
+  expect(h.runtime.pendingCount).toBe(0);
+  const compact = { ...request, messages: [{ role: 'user', content: 'Summarize. <template>\n## Objective\n</template>' }] };
+  const summary = await geminiRound(h, compact, 'Wrong template');
+  expect(summary.response.status).toBe(422);
+  expect(h.runtime.pendingCount).toBe(0);
+  expect((await h.native(compact, undefined, 'gemini')).status).toBe(422);
+});
+
+test('Gemini cannot return a fifth tool round even if the website ignores the final-answer instruction', async () => {
+  const h = await start(); let body = { ...request, tools: geminiTools };
+  for (let round = 0; round < 5; round++) {
+    const text = JSON.stringify({ tool_calls: [{ name: 'read', arguments: { path: 'fixture-' + round } }] });
+    const { response, job } = await geminiRound(h, body, text, { url: 'https://gemini.google.com/app/observed', userCount: round + 1 });
+    if (round === 4) {
+      expect(job.prompt).toContain('No client tools are available');
+      expect(response.status).toBe(422);
+      expect(await response.text()).toContain('not offered');
+      expect((await h.native(body, undefined, 'gemini')).status).toBe(422);
+      expect(h.runtime.pendingCount).toBe(0);
+      break;
+    }
+    const message = (await response.json()).choices[0].message;
+    body = { ...body, messages: [...body.messages, message, { role: 'tool', tool_call_id: message.tool_calls[0].id, content: 'Synthetic failure: unavailable' }] };
+  }
+});
+
+test('Gemini detects equivalent nested arguments and duplicate calls within one batch', async () => {
+  const h = await start();
+  const calls = [{ name: 'read', arguments: { a: 1, nested: { a: 2, b: 3 } } }, { name: 'read', arguments: { nested: { b: 3, a: 2 }, a: 1 } }];
+  const { response } = await geminiRound(h, { ...request, tools: geminiTools }, JSON.stringify({ tool_calls: calls }));
+  expect(response.status).toBe(422); expect(await response.text()).toContain('repeated tool');
+  expect(h.runtime.pendingCount).toBe(0);
+});
+
+test('Gemini cancelled and timed-out generations are never re-leased or regenerated', async () => {
+  const h = await start({ timeoutMs: 500 });
+  const waiting = h.worker(); await vi.waitFor(() => expect(h.runtime.workerCount).toBe(1));
+  const controller = new AbortController();
+  const completion = h.native(request, controller.signal, 'gemini').catch(() => null);
+  const job = await (await waiting).json(); controller.abort(); await completion;
+  await vi.waitFor(() => expect(h.runtime.pendingCount).toBe(0));
+  expect((await h.native(request, undefined, 'gemini')).status).toBe(422);
+  expect(await (await h.result({ id: job.id, lease: job.lease, text: 'Late answer' })).json()).toEqual({ accepted: false });
+  const timed = await geminiRound(h, { ...request, messages: [{ role: 'user', content: 'Different turn' }] }, 'Done');
+  expect(timed.response.status).toBe(200);
+  const next = h.worker(); await vi.waitFor(() => expect(h.runtime.workerCount).toBe(1));
+  const body = { ...request, messages: [{ role: 'user', content: 'Timeout turn' }] };
+  const timeout = h.native(body, undefined, 'gemini'); const expired = await (await next).json();
+  expect((await timeout).status).toBe(422); expect(h.runtime.pendingCount).toBe(0);
+  expect((await h.native(body, undefined, 'gemini')).status).toBe(422);
+  expect(await (await h.result({ id: expired.id, lease: expired.lease, text: 'Late answer' })).json()).toEqual({ accepted: false });
+});
+
+test('Gemini recent-request protection refuses overflow and expires without evicting earlier attempts', async () => {
+  const h = await start();
+  for (let i = 0; i < 128; i++) {
+    const body = { ...request, messages: [{ role: 'user', content: 'Synthetic ' + i }] };
+    const { response } = await geminiRound(h, body, 'Done');
+    expect(response.status).toBe(200);
+  }
+  const body = { ...request, messages: [{ role: 'user', content: 'Overflow' }] };
+  const refused = await h.native(body, undefined, 'gemini');
+  expect(refused.status).toBe(422); expect(await refused.text()).toContain('safety limit');
+  const first = { ...request, messages: [{ role: 'user', content: 'Synthetic 0' }] };
+  expect(await (await h.native(first, undefined, 'gemini')).text()).toContain('already attempted');
+  expect(h.runtime.pendingCount).toBe(0);
+  const later = Date.now() + 10 * 60_000 + 1;
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(later);
+  try { expect((await geminiRound(h, first, 'Done')).response.status).toBe(200); }
+  finally { clock.mockRestore(); }
+});
 test('website models are desktop-only, loopback-only and gated at use time', () => {
   let blocked = false; const runtime = createWebsiteModelsRuntime({ enabled: true, blocked: () => blocked });
   const env = { OPENCHAMBER_AGENT_TOOL_URL: 'http://127.0.0.1:3000/api/openchamber/agent-tool', OPENCHAMBER_AGENT_TOOL_TOKEN: 'local-fixture' };

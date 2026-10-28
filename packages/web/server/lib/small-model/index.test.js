@@ -212,6 +212,26 @@ describe('generateSmallModelText', () => {
     expect(result).toMatchObject({ providerID: 'openai', modelID: 'gpt-5.6-luna', source: 'session-model' });
   });
 
+  it.each([
+    ['openai', 'gpt-6.1-sol'],
+    ['anthropic', 'claude-sonnet'],
+    ['custom-provider', 'custom-model'],
+  ])('can improve drafts on %s without a global default or a small model', async (providerID, modelID) => {
+    state.defaultModel = null;
+    state.models = [MODEL({ providerID, id: modelID, modelID })];
+    for (const directory of ['/folders/one', '/folders/two with spaces']) {
+      const result = await generateSmallModelText({
+        prompt: 'Improve this draft', directory,
+        preferredProviderID: providerID, preferredModelID: modelID,
+        restrictToPreferredProvider: true,
+      });
+      expect(result).toMatchObject({ text: 'generated', providerID, modelID, source: 'session-model' });
+      expect(lastGenerate().body.model).toEqual({ providerID, id: modelID });
+      expect(lastGenerate().headers['x-opencode-directory']).toBe(encodeURIComponent(directory));
+    }
+    expect(state.requests.some((entry) => entry.path === '/api/model/default')).toBe(false);
+  });
+
   it('prefers the small model of the session provider over the session model itself', async () => {
     state.models = [
       MODEL({ id: 'claude-sonnet-5', modelID: 'claude-sonnet-5', family: 'claude-sonnet' }),
@@ -425,6 +445,7 @@ describe('describeSmallModel', () => {
   });
 
   it('reports the override model instead of the default', async () => {
+    state.models = [MODEL(), MODEL({ id: 'gpt-5.6-luna', modelID: 'gpt-5.6-luna', providerID: 'openai', name: 'Luna' })];
     fs.writeFileSync(
       path.join(TEMP_DATA_DIR, 'settings.json'),
       JSON.stringify({ smallModelUseDefault: false, smallModelOverride: 'openai/gpt-5.6-luna' }),
@@ -433,6 +454,23 @@ describe('describeSmallModel', () => {
     try {
       const described = await describeSmallModel({ directory: '/proj' });
       expect(described).toMatchObject({ providerID: 'openai', modelID: 'gpt-5.6-luna', source: 'settings' });
+    } finally {
+      fs.rmSync(path.join(TEMP_DATA_DIR, 'settings.json'), { force: true });
+    }
+  });
+
+  // A saved override outlives the model it names. Honouring it then fails every
+  // caller in every folder with "Model unavailable", which is what made the
+  // Director look broken across models.
+  it('ignores a saved override the catalog no longer lists', async () => {
+    fs.writeFileSync(
+      path.join(TEMP_DATA_DIR, 'settings.json'),
+      JSON.stringify({ smallModelUseDefault: false, smallModelOverride: 'zai-coding-plan/glm-5.3-flash' }),
+    );
+
+    try {
+      const described = await describeSmallModel({ directory: '/proj' });
+      expect(described).toMatchObject({ providerID: 'anthropic', modelID: 'claude-haiku-4-5', source: 'default' });
     } finally {
       fs.rmSync(path.join(TEMP_DATA_DIR, 'settings.json'), { force: true });
     }

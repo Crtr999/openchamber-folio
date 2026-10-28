@@ -1,5 +1,9 @@
 export const friendsI18n = {
   "en": {
+    "zdr.settings": "ZDR PIN lock",
+    "zdr.locked": "ZDR folder locked",
+    "zdr.unlocked": "ZDR folder unlocked",
+    "zdr.noPin": "ZDR folder has no PIN",
     "friends.title": "Friends",
     "friends.name": "Friend name",
     "friends.manage": "Agent settings",
@@ -62,6 +66,10 @@ export const friendsI18n = {
     "friends.status.unconfirmed": "Last start unconfirmed"
 },
   "de": {
+    "zdr.settings": "ZDR-PIN-Sperre",
+    "zdr.locked": "ZDR-Ordner gesperrt",
+    "zdr.unlocked": "ZDR-Ordner entsperrt",
+    "zdr.noPin": "ZDR-Ordner ohne PIN",
     "friends.title": "Freunde",
     "friends.name": "Name des Freundes",
     "friends.manage": "Agenteneinstellungen",
@@ -124,6 +132,10 @@ export const friendsI18n = {
     "friends.status.unconfirmed": "Letzter Start nicht bestätigt"
 },
   "es": {
+    "zdr.settings": "Bloqueo de ZDR con PIN",
+    "zdr.locked": "Carpeta ZDR bloqueada",
+    "zdr.unlocked": "Carpeta ZDR desbloqueada",
+    "zdr.noPin": "La carpeta ZDR no tiene PIN",
     "friends.title": "Amigos",
     "friends.name": "Nombre del amigo",
     "friends.manage": "Ajustes del agente",
@@ -186,6 +198,10 @@ export const friendsI18n = {
     "friends.status.unconfirmed": "Último inicio sin confirmar"
 },
   "fr": {
+    "zdr.settings": "Verrouillage ZDR par code PIN",
+    "zdr.locked": "Dossier ZDR verrouillé",
+    "zdr.unlocked": "Dossier ZDR déverrouillé",
+    "zdr.noPin": "Le dossier ZDR n’a pas de code PIN",
     "friends.title": "Amis",
     "friends.name": "Nom de l’ami",
     "friends.manage": "Réglages de l’agent",
@@ -248,6 +264,10 @@ export const friendsI18n = {
     "friends.status.unconfirmed": "Dernier démarrage non confirmé"
 },
   "nl": {
+    "zdr.settings": "ZDR-pincodevergrendeling",
+    "zdr.locked": "ZDR-map vergrendeld",
+    "zdr.unlocked": "ZDR-map ontgrendeld",
+    "zdr.noPin": "ZDR-map heeft geen pincode",
     "friends.title": "Vrienden",
     "friends.name": "Naam van de vriend",
     "friends.manage": "Agentinstellingen",
@@ -310,6 +330,10 @@ export const friendsI18n = {
     "friends.status.unconfirmed": "Laatste start niet bevestigd",
   },
   "tr": {
+    "zdr.settings": "ZDR PIN kilidi",
+    "zdr.locked": "ZDR klasörü kilitli",
+    "zdr.unlocked": "ZDR klasörünün kilidi açık",
+    "zdr.noPin": "ZDR klasörünün PIN kodu yok",
     "friends.title": "Arkadaşlar",
     "friends.name": "Arkadaş adı",
     "friends.manage": "Aracı ayarları",
@@ -372,6 +396,10 @@ export const friendsI18n = {
     "friends.status.unconfirmed": "Son başlatma doğrulanmadı",
   },
   "ja": {
+    "zdr.settings": "ZDR PINロック",
+    "zdr.locked": "ZDRフォルダーはロックされています",
+    "zdr.unlocked": "ZDRフォルダーのロックは解除されています",
+    "zdr.noPin": "ZDRフォルダーにPINが設定されていません",
     "friends.title": "フレンド",
     "friends.name": "フレンドの名前",
     "friends.manage": "エージェント設定",
@@ -434,6 +462,10 @@ export const friendsI18n = {
     "friends.status.unconfirmed": "前回の開始は未確認です"
 },
   "ko": {
+    "zdr.settings": "ZDR PIN 잠금",
+    "zdr.locked": "ZDR 폴더가 잠겨 있습니다",
+    "zdr.unlocked": "ZDR 폴더 잠금이 해제되었습니다",
+    "zdr.noPin": "ZDR 폴더에 PIN이 없습니다",
     "friends.title": "친구",
     "friends.name": "친구 이름",
     "friends.manage": "에이전트 설정",
@@ -496,6 +528,10 @@ export const friendsI18n = {
     "friends.status.unconfirmed": "마지막 시작이 확인되지 않음"
 },
   "pl": {
+    "zdr.settings": "Blokada ZDR kodem PIN",
+    "zdr.locked": "Folder ZDR zablokowany",
+    "zdr.unlocked": "Folder ZDR odblokowany",
+    "zdr.noPin": "Folder ZDR nie ma kodu PIN",
     "friends.title": "Przyjaciele",
     "friends.name": "Imię przyjaciela",
     "friends.manage": "Ustawienia agenta",
@@ -558,6 +594,10 @@ export const friendsI18n = {
     "friends.status.unconfirmed": "Ostatnie uruchomienie niepotwierdzone"
 },
   "pt-BR": {
+    "zdr.settings": "Bloqueio ZDR por PIN",
+    "zdr.locked": "Pasta ZDR bloqueada",
+    "zdr.unlocked": "Pasta ZDR desbloqueada",
+    "zdr.noPin": "A pasta ZDR não tem PIN",
     "friends.title": "Amigos",
     "friends.name": "Nome do amigo",
     "friends.manage": "Configurações do agente",
@@ -620,6 +660,10 @@ export const friendsI18n = {
     "friends.status.unconfirmed": "Último início não confirmado"
 },
   "uk": {
+    "zdr.settings": "Блокування ZDR за PIN-кодом",
+    "zdr.locked": "Папку ZDR заблоковано",
+    "zdr.unlocked": "Папку ZDR розблоковано",
+    "zdr.noPin": "Папка ZDR не має PIN-коду",
     "friends.title": "Друзі",
     "friends.name": "Ім’я друга",
     "friends.manage": "Налаштування агента",
@@ -682,6 +726,10 @@ export const friendsI18n = {
     "friends.status.unconfirmed": "Останній запуск не підтверджено"
 },
   "zh-CN": {
+    "zdr.settings": "ZDR PIN 锁",
+    "zdr.locked": "ZDR 文件夹已锁定",
+    "zdr.unlocked": "ZDR 文件夹已解锁",
+    "zdr.noPin": "ZDR 文件夹未设置 PIN",
     "friends.title": "伙伴",
     "friends.name": "伙伴名称",
     "friends.manage": "代理设置",
@@ -744,6 +792,10 @@ export const friendsI18n = {
     "friends.status.unconfirmed": "上次启动未确认"
 },
   "zh-TW": {
+    "zdr.settings": "ZDR PIN 鎖",
+    "zdr.locked": "ZDR 資料夾已鎖定",
+    "zdr.unlocked": "ZDR 資料夾已解鎖",
+    "zdr.noPin": "ZDR 資料夾未設定 PIN",
     "friends.title": "夥伴",
     "friends.name": "夥伴名稱",
     "friends.manage": "代理設定",

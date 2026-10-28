@@ -25,7 +25,9 @@ mock.module("@/lib/runtime-fetch", () => ({
     fetched.push(path)
     if (quotaRequestsFail) throw new Error("network down")
     if (path.startsWith("/api/config/settings")) return json({ usageDropdownProviders: ["claude"] })
-    return json({ providerId: "claude", providerName: "Claude", ok: true, configured: true, usage: null, fetchedAt: 1 })
+    const providerId = path.endsWith('/gemini-website') ? 'gemini-website'
+      : path.endsWith('/venice-website') ? 'venice-website' : 'claude';
+    return json({ providerId, providerName: providerId, ok: true, configured: true, usage: null, fetchedAt: 1 })
   },
 }))
 
@@ -121,12 +123,14 @@ describe("Usage quotas are loaded once per ready instance", () => {
       useQuotaStore.getState().ensureLoadedForRuntime(),
     ])
 
-    expect(fetched.filter((path) => path.startsWith("/api/quota/"))).toHaveLength(1)
+    expect(fetched.filter((path) => path.startsWith("/api/quota/"))).toEqual([
+      '/api/quota/claude', '/api/quota/gemini-website', '/api/quota/venice-website',
+    ])
   })
 
   test("a switch drops the previous instance's display settings", async () => {
     await useQuotaStore.getState().ensureLoadedForRuntime()
-    expect(useQuotaStore.getState().dropdownProviderIds).toEqual(["claude"])
+    expect(useQuotaStore.getState().dropdownProviderIds).toEqual(['claude', 'gemini-website', 'venice-website'])
     useQuotaStore.getState().setDisplayMode("remaining")
 
     useQuotaStore.getState().resetForRuntimeSwitch()

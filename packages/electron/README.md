@@ -525,7 +525,81 @@ synthetic worker/provider fixtures. These do not prove OS dialogs, live system
 audio, sherpa inference or UI interaction. Those checks remain native QA.
 
 
-The private `personalHome.readAwareness` callback is available only in process to the server's approved personal-review job. It reads bounded Notion excerpts and calendar data without exposing credentials or write-capable MCP access. The server verifies persisted source-review consent and exact OpenAI selection before calling it. Enterprise policy refuses the personal review and the underlying Notion reads. This is separate from renderer IPC and grants nothing to remote pages. Outlook has no background reader yet and reports `needs-connection`, never an empty successful mailbox.
+The private `personalHome.readAwareness` callback is available only in process to the server's approved personal-review job. It reads bounded Notion excerpts and calendar data without exposing credentials or write-capable MCP access. The server verifies persisted source-review consent and exact OpenAI selection before calling it. Enterprise policy refuses the personal review and the underlying Notion reads. This is separate from renderer IPC and grants nothing to remote pages.
+
+### Outlook authorization
+
+On macOS, Settings > Integrations > Outlook defaults to the installed Outlook
+app through `personal-outlook-native.mjs`. No Azure registration or app secret is
+needed. Connect explicitly requests Automation access and reads account identities
+only. A successful account-identity read must precede the local connection save.
+Source reads require both that saved connection and separate personal-review
+consent naming the mailbox. Merely installing or opening Settings reads no mail.
+
+The fixed JXA program checks `AEDeterminePermissionToAutomateTarget` without
+prompting before every ordinary probe or source read. Only Connect may request
+permission. Account collections are checked first; a folder's explicit account
+reference may supply an identity when collections do not. Folder names, UI
+selection and the default account never substitute for a selected stable identity.
+If Outlook cannot expose identities, Connect reports that failure and saves no
+connection. App presence or an advertised scripting dictionary alone is not proof
+of readable accounts. Non-macOS and missing Outlook return explicit unsupported
+results without launching automation.
+
+Native review reads up to ten recent inbox messages and ten upcoming calendar
+events per selected account. Plain message text is truncated inside JXA before
+returning across the process boundary. No message windows are opened, read flags
+changed, drafts made, messages sent, accounts changed or sync commands called.
+Local caches can be stale and recurring events are not expanded, so native
+coverage is always partial. Permission denial and scripting failures remain
+distinct from successful empty mailboxes. The app bundle carries
+`NSAppleEventsUsageDescription` and the hardened-runtime
+`com.apple.security.automation.apple-events` entitlement. The signed packaged
+application must still verify its own OS grant; a terminal-host grant does not
+prove that the app has permission.
+
+The Advanced Microsoft OAuth connection uses Microsoft's delegated device flow through
+`personal-outlook.mjs`. It needs a Microsoft Entra application registration that
+supports the intended work, school or personal accounts, allows public client
+flows, and grants delegated `User.Read`, `Mail.Read` and `Calendars.Read` access.
+Use an app supporting accounts in any organizational directory and personal
+Microsoft accounts with the bundled `common` authority. Enter its application
+client ID, not a client secret. An organization can require administrator consent
+or forbid device authorization. No account is connected by installing this code.
+
+Sign in creates a code only after the user's click. The user opens the fixed
+Microsoft device-login page, enters that code and approves Microsoft's consent
+screen, then clicks Check sign-in. Checks honor the provider's polling interval
+and slow-down response. The app has no automatic authorization poller or callback
+listener. Pending codes stay in memory and expire. Successful token exchange must
+also verify the account through Graph `/me` before saving credentials. Up to five
+accounts can be authorized. Changing the client ID requires disconnecting saved
+accounts first.
+
+Tokens stay in `personal-outlook.json` beside `personal-home.json`, encrypted by
+Electron safeStorage and written atomically with mode 0600. Renderer status
+contains only the public client ID, authorized mailbox addresses and a pending
+user code, never access tokens, refresh tokens or device codes. Authorization
+saved is not a claim that a later mailbox read succeeded. Disconnect removes the
+local credential, not Microsoft's server-side grant; revocation remains in the
+user's Microsoft account settings.
+
+The private awareness reader fetches only addresses explicitly listed in saved
+personal-review consent. An authorized account alone does not opt it into review.
+Each read verifies account identity, refreshes expired credentials when possible,
+then reads at most ten inbox previews from the past 14 days and ten calendar-view
+events from the next seven days per selected account. Calendar timestamps are
+requested in UTC; all-day and cancellation flags remain intact. Previews are
+marked truncated. Extra pages report partial coverage and are never followed.
+No attachments, sent mail, full message bodies or write endpoints are read.
+Failures remain error or partial states, not empty successful mailboxes.
+
+Microsoft requests are refused at use time in enterprise mode, including code
+creation, token exchange and refresh. Local cancellation and credential removal
+remain available. Local Electron alone exposes the existing gated personal-home
+IPC. Web, remote desktop, VS Code, hosted mobile and Capacitor do not expose this
+connection. macOS Calendar keeps its existing explicit EventKit authorization;
+ordinary reads do not request permission.
 
 Venice uses the isolated `persist:open-carter-venice` partition. Initial attachment requires the exact official origin and a local parent. The guest has no app preload, Node integration or controller access. Enterprise mode refuses attachment and cancels partition network requests at use time. Media/device/location permissions remain denied; no broad privilege is inherited from the browser controller.
 
@@ -536,3 +610,70 @@ Gemini uses persist:open-carter-gemini and the exact https://gemini.google.com i
 
 
 The desktop host enables website model providers through startWebUiServer's desktopWebsiteModels option. The existing per-child local callback token authenticates model completions; it is not a Venice or Gemini API key. Managed provider settings point only to the app's loopback server and are written privately with the existing managed config. The local renderer worker owns short-lived website guests; account pages and native conversations stay separate. No new listener, credential forwarding, native permission, API purchase or per-agent MCP process is added.
+
+## Texting a friend (iMessage)
+
+`imessage-bridge.mjs` lets the numbers the user allows reach this Mac's Open
+Carter from Messages. It reads `~/Library/Messages/chat.db` read-only through
+`/usr/bin/sqlite3`, one page at a time, from a saved ROWID cursor, and only rows
+that are inbound, not reactions, not system messages and from an allowlisted
+handle. It never writes to that database.
+
+A text is not a second kind of conversation. It is an ordinary OpenChamber
+session in a friend's folder, created through
+`POST /api/openchamber/sessions` and continued through
+`POST /api/openchamber/sessions/:id/send`, so that folder's agent, rules, memory
+and `opencode.json` guardrails apply exactly as they do in the app. The bridge
+holds only friend keys, session ids, chat ids and cursor in
+`<userData>/imessage-bridge.json`; message bodies are never stored and never
+logged.
+
+### Naming the friend
+
+`@` names who answers. The friends are the app's own registered project folders,
+read from the same settings the sidebar uses, so a folder added there is
+addressable with no second list; `@business launch` reaches a project labelled
+"Business Launch". Matching is exact first, then the longest name that ends on a
+word boundary, so multi-word names need no quotes, and `@legally` is not
+`@legal`. Two folders sharing a name are reported back ("Which one: …?") rather
+than guessed. The mention itself is removed from the prompt.
+
+One iMessage thread holds one session per friend, so `@legal` and
+`@business launch` keep separate histories in the same chat. A text that names
+nobody goes to the thread's last friend, then the configured default, then All
+Chats. Shared threads and rows the user sent himself are answered only when a
+friend is named, so an ordinary family or work group is never piped into a model;
+a reply in a shared thread is prefixed with the friend's name because one Mac has
+one sender. A reply the bridge itself sent is recognised and never answered, even
+when it contains an `@`.
+
+A friend whose folder enforces zero retention stays on this Mac: its sessions are
+never mirrored into a notification.
+
+`session.idle` on the app's own event stream says when a turn is over; polling
+the session's messages is the fallback when that stream is missed. Several texts
+in a row become one turn. The settled reply is the newest assistant text, sent
+back through `osascript` with the text passed as an argument, never interpolated
+into the script.
+
+The Mac's own Messages accounts (the Apple ID address and numbers it is signed
+in with, read from `chat.account_login`) always count as the user, refreshed
+every ten minutes, so a text from the user's phone is answered whichever of
+those addresses it arrives from. The allowlist then only has to name other
+numbers.
+
+Permission boundaries are OS boundaries:
+
+- reading chat.db requires Full Disk Access for the running app. Without it the
+  panel reports `denied` and a hint, not an empty inbox,
+- sending requires Automation access to Messages, and an iMessage account signed
+  in on this Mac,
+- `desktop_imessage` is available only to the trusted local main frame, is
+  refused in enterprise mode and is absent from web, VS Code and mobile.
+
+Notifications can also be copied to a text when the user turns that on
+(`forwardNotifications`, off by default). Nothing is sent by the bridge unless
+texting is enabled and a number is allowed.
+
+Texting runs only while the local runtime is up, because the sessions it answers
+with live there. A remote host keeps its own server and this bridge does not run.
