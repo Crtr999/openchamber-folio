@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -752,4 +752,117 @@ test("the Mac's signed-in Messages accounts count as the user without a list", (
     ['carterlaborde@gmail.com', '+18566892599'],
   );
   assert.deepEqual(ownIdentitiesFromRows(null), []);
+});
+
+test('a self-text answers in the phone-number thread, and an unknown @name is told so', async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'imessage-canon-'));
+  const dbPath = path.join(directory, 'chat.db');
+  const sendLog = path.join(directory, 'sends.log');
+  const fakeOsascript = path.join(directory, 'osascript');
+  writeFileSync(fakeOsascript, `#!/bin/sh\nprintf '%s|%s\\n' "$3" "$2" >> '${sendLog}'\n`, { mode: 0o755 });
+  execFileSync('/usr/bin/sqlite3', [dbPath, `
+CREATE TABLE handle (ROWID INTEGER PRIMARY KEY, id TEXT, service TEXT);
+CREATE TABLE chat (ROWID INTEGER PRIMARY KEY, guid TEXT, style INTEGER, chat_identifier TEXT, display_name TEXT, account_login TEXT);
+CREATE TABLE message (ROWID INTEGER PRIMARY KEY, guid TEXT, text TEXT, attributedBody BLOB, handle_id INTEGER,
+  is_from_me INTEGER, item_type INTEGER, is_system_message INTEGER, associated_message_type INTEGER, account TEXT, date INTEGER);
+CREATE TABLE chat_message_join (chat_id INTEGER, message_id INTEGER);
+INSERT INTO handle (ROWID, id, service) VALUES (1, '+18566892599', 'iMessage'), (2, 'carterlaborde@gmail.com', 'iMessage');
+INSERT INTO chat (ROWID, guid, style, chat_identifier, account_login) VALUES (1, 'any;-;+18566892599', 45, '+18566892599', 'E:carterlaborde@gmail.com'), (2, 'any;-;carterlaborde@gmail.com', 45, 'carterlaborde@gmail.com', 'E:carterlaborde@gmail.com');
+INSERT INTO message (ROWID, guid, text, handle_id, is_from_me, item_type, is_system_message, associated_message_type, account)
+  VALUES (10, 's10', 'old', 1, 1, 0, 0, 0, 'E:carterlaborde@gmail.com');
+INSERT INTO chat_message_join (chat_id, message_id) VALUES (1, 10);
+`]);
+
+  const dispatched = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    const target = String(url);
+    if (target.endsWith('/api/config/settings')) {
+      return new Response(JSON.stringify({ projects: [{ label: 'Business', path: '/tmp/example' }] }), { status: 200 });
+    }
+    if (target.endsWith('/api/event')) {
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('data: {"type":"session.idle","data":{"sessionID":"ses_canon"}}\n\n'));
+        },
+      });
+      return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    }
+    if (target.endsWith('/api/openchamber/sessions') && init.method === 'POST') {
+      dispatched.push(JSON.parse(init.body));
+      return new Response(JSON.stringify({ sessionId: 'ses_canon', promptDispatched: true }), { status: 200 });
+    }
+    if (target.includes('/api/session/ses_canon/message')) {
+      return new Response(JSON.stringify({
+        data: [{ id: 'msg_a', type: 'assistant', time: { completed: 5 }, content: [{ type: 'text', text: 'On it.' }] }],
+      }), { status: 200 });
+    }
+    throw new Error(`unexpected request ${init.method || 'GET'} ${target}`);
+  };
+
+  const bridge = createImessageBridge({
+    filePath: path.join(directory, 'bridge.json'),
+    chatDbPath: dbPath,
+    osascriptPath: fakeOsascript,
+    getApiBaseUrl: () => 'http://127.0.0.1:1',
+    log: { warn: () => {} },
+  });
+  // Other tests' bridges can still be answering through the shared fetch mock.
+  const mine = () => dispatched.filter((entry) => /what is (open|new)/.test(entry.prompt));
+  const sends = () => (existsSync(sendLog) ? readFileSync(sendLog, 'utf8').trim().split('\n').filter((line) => line.startsWith('any;-;')) : []);
+
+  try {
+    await bridge.configure({ enabled: true, handles: ['+18566892599', 'carterlaborde@gmail.com'], debounceMs: 20 });
+    await bridge.pollOnce();
+
+    // The text arrives filed under the Apple ID thread; the reply still goes to the number's thread.
+    execFileSync('/usr/bin/sqlite3', [dbPath, `
+INSERT INTO message (ROWID, guid, text, handle_id, is_from_me, item_type, is_system_message, associated_message_type, account)
+  VALUES (11, 's11', '@business what is open', 2, 0, 0, 0, 0, 'E:carterlaborde@gmail.com');
+INSERT INTO chat_message_join (chat_id, message_id) VALUES (2, 11);
+`]);
+    await bridge.pollOnce();
+    await waitFor(() => sends().length > 0, 8_000);
+    assert.equal(mine().length, 1);
+    assert.equal(mine()[0].directory, '/tmp/example', 'the named friend answers');
+    assert.match(sends()[0], /^any;-;\+18566892599\|/, 'the reply goes to the phone-number thread');
+
+    // A name nobody has is said out loud, never handed to All Chats.
+    execFileSync('/usr/bin/sqlite3', [dbPath, `
+INSERT INTO message (ROWID, guid, text, handle_id, is_from_me, item_type, is_system_message, associated_message_type, account)
+  VALUES (12, 's12', '@venice what is new', 2, 0, 0, 0, 0, 'E:carterlaborde@gmail.com');
+INSERT INTO chat_message_join (chat_id, message_id) VALUES (2, 12);
+`]);
+    await bridge.pollOnce();
+    await waitFor(() => sends().length > 1, 8_000);
+    assert.equal(mine().length, 1, 'an unknown friend is not dispatched');
+    assert.match(sends()[1], /^any;-;\+18566892599\|I don't have a friend called venice\. Friends: All Chats, Business\./);
+  } finally {
+    bridge.dispose();
+    globalThis.fetch = originalFetch;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('friends still load from the settings file when the server is unreachable', async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'imessage-fallback-'));
+  const settingsFilePath = path.join(directory, 'settings.json');
+  writeFileSync(settingsFilePath, JSON.stringify({ projects: [{ label: 'Villanova Work', path: '/tmp/villanova' }] }));
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('server restarting'); };
+  const bridge = createImessageBridge({
+    filePath: path.join(directory, 'bridge.json'),
+    chatDbPath: path.join(directory, 'none.db'),
+    getApiBaseUrl: () => 'http://127.0.0.1:1',
+    settingsFilePath,
+    log: { warn: () => {} },
+  });
+  try {
+    const status = await bridge.status();
+    assert.ok(status.friends.some((friend) => friend.label === 'Villanova Work'));
+  } finally {
+    bridge.dispose();
+    globalThis.fetch = originalFetch;
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

@@ -665,6 +665,7 @@ export const createImessageBridge = ({
   getApiBaseUrl = () => '',
   allChatsDirectory = '',
   commitmentsFilePath = '',
+  settingsFilePath = path.join(process.env.HOME || '', '.config/openchamber/settings.json'),
   timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
   log = console,
   clock = nowMs,
@@ -750,13 +751,26 @@ export const createImessageBridge = ({
    *  Chats. They are read from the same settings the sidebar uses, so a folder
    *  added in the app can be addressed by name without any second list. */
   const loadFriends = async (force = false) => {
-    if (!force && friendsCache.list.length > 0 && clock() - friendsCache.at < 60_000) return friendsCache.list;
+    const ttl = friendsCache.fromFallback ? 5_000 : 60_000;
+    if (!force && friendsCache.list.length > 0 && clock() - friendsCache.at < ttl) return friendsCache.list;
     try {
       const payload = await requestJson('GET', '/api/config/settings');
       const friends = buildFriends(Array.isArray(payload?.projects) ? payload.projects : [], { allChatsDirectory });
-      friendsCache = { at: clock(), list: friends };
+      friendsCache = { at: clock(), list: friends, fromFallback: false };
     } catch {
-      if (friendsCache.list.length === 0) friendsCache = { at: clock(), list: buildFriends([]) };
+      // The server can be mid-restart. Reading the same settings file it
+      // serves keeps every @friend reachable; falling back to All Chats alone
+      // would send "@legal ..." to the wrong friend. A short TTL retries soon.
+      let projects = [];
+      try {
+        const raw = JSON.parse(await readFile(settingsFilePath, 'utf8'));
+        projects = Array.isArray(raw?.projects) ? raw.projects : [];
+      } catch {
+        // No settings file either: All Chats alone.
+      }
+      if (projects.length > 0 || friendsCache.list.length === 0) {
+        friendsCache = { at: clock(), list: buildFriends(projects, { allChatsDirectory }), fromFallback: true };
+      }
     }
     runtime.friends = friendsCache.list.map((friend) => ({
       key: friend.key,
@@ -1104,6 +1118,15 @@ export const createImessageBridge = ({
   const isOwnThread = (message) => !message.isGroup
     && (store.handles.includes(message.handle) || ownIdentities.has(message.handle));
 
+  /** The user's own phone number is the one thread his texts and the replies
+   *  live in. Messages files a text to himself under several chats (his number,
+   *  his Apple ID address) depending on which device sent it; answering in
+   *  whichever one it arrived in made replies jump between threads. */
+  const canonicalOwnChat = () => {
+    const phone = store.handles.find((handle) => handle.startsWith('+')) || store.handles[0] || '';
+    return phone ? `any;-;${phone}` : '';
+  };
+
   /** Who answers this message: the @mentioned friend, the thread's last friend,
    *  or the default. Groups and the user's own rows must name someone. */
   const resolveTarget = async (message) => {
@@ -1111,6 +1134,11 @@ export const createImessageBridge = ({
     const mention = parseMention(message.text, friends);
     if (mention.ambiguous.length > 0) return { clarify: mention.ambiguous };
     if (mention.friend) return { friend: mention.friend, body: mention.body || message.text };
+    // "@venice ..." that names nobody is not a request for All Chats. Saying so
+    // is better than answering as the wrong friend. Groups are skipped: there an
+    // @ may address a person.
+    const unknown = !message.isGroup ? /^\s*@([^\s,:;.!?]{1,40})/.exec(message.text) : null;
+    if (unknown) return { unknown: unknown[1], friends };
     // A shared thread, or a row the user sent himself, is answered only when a
     // friend was named; an ordinary one-to-one text needs no ceremony.
     if (message.isGroup || (message.fromMe && !isOwnThread(message))) return null;
@@ -1174,7 +1202,21 @@ export const createImessageBridge = ({
         if (message.fromMe && !message.isGroup && !isOwnThread(message)) continue;
         if (message.fromMe && message.isGroup && !message.text.includes('@')) continue;
         if (message.isGroup && !message.text.includes('@')) continue;
+        if (isOwnThread(message)) {
+          const canonical = canonicalOwnChat();
+          if (canonical) message.chatGuid = canonical;
+        }
         const target = await resolveTarget(message);
+        if (target?.unknown) {
+          const names = target.friends.map((friend) => friend.label.replace(/\s*\([^)]*\)\s*$/, '')).join(', ');
+          await sendText({
+            chatGuid: message.chatGuid,
+            handle: message.handle,
+            text: `I don't have a friend called ${target.unknown}. Friends: ${names}.`,
+          }).catch(() => {});
+          changed = true;
+          continue;
+        }
         if (target?.clarify) {
           const names = target.clarify.map((friend) => friend.label).join(' or ');
           await sendText({
