@@ -1,3 +1,4 @@
+import { useZdrLockStore } from '@/stores/useZdrLockStore';
 import type { MessagePage, SessionPage } from './client';
 import type { Session } from './model';
 
@@ -33,6 +34,8 @@ export async function searchChats(filters: ChatSearchFilters, loaders: Loaders, 
     for (const session of page.sessions) {
       if (seenSessions.has(session.id)) continue;
       seenSessions.add(session.id);
+      // A locked ZDR folder's chats are not searchable until its PIN is entered.
+      if (useZdrLockStore.getState().isLocked(session.directory)) continue;
       if (!filters.directory || session.directory === filters.directory || session.directory.startsWith(`${filters.directory}/`)) sessions.push(session);
     }
     cursor = page.cursor.next;

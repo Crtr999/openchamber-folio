@@ -18,6 +18,8 @@ import { registerProjectSetupRoutes } from '../projects/routes.js';
 import { registerAgentMemoryRoutes } from '../agent-memory/routes.js';
 import { registerSessionKnowledgeRoutes } from '../session-knowledge/routes.js';
 import { registerDirectorRoutes } from '../director/routes.js';
+import { registerZdrLockRoutes } from '../zdr-lock/routes.js';
+import { createZdrLock } from '../zdr-lock/runtime.js';
 import { resolveDirectoryAllowedProviders } from '../session-memory-capture/providers.js';
 import { registerHealthRoutes } from '../health/routes.js';
 import { registerComputerRoutes } from '../computer/routes.js';
@@ -372,6 +374,12 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     registerProjectSetupRoutes(app, { projectConfigRuntime });
     registerAgentMemoryRoutes(app, { agentMemoryRuntime, isAgentMemoryEnabled });
     registerSessionKnowledgeRoutes(app, { sessionKnowledgeRuntime });
+    registerZdrLockRoutes(app, {
+      lock: createZdrLock({ file: path.join(openchamberDataDir, 'zdr-lock.json') }),
+      listProjectPaths: listConfiguredProjectPaths,
+      resolveAllowedProviders: resolveDirectoryAllowedProviders,
+      path,
+    });
     registerDirectorRoutes(app, {
       fsPromises,
       path,

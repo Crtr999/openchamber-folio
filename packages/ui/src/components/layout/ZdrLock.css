@@ -1,0 +1,22 @@
+.oc-zdr-curtain { position: fixed; inset: 0; z-index: 8500; display: flex; align-items: center; justify-content: center;
+    background: color-mix(in srgb, var(--surface-background) 96%, transparent); animation: oc-zdr-in .22s ease both; }
+@keyframes oc-zdr-in { from { opacity: 0; } to { opacity: 1; } }
+.oc-zdr-card { width: min(340px, calc(100vw - 48px)); display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 28px 26px 22px;
+    border-radius: 18px; border: 1px solid var(--interactive-border); background: var(--surface-elevated); color: var(--surface-elevated-foreground);
+    box-shadow: 0 24px 80px -24px rgb(0 0 0 / .55); }
+.oc-zdr-lock-icon { width: 36px; height: 36px; color: var(--surface-muted-foreground); }
+.oc-zdr-title { font-size: 15px; font-weight: 600; letter-spacing: .01em; }
+.oc-zdr-sub { font-size: 12px; text-align: center; color: var(--surface-muted-foreground); min-height: 2.6em; }
+.oc-zdr-dots { display: flex; gap: 14px; padding: 6px 0; cursor: text; }
+.oc-zdr-dot { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid var(--surface-muted-foreground); transition: background .12s ease, transform .12s ease, border-color .12s ease; }
+.oc-zdr-dot[data-filled="true"] { background: var(--foreground); border-color: var(--foreground); transform: scale(1.08); }
+.oc-zdr-dots[data-error="true"] { animation: oc-zdr-shake .38s ease; }
+.oc-zdr-dots[data-error="true"] .oc-zdr-dot { border-color: var(--status-error, #e5484d); }
+@keyframes oc-zdr-shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-8px); } 40% { transform: translateX(8px); } 60% { transform: translateX(-5px); } 80% { transform: translateX(5px); } }
+.oc-zdr-input { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
+.oc-zdr-actions { display: flex; gap: 8px; width: 100%; justify-content: center; }
+.oc-zdr-button { all: unset; cursor: pointer; font-size: 12px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--interactive-border); color: var(--surface-muted-foreground); }
+.oc-zdr-button:hover { background: var(--interactive-hover); color: var(--foreground); }
+.oc-zdr-button:focus-visible { outline: 2px solid var(--interactive-focus-ring); outline-offset: 1px; }
+.oc-zdr-button[disabled] { opacity: .45; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .oc-zdr-curtain, .oc-zdr-dots[data-error="true"] { animation: none; } .oc-zdr-dot { transition: none; } }

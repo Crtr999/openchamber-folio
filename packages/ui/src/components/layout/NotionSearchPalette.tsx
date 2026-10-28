@@ -9,6 +9,8 @@ import { createChatSearchCache, searchChats, type ChatSearchMatch } from '@/lib/
 import type { Session } from '@/lib/opencode/model';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
+import { useZdrLockStore } from '@/stores/useZdrLockStore';
+import { isPathGuarded } from '@/lib/zdrLock';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionTabsStore } from '@/stores/useSessionTabsStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -125,7 +127,15 @@ export function NotionSearchPalette() {
   const panelRef = React.useRef<HTMLDivElement | null>(null);
   const pointerMovedRef = React.useRef(false);
 
-  const activeSessions = useGlobalSessionsStore((state) => (open ? state.activeSessions : EMPTY));
+  const allActiveSessions = useGlobalSessionsStore((state) => (open ? state.activeSessions : EMPTY));
+  const zdrPinSet = useZdrLockStore((state) => state.pinSet);
+  const zdrUnlocked = useZdrLockStore((state) => state.unlocked);
+  const zdrDirectories = useZdrLockStore((state) => state.directories);
+  // A locked ZDR folder's chats do not show up in the palette's title matches.
+  const activeSessions = React.useMemo(
+    () => (zdrPinSet && !zdrUnlocked ? allActiveSessions.filter((session) => !isPathGuarded(zdrDirectories, session.directory)) : allActiveSessions),
+    [allActiveSessions, zdrDirectories, zdrPinSet, zdrUnlocked],
+  );
   const projects = useProjectsStore((state) => state.projects);
 
   const projectLabel = React.useCallback((directory: string) => {

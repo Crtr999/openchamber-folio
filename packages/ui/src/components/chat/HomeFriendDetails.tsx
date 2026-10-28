@@ -25,6 +25,9 @@ import type { Agent, Session } from '@/lib/opencode/model';
 import { clearProviderBindingCache } from '@/lib/projectProviderBinding';
 import { morphFrom } from '@/lib/motion';
 import { isAllChatsProject } from '@/lib/allChatsFriend';
+import { ZdrPinSettings } from '@/components/layout/ZdrPinSettings';
+import { useZdrLockStore } from '@/stores/useZdrLockStore';
+import { isPathGuarded } from '@/lib/zdrLock';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -431,6 +434,7 @@ export function HomeFriendDetails({
     // All Chats lives in the app's own managed directory: its rules and memory files sit at the
     // chats root and are edited like any folder's, but it has no guardrail file of its own.
     const allChats = isAllChatsProject(project);
+    const zdrGuarded = useZdrLockStore((state) => isPathGuarded(state.directories, project?.path));
 
     /**
      * The memory store holds one project at a time, and the panel may be
@@ -500,6 +504,7 @@ export function HomeFriendDetails({
                         {target.name} owns <strong>{project?.label || 'this folder'}</strong>. Every chat here is added to what this friend knows. The folder&apos;s rules, memory, and the Mac apps you leave on stay with this friend.
                     </p>
                     {project && !allChats ? <FriendEstate project={project} /> : null}
+                    {zdrGuarded ? <div className="pt-2"><ZdrPinSettings /></div> : null}
                 </section>
 
                 {project && folderSessions.length > 0 && (

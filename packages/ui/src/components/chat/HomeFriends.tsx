@@ -40,6 +40,8 @@ import { createChatDirectory } from '@/lib/chatDirectories';
 import { useChatsRoot } from '@/hooks/useChatsRoot';
 import { cn } from '@/lib/utils';
 import { HomeFriendAvatar } from './HomeFriendAvatar';
+import { useZdrLockStore } from '@/stores/useZdrLockStore';
+import { isPathGuarded } from '@/lib/zdrLock';
 import { HomeFriendDetails } from './HomeFriendDetails';
 
 type FolderCatalog = {
@@ -92,6 +94,11 @@ export function HomeFriendCards({ friends, busyAgent, onOpen, onNew, onDetails }
     const { t } = useI18n();
     const cards = React.useRef(new Map<string, HTMLLIElement>());
     const originOf = (agent: string): Origin => cards.current.get(agent)?.getBoundingClientRect() ?? null;
+    const zdrPinSet = useZdrLockStore((state) => state.pinSet);
+    const zdrUnlocked = useZdrLockStore((state) => state.unlocked);
+    const zdrDirectories = useZdrLockStore((state) => state.directories);
+    // A locked ZDR friend still appears, but says nothing about its chats.
+    const isLockedCard = (agent: string) => zdrPinSet && !zdrUnlocked && agent.startsWith('folder:') && isPathGuarded(zdrDirectories, agent.slice('folder:'.length));
     return <ul className="oc-friend-grid" aria-label={t('friends.title')}>{friends.map(friend => {
         const busy = Boolean(busyAgent);
         return <li key={friend.agent} className="oc-friend-card" data-friend={friend.agent} data-busy={busyAgent === friend.agent ? 'true' : undefined}
@@ -120,7 +127,7 @@ export function HomeFriendCards({ friends, busyAgent, onOpen, onNew, onDetails }
                     )}
                     <span id={`friend-status-${friend.agent}`} className="oc-friend-card-status" data-kind={friend.status.kind}>
                         {(friend.status.kind === 'working' || friend.status.kind === 'retrying' || friend.status.kind === 'waiting') && <span className="oc-friend-status-dot" aria-hidden="true" />}
-                        <span className="truncate">{busyAgent === friend.agent ? t('friends.opening') : friend.status.text}</span>
+                        <span className="truncate">{busyAgent === friend.agent ? t('friends.opening') : isLockedCard(friend.agent) ? 'Locked' : friend.status.text}</span>
                     </span>
                 </span>
             </Button>

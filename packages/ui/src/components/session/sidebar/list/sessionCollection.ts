@@ -1,3 +1,5 @@
+import { useZdrLockStore } from '@/stores/useZdrLockStore';
+import { isPathGuarded } from '@/lib/zdrLock';
 import React from 'react';
 import type { Session } from '@/lib/opencode/model';
 import { useAllLiveSessions } from '@/sync/sync-context';
@@ -314,6 +316,19 @@ export const useSessionProjectCollection = ({
     [childrenMap, sessionById],
   );
 
+  // While a ZDR folder is locked its chats stay out of every sidebar list, so their titles are not readable.
+  const zdrPinSet = useZdrLockStore((state) => state.pinSet);
+  const zdrUnlocked = useZdrLockStore((state) => state.unlocked);
+  const zdrDirectories = useZdrLockStore((state) => state.directories);
+  const hideLocked = React.useCallback(<T extends { directory?: string | null }>(items: readonly T[]): T[] => (
+    zdrPinSet && !zdrUnlocked && zdrDirectories.length > 0
+      ? items.filter((item) => !isPathGuarded(zdrDirectories, item.directory))
+      : [...items]
+  ), [zdrDirectories, zdrPinSet, zdrUnlocked]);
+  const visibleOrdered = React.useMemo(() => hideLocked(orderedSessions), [hideLocked, orderedSessions]);
+  const visibleSessions = React.useMemo(() => hideLocked(sessions), [hideLocked, sessions]);
+  const visibleRoots = React.useMemo(() => hideLocked(structure.rootSessions), [hideLocked, structure.rootSessions]);
+
   return {
     archivedSessions,
     childrenMap,
@@ -321,11 +336,11 @@ export const useSessionProjectCollection = ({
     getDescendantIds: getDescendantIdsForAction,
     hasAuthoritativeGlobalSessions,
     liveSessions,
-    orderedSessions,
+    orderedSessions: visibleOrdered,
     pinnedSessionIds,
     sessionOrderRanks,
-    sessions,
-    rootSessions: structure.rootSessions,
+    sessions: visibleSessions,
+    rootSessions: visibleRoots,
   };
 };
 

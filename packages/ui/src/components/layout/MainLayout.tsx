@@ -1,5 +1,7 @@
 import { WebsiteModelRuntime } from '@/components/views/WebsiteModelRuntime';
 import { DirectorOverlay } from '@/components/chat/DirectorOverlay';
+import { ZdrLockCurtain } from '@/components/layout/ZdrLockCurtain';
+import { useZdrAutoLock } from '@/hooks/useZdrAutoLock';
 import { GeminiWorkspace } from '@/components/views/GeminiWorkspace';
 import { useGeminiStore } from '@/stores/useGeminiStore';
 import { useChatGPTStore } from '@/stores/useChatGPTStore';
@@ -79,6 +81,7 @@ const installAutoHideScrollbars = () => {
 };
 
 export const MainLayout: React.FC = () => {
+    useZdrAutoLock();
     const [launchSessionId] = React.useState(() => parseRoute().sessionId);
     React.useEffect(() => installAutoHideScrollbars(), []);
     // The first time the app is opened (or brought forward) each day, the Today
@@ -248,6 +251,7 @@ export const MainLayout: React.FC = () => {
                                             )}
                                             <ErrorBoundary><WorktreesView /></ErrorBoundary>
                                             <ErrorBoundary><DirectorOverlay /></ErrorBoundary>
+                                            <ErrorBoundary><ZdrLockCurtain /></ErrorBoundary>
                                             {isElectronShell() && isDesktopLocalOriginActive() && <ErrorBoundary>
                                                 <WebsiteModelRuntime />
                                                 <ChatGPTWorkspace visible={isChatGPTPageOpen} />
