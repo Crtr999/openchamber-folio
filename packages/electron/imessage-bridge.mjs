@@ -131,6 +131,7 @@ export const composeMorningText = (items, { now = Date.now(), timeZone = 'UTC' }
 // not the way an app prints a report.
 const TEXT_STYLE = 'This arrived as a text on Carter\'s phone. Answer like a text: a sentence or two, plain words, no markdown, no headings, no lists, and do not introduce yourself.';
 const GROUP_CHAT_STYLE = 43;
+const DIRECT_CHAT_STYLE = 45;
 
 /** "+1 (267) 888-8147" and "2678888147" name the same person; emails fold case.
  *  Anything that is neither a phone number nor an email is rejected here, so a
@@ -366,9 +367,10 @@ export const rowToMessage = (row) => {
   };
 };
 
-/** Group chats need their own outgoing rows, because a thread whose only
- *  members are the user's own addresses records his texts as sent by him.
- *  One-to-one chats keep answering inbound only. */
+/** Outgoing rows are read too, because a thread whose only members are the
+ *  user's own addresses records his texts as sent by him: a text from the
+ *  phone to its own number is a single is_from_me row, with no inbound copy.
+ *  Which of those rows is a prompt is decided in the poll, by handle. */
 export const buildInboundQuery = (afterRowId) => {
   const cursor = Number.isFinite(afterRowId) && afterRowId > 0 ? Math.trunc(afterRowId) : 0;
   return `
@@ -385,7 +387,7 @@ SELECT m.ROWID AS rowid,
   LEFT JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
   LEFT JOIN chat c ON c.ROWID = cmj.chat_id
  WHERE m.ROWID > ${cursor}
-   AND (m.is_from_me = 0 OR c.style = ${GROUP_CHAT_STYLE})
+   AND (m.is_from_me = 0 OR c.style IN (${GROUP_CHAT_STYLE}, ${DIRECT_CHAT_STYLE}))
    AND m.item_type = 0
    AND m.is_system_message = 0
    AND (m.associated_message_type IS NULL OR m.associated_message_type = 0)
@@ -1087,6 +1089,14 @@ export const createImessageBridge = ({
     if (store.recentSent.length > 60) store.recentSent.splice(0, store.recentSent.length - 60);
   };
 
+  const OWN_IDENTITIES_REFRESH_MS = 10 * 60_000;
+  let ownIdentities = new Set();
+  let ownIdentitiesAt = 0;
+
+  /** A one-to-one thread with one of the user's own addresses. */
+  const isOwnThread = (message) => !message.isGroup
+    && (store.handles.includes(message.handle) || ownIdentities.has(message.handle));
+
   /** Who answers this message: the @mentioned friend, the thread's last friend,
    *  or the default. Groups and the user's own rows must name someone. */
   const resolveTarget = async (message) => {
@@ -1096,7 +1106,7 @@ export const createImessageBridge = ({
     if (mention.friend) return { friend: mention.friend, body: mention.body || message.text };
     // A shared thread, or a row the user sent himself, is answered only when a
     // friend was named; an ordinary one-to-one text needs no ceremony.
-    if (message.isGroup || message.fromMe) return null;
+    if (message.isGroup || (message.fromMe && !isOwnThread(message))) return null;
     const stickyKey = store.threads[message.chatGuid]?.sticky || store.defaultFriend || '';
     const friend = friends.find((entry) => entry.key === stickyKey)
       || friends.find((entry) => entry.key === ALL_CHATS_FRIEND.key)
@@ -1104,9 +1114,6 @@ export const createImessageBridge = ({
     return friend ? { friend, body: message.text } : null;
   };
 
-  const OWN_IDENTITIES_REFRESH_MS = 10 * 60_000;
-  let ownIdentities = new Set();
-  let ownIdentitiesAt = 0;
 
   const pollOnce = async () => {
     if (polling || !store.enabled) return;
@@ -1154,7 +1161,10 @@ export const createImessageBridge = ({
         if (wasSentByBridge(message.text)) continue;
         // In a thread where the user's own rows are read, only a named friend
         // is a prompt.
-        if (message.fromMe && !message.text.includes('@')) continue;
+        // A one-to-one thread with the user's own number is the note-to-self
+        // thread: there, a sent row is the user's text and needs no mention.
+        if (message.fromMe && !message.isGroup && !isOwnThread(message)) continue;
+        if (message.fromMe && message.isGroup && !message.text.includes('@')) continue;
         if (message.isGroup && !message.text.includes('@')) continue;
         const target = await resolveTarget(message);
         if (target?.clarify) {

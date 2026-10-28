@@ -551,6 +551,99 @@ INSERT INTO chat_message_join (chat_id, message_id) VALUES (1, 14);
 });
 
 
+test('a text from the phone to its own number is a prompt, though it is stored as a sent row', async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'imessage-self-'));
+  const dbPath = path.join(directory, 'chat.db');
+  execFileSync('/usr/bin/sqlite3', [dbPath, `
+CREATE TABLE handle (ROWID INTEGER PRIMARY KEY, id TEXT, service TEXT);
+CREATE TABLE chat (ROWID INTEGER PRIMARY KEY, guid TEXT, style INTEGER, chat_identifier TEXT, display_name TEXT, account_login TEXT);
+CREATE TABLE message (ROWID INTEGER PRIMARY KEY, guid TEXT, text TEXT, attributedBody BLOB, handle_id INTEGER,
+  is_from_me INTEGER, item_type INTEGER, is_system_message INTEGER, associated_message_type INTEGER, account TEXT);
+CREATE TABLE chat_message_join (chat_id INTEGER, message_id INTEGER);
+INSERT INTO handle (ROWID, id, service) VALUES (1, '+18566892599', 'iMessage'), (2, '+12672888147', 'iMessage');
+INSERT INTO chat (ROWID, guid, style, chat_identifier, account_login) VALUES (1, 'any;-;+18566892599', 45, '+18566892599', 'E:carterlaborde@gmail.com'), (2, 'any;-;+12672888147', 45, '+12672888147', 'E:carterlaborde@gmail.com');
+INSERT INTO message (ROWID, guid, text, handle_id, is_from_me, item_type, is_system_message, associated_message_type, account)
+  VALUES (10, 's10', 'old', 1, 1, 0, 0, 0, 'E:carterlaborde@gmail.com');
+INSERT INTO chat_message_join (chat_id, message_id) VALUES (1, 10);
+`]);
+
+  const dispatched = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    const target = String(url);
+    if (target.endsWith('/api/config/settings')) {
+      return new Response(JSON.stringify({ projects: [{ label: 'Business Launch', path: '/tmp/example' }] }), { status: 200 });
+    }
+    if (target.endsWith('/api/event')) {
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('data: {"type":"session.idle","data":{"sessionID":"ses_self"}}\n\n'));
+        },
+      });
+      return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    }
+    if (target.endsWith('/api/openchamber/sessions') && init.method === 'POST') {
+      dispatched.push(JSON.parse(init.body));
+      return new Response(JSON.stringify({ sessionId: 'ses_self', promptDispatched: true }), { status: 200 });
+    }
+    if (target.includes('/api/session/ses_self/message')) {
+      return new Response(JSON.stringify({
+        data: [{ id: 'msg_a', type: 'assistant', time: { completed: 5 }, content: [{ type: 'text', text: 'Looking into it.' }] }],
+      }), { status: 200 });
+    }
+    throw new Error(`unexpected request ${init.method || 'GET'} ${target}`);
+  };
+
+  const bridge = createImessageBridge({
+    filePath: path.join(directory, 'bridge.json'),
+    chatDbPath: dbPath,
+    osascriptPath: '/bin/echo',
+    getApiBaseUrl: () => 'http://127.0.0.1:1',
+    log: { warn: () => {} },
+  });
+
+  try {
+    await bridge.configure({ enabled: true, handles: ['8566892599'], debounceMs: 20, defaultFriend: 'Business Launch' });
+    await bridge.pollOnce();
+
+    // Carter's own sent text in someone else's thread is never a prompt.
+    execFileSync('/usr/bin/sqlite3', [dbPath, `
+INSERT INTO message (ROWID, guid, text, handle_id, is_from_me, item_type, is_system_message, associated_message_type, account)
+  VALUES (11, 's11', 'see you at six', 2, 1, 0, 0, 0, 'E:carterlaborde@gmail.com');
+INSERT INTO chat_message_join (chat_id, message_id) VALUES (2, 11);
+`]);
+    await bridge.pollOnce();
+    await sleep(80);
+    assert.equal(dispatched.length, 0);
+
+    // The same words sent to his own number are the question.
+    execFileSync('/usr/bin/sqlite3', [dbPath, `
+INSERT INTO message (ROWID, guid, text, handle_id, is_from_me, item_type, is_system_message, associated_message_type, account)
+  VALUES (12, 's12', 'what is on my plate today', 1, 1, 0, 0, 0, 'E:carterlaborde@gmail.com');
+INSERT INTO chat_message_join (chat_id, message_id) VALUES (1, 12);
+`]);
+    await bridge.pollOnce();
+    await waitFor(() => dispatched.length > 0, 8_000);
+    await waitForStatus(bridge, (value) => value.lastTextAt !== null, 10_000);
+    assert.equal(dispatched.length, 1);
+
+    // Its reply lands in the same thread as another sent row, and is ignored.
+    execFileSync('/usr/bin/sqlite3', [dbPath, `
+INSERT INTO message (ROWID, guid, text, handle_id, is_from_me, item_type, is_system_message, associated_message_type, account)
+  VALUES (13, 's13', 'Looking into it.', 1, 1, 0, 0, 0, 'E:carterlaborde@gmail.com');
+INSERT INTO chat_message_join (chat_id, message_id) VALUES (1, 13);
+`]);
+    await bridge.pollOnce();
+    await sleep(120);
+    assert.equal(dispatched.length, 1, 'the bridge does not answer itself');
+  } finally {
+    bridge.dispose();
+    globalThis.fetch = originalFetch;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+
 test('the morning text lists what is overdue, due today and close', () => {
   const now = Date.UTC(2026, 9, 28, 13, 0);
   const text = composeMorningText([
