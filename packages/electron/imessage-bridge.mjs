@@ -966,7 +966,7 @@ export const createImessageBridge = ({
     }
   };
 
-  const MAX_TEXTS_PER_THREAD = 8;
+  const MAX_TEXTS_PER_THREAD = 20;
   const TEXT_WINDOW_MS = 10 * 60_000;
 
   const respond = async ({ handle, chatGuid, friend, isGroup, prompt }) => {
