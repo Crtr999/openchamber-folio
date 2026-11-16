@@ -281,7 +281,7 @@ export const registerOpenCodeRoutes = (app, dependencies) => {
       const sources = getProviderSources(providerId, directory);
       const { getProviderAuth } = await getAuthLibrary();
       const auth = getProviderAuth(providerId);
-      sources.sources.auth.exists = providerId === 'claude-code'
+      sources.sources.auth.exists = (providerId === 'claude-agent' || providerId === 'claude-code')
         ? getClaudeCliAuthStatus().connected
         : Boolean(auth);
 

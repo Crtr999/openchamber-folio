@@ -31,21 +31,25 @@ storage. Only local Electron exposes this view; every other runtime is unsupport
 Main-process attachment and permission rules live in
 `packages/electron/website-guest-security.mjs`.
 
-### Native provider feasibility, checked October 8, 2026
+### Native Claude Agent, updated November 2, 2026
 
-Current account-history and external scheduled-task findings, including real
-Enterprise compliance APIs and their access requirements, are in
-[account-integration-findings.md](./account-integration-findings.md). Local saved
-pages are not account history. No external feed runs in the Scheduled sidebar.
+Open Carter bundles OpenCode 2.2.4. The native Claude shortcut selects its built-in
+`claude-agent` provider. Claude Code owns sign-in and sends requests through the
+Claude Agent SDK. OpenCode supplies the tools, permission checks and stored chat
+history. The Claude folder defaults to this provider; its older `claude-code`
+plugin remains available for existing conversations. No website history or
+claude.ai memory is imported. Existing Claude Code Team sign-in was verified.
 
-Native ChatGPT uses ordinary OpenCode sessions through the OpenAI provider, not
-website transcripts or account memory. OpenCode V2's [provider documentation](https://opencode.ai/v2/docs/providers)
-does not document a Claude subscription login equivalent. Anthropic's current
-[authentication policy](https://code.claude.com/docs/en/legal-and-compliance)
-permits end users to sign into an unmodified official Claude Code binary, but
-does not permit third-party applications to collect or intermediate Claude.ai
-tokens. That separate binary is not an OpenCode provider or a cloud-history
-adapter. No native Claude option is added, and API billing is not substituted.
+Settings connects the external `claude-login` method through the official SDK.
+It records a credential reference rather than copying Claude tokens. Install and
+sign in to Claude Code on the OpenCode server machine. The response test passed
+with Claude Code 2.1.316; 2.1.287 discovered models but did not report the version
+needed by OpenCode's chat compatibility check.
+
+The native shortcut remains local Electron only. Provider Settings on web,
+VS Code, hosted mobile and Capacitor connects the active server's Claude Code;
+none of these clients receives local credentials or launches a local Claude CLI.
+The existing enterprise gate refuses new external provider connections.
 
 ## Context panel retention
 

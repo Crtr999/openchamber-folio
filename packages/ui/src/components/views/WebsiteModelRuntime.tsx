@@ -6,7 +6,7 @@ import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 import { buildWebsiteAccountScript, buildWebsiteChatScript, buildWebsiteImageScript, websiteImageResultSchema, websiteAccountActionSchema, websiteChatSnapshotSchema, websiteChatActionSchema, waitForWebsiteSnapshot } from '@/lib/website-chat/websiteChat';
 
-const jobSchema = z.object({ id: z.string().uuid(), lease: z.string().uuid(), provider: z.enum(['venice', 'gemini']), kind: z.enum(['chat', 'usage', 'models']).default('chat'), prompt: z.string().max(300_000), model: z.string().max(120).nullish(), image: z.boolean().default(false) });
+const jobSchema = z.object({ id: z.string().uuid(), lease: z.string().uuid(), provider: z.enum(['venice', 'gemini', 'mistral']), kind: z.enum(['chat', 'usage', 'models']).default('chat'), prompt: z.string().max(300_000), model: z.string().max(120).nullish(), image: z.boolean().default(false) });
 type Job = z.infer<typeof jobSchema>;
 const normalize = (text: string) => text.replace(/\s+/g, ' ').trim();
 const wait = (signal: AbortSignal, ms: number) => new Promise<void>((resolve, reject) => {
@@ -46,14 +46,14 @@ function WebsiteModelJob({ job, signal, finish, userFocus }: { job: Job; signal:
         if (job.kind === 'models' || job.provider === 'venice') {
           const read = async () => websiteChatSnapshotSchema.parse(await webview.executeJavaScript(buildWebsiteChatScript(job.provider, { kind: 'snapshot' }), false));
           if (!(await waitReady(read, ensureActive, deadline, 'account'))) throw new Error('The ' + job.provider + ' website did not finish loading. Sign in through its account connection.');
-        } else {
+        } else if (job.provider !== 'mistral') {
           // Gemini's usage page is its own route.
           while (alive && !signal.aborted && Date.now() < deadline) {
             await ensureActive();
             try { if (String(await webview.executeJavaScript('location.origin + location.pathname', false)).endsWith('/usage')) break; } catch { /* still loading */ }
             await wait(signal, 400);
           }
-        }
+        } // Mistral's account script waits for its own page content.
         const result = websiteAccountActionSchema.parse(await webview.executeJavaScript(buildWebsiteAccountScript(job.provider, { kind: job.kind === 'models' ? 'models' : 'usage' }), true));
         if (result.kind === 'failed' || result.kind === 'unavailable') throw new Error(result.reason);
         await post('result', { data: result });
@@ -182,7 +182,7 @@ function WebsiteModelJob({ job, signal, finish, userFocus }: { job: Job; signal:
     void run();
     return () => { alive = false; };
   }, [webview, job, signal, finish, userFocus]);
-  const src = job.provider === 'venice' ? 'https://venice.ai/chat/classic' : job.kind === 'usage' ? 'https://gemini.google.com/usage' : 'https://gemini.google.com/app';
+  const src = job.provider === 'venice' ? 'https://venice.ai/chat/classic' : job.provider === 'mistral' ? 'https://admin.mistral.ai/subscription' : job.kind === 'usage' ? 'https://gemini.google.com/usage' : 'https://gemini.google.com/app';
   return <webview tabIndex={-1} ref={attachWebview} src={src} partition={`persist:open-carter-${job.provider}`} webpreferences="backgroundThrottling=no" style={{ width: '1200px', height: '900px', border: 'none' }} />;
 }
 

@@ -5,13 +5,8 @@ export const providerId = 'xai';
 export const providerName = 'xAI';
 
 const USAGE_URL = 'https://grok.com/grok_api_v2.GrokBuildBilling/GetGrokCreditsConfig';
-const TOKEN_URL = 'https://auth.x.ai/oauth2/token';
-const CLIENT_ID = 'b1a00492-073a-47ea-816f-4c329264a828';
-const REFRESH_SKEW_MS = 120_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const EMPTY_GRPC_WEB_BODY = new Uint8Array([0, 0, 0, 0, 0]);
-
-let refreshPromise = null;
 
 const nonEmptyString = (value) => {
   if (typeof value !== 'string') return null;
@@ -44,11 +39,11 @@ const decodeJwtClaims = (token) => {
   }
 };
 
-const tokenNeedsRefresh = (entry) => {
+const tokenIsExpired = (entry) => {
   const access = nonEmptyString(entry.access);
   if (!access) return true;
 
-  const refreshDeadline = Date.now() + REFRESH_SKEW_MS;
+  const refreshDeadline = Date.now();
   const storedExpiry = Number(entry.expires);
   if (Number.isFinite(storedExpiry) && storedExpiry <= refreshDeadline) return true;
 
@@ -56,72 +51,13 @@ const tokenNeedsRefresh = (entry) => {
   return Number.isFinite(jwtExpiry) && jwtExpiry <= refreshDeadline;
 };
 
-const refreshXaiOauth = async (entry) => {
-  if (!refreshPromise) {
-    refreshPromise = (async () => {
-      const refreshToken = nonEmptyString(entry.refresh);
-      if (!refreshToken) {
-        throw new Error('xAI OAuth entry has no usable refresh token');
-      }
-
-      const response = await fetch(TOKEN_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: CLIENT_ID,
-          refresh_token: refreshToken,
-          grant_type: 'refresh_token'
-        }),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-      });
-
-      if (!response.ok) {
-        throw new Error(`xAI OAuth refresh failed with HTTP ${response.status}`);
-      }
-
-      let payload;
-      try {
-        payload = await response.json();
-      } catch {
-        throw new Error('xAI OAuth refresh returned invalid JSON');
-      }
-
-      const access = nonEmptyString(payload?.access_token);
-      if (!access) {
-        throw new Error('xAI OAuth refresh returned no access token');
-      }
-
-      const expiresIn = payload?.expires_in ?? 3600;
-      if (typeof expiresIn !== 'number' || !Number.isFinite(expiresIn)) {
-        throw new Error('xAI OAuth refresh returned an invalid expiry');
-      }
-      const expires = Date.now() + expiresIn * 1000;
-      const refreshed = {
-        ...entry,
-        type: 'oauth',
-        access,
-        refresh: nonEmptyString(payload?.refresh_token) ?? refreshToken,
-        expires
-      };
-
-      // The refreshed token is kept in memory for this process only: OpenCode
-      // 2.x owns `auth.json` (it imports it once and never reads it again), so
-      // writing it back would drift from the credential OpenCode actually uses.
-      return refreshed;
-    })().finally(() => {
-      refreshPromise = null;
-    });
+// OpenCode owns OAuth renewal. A quota refresh must never rotate its token.
+const readAccessToken = (entry) => {
+  const access = nonEmptyString(entry.access);
+  if (!access || tokenIsExpired(entry)) {
+    throw new Error('xAI sign-in is managed by OpenCode. Send a Grok message to refresh it, or reconnect xAI in Providers.');
   }
-
-  return refreshPromise;
-};
-
-const ensureFreshAccess = async (entry) => {
-  if (!tokenNeedsRefresh(entry)) return entry;
-  if (!nonEmptyString(entry.refresh)) {
-    throw new Error('xAI OAuth access token is expired and has no usable refresh token');
-  }
-  return refreshXaiOauth(entry);
+  return access;
 };
 
 const readVarint = (bytes, state) => {
@@ -364,9 +300,7 @@ export const fetchQuota = async () => {
   }
 
   try {
-    const freshEntry = await ensureFreshAccess(entry);
-    const accessToken = nonEmptyString(freshEntry.access);
-    if (!accessToken) throw new Error('xAI OAuth entry has no usable access token');
+    const accessToken = readAccessToken(entry);
     const usage = await fetchUsage(accessToken);
 
     return buildResult({

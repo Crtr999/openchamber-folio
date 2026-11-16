@@ -67,7 +67,7 @@ interface QuotaStore extends QuotaSettingsState {
   resetForRuntimeSwitch: () => void;
 }
 
-const ALWAYS_FETCHED_PROVIDER_IDS: QuotaProviderId[] = ['gemini-website', 'venice-website'];
+const ALWAYS_FETCHED_PROVIDER_IDS: QuotaProviderId[] = ['gemini-website', 'venice-website', 'mistral-website'];
 
 const parseSettings = (data: DesktopSettings): QuotaSettingsState => {
   const allProviderIds = QUOTA_PROVIDERS.map((provider) => provider.id);

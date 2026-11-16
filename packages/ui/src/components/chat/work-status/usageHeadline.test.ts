@@ -38,6 +38,7 @@ describe('resolveQuotaProviderId', () => {
 
   test('maps the opencode-claude integration provider onto Claude quota', () => {
     expect(resolveQuotaProviderId('claude-code')).toBe('claude');
+    expect(resolveQuotaProviderId('claude-agent')).toBe('claude');
   });
 
   test('is case and whitespace tolerant, and rejects empties', () => {

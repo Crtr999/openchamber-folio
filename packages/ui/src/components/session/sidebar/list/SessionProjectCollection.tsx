@@ -698,7 +698,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   const websitesAvailable = isElectronShell() && isDesktopLocalOriginActive();
   const visibleWebsiteIds = React.useMemo(() => {
     if (!websitesAvailable) return [];
-    return WEBSITE_SIDEBAR_IDS.filter((id) => !enterpriseMode || (id !== 'website:venice' && id !== 'website:gemini'));
+    return WEBSITE_SIDEBAR_IDS.filter((id) => !enterpriseMode || (id !== 'website:venice' && id !== 'website:gemini' && id !== 'website:mistral'));
   }, [enterpriseMode, websitesAvailable]);
   const sidebarRowModel = React.useMemo(() => buildSessionSidebarRowModel({
     mode: view.hasSessionSearchQuery ? 'search' : 'normal',

@@ -1,7 +1,6 @@
-/* Open Carter vibe: print-poster art direction on top of open-carter-feel.css.
-   Cobalt ink on cream paper (light) and cream type on ink black (dark), a
-   static paper grain, an illustrated Home scene with floating rounded cards,
-   an editorial serif greeting and an extended grotesk for widget titles.
+/* Open Carter art direction on top of open-carter-feel.css.
+   Theme-aware ink, a static paper grain, illustrated Home scenes and a serif
+   greeting. Home section styling belongs to HomeDashboard.css.
    Shapes, type and scenes are scoped to the desktop shell
    (data-oc-personal-interactions); the palette-specific hairlines and grain
    only apply while one of the Open Carter themes is active (data-theme-id).
@@ -21,12 +20,9 @@
         inset 0 1px 0 0 rgb(255 255 255 / 0.55),
         0 1px 2px rgb(20 27 61 / 0.05),
         0 16px 36px -20px rgb(20 27 61 / 0.32);
-    --oc-shadow-lift:
-        0 2px 6px rgb(20 27 61 / 0.07),
-        0 24px 44px -20px rgb(20 27 61 / 0.38);
     /* Dark ink specks on paper. */
     --oc-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .08 0 0 0 0 .1 0 0 0 0 .24 1.8 0 0 0 -.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    --oc-grain-opacity: 0.07;
+    --oc-grain-opacity: 0.025;
 }
 :root.dark:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) {
     --oc-hairline: color-mix(in srgb, var(--surface-foreground) 12%, transparent);
@@ -35,13 +31,9 @@
         inset 0 1px 0 0 color-mix(in srgb, var(--surface-foreground) 7%, transparent),
         0 1px 2px rgb(0 0 0 / 0.4),
         0 18px 40px -20px rgb(0 0 0 / 0.8);
-    --oc-shadow-lift:
-        inset 0 1px 0 0 color-mix(in srgb, var(--surface-foreground) 9%, transparent),
-        0 2px 6px rgb(0 0 0 / 0.45),
-        0 26px 48px -20px rgb(0 0 0 / 0.85);
     /* Cream specks on ink, like the poster's dust and stars. */
     --oc-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .93 0 0 0 0 .89 0 0 0 0 .81 1.8 0 0 0 -.7'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    --oc-grain-opacity: 0.09;
+    --oc-grain-opacity: 0.03;
 }
 
 /* One static grain sheet over the whole window. It never repaints, never
@@ -61,7 +53,6 @@
 [data-oc-personal-interactions] {
     --oc-radius-card: 22px;
 }
-[data-oc-personal-interactions] :is(.oc-home-task, .oc-ai-task) { border-radius: 14px; }
 [data-oc-personal-interactions] .oc-glass-composer { border-radius: var(--oc-radius-float); }
 
 /* Primary actions print as solid cobalt pills with cream type. */
@@ -80,24 +71,6 @@
 }
 
 /* ── Type ─────────────────────────────────────────────────────────────── */
-/* Widget titles: a wide, heavy grotesk, tight-tracked like poster type. */
-[data-oc-personal-interactions] :is(.oc-home-card-heading, .oc-home-card-heading h2) {
-    color: var(--surface-elevated-foreground);
-    font-family: var(--oc-font-display);
-    font-size: 14.5px;
-    font-stretch: 116%;
-    font-weight: 800;
-    letter-spacing: -0.025em;
-}
-[data-oc-personal-interactions] .oc-home-card-heading :is(.oc-home-count, button, [data-slot="select-trigger"], span.ml-auto) {
-    font-family: var(--font-sans);
-    font-stretch: normal;
-    font-weight: 500;
-    letter-spacing: normal;
-}
-[data-oc-personal-interactions] .oc-home-card-heading > svg,
-[data-oc-personal-interactions] .oc-home-card-heading h2 > svg { color: var(--primary-text, var(--primary-base)); }
-
 /* The Home greeting and the draft title: big editorial serif. */
 [data-oc-personal-interactions] .oc-home-greeting-title {
     font-family: var(--oc-font-serif);
@@ -126,7 +99,7 @@
 [data-oc-personal-interactions] { isolation: isolate; }
 /* The shell shows the window-wide copy; the in-content one is for other runtimes. */
 [data-oc-personal-interactions] .oc-home-landscape { display: none; }
-[data-oc-personal-interactions] .oc-home-content { padding-top: clamp(140px, 21vh, 220px); }
+[data-oc-personal-interactions] .oc-home-content { padding-top: clamp(48px, 10vh, 100px); }
 
 .oc-scene-backdrop {
     position: fixed;
@@ -291,37 +264,24 @@ html:not(.dark)[data-oc-home] [data-oc-personal-interactions]:has(> .oc-scene-ba
     box-shadow: var(--oc-shadow-card);
 }
 
-/* The greeting sits on a frosted paper plate so it reads over any scene. */
+/* A quiet reading wash keeps the greeting legible over every saved scene. */
 [data-oc-personal-interactions] .oc-home-greeting {
     display: inline-flex;
     flex-direction: column;
     align-items: center;
     max-width: 100%;
     padding: 16px 34px 14px;
-    border: 1px solid color-mix(in srgb, var(--oc-hairline) 75%, transparent);
-    border-radius: 28px;
-    background: color-mix(in srgb, var(--surface-background) 72%, transparent);
-    -webkit-backdrop-filter: blur(18px) saturate(1.18);
-    backdrop-filter: blur(18px) saturate(1.18);
-    box-shadow: var(--oc-shadow-card);
+    border: 0;
+    border-radius: 16px;
+    background: var(--surface-background);
 }
 [data-oc-personal-interactions] .oc-home-scene-button { margin-top: 6px; }
 
-/* Cards float over the scene as translucent frosted cream (or ink) panels. */
-[data-oc-personal-interactions] .oc-home-card {
-    background: color-mix(in srgb, var(--surface-elevated) 84%, transparent);
-    -webkit-backdrop-filter: blur(22px) saturate(1.18);
-    backdrop-filter: blur(22px) saturate(1.18);
-}
+/* Home sections share one canvas, owned by HomeDashboard.css. */
 
 @media (prefers-reduced-transparency: reduce) {
     [data-oc-personal-interactions] .oc-home-greeting {
         background: var(--surface-background);
-        -webkit-backdrop-filter: none;
-        backdrop-filter: none;
-    }
-    [data-oc-personal-interactions] .oc-home-card {
-        background: var(--surface-elevated);
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
     }
@@ -373,4 +333,21 @@ html[data-oc-inactive] [class*="marquee"],
 html[data-oc-inactive] [class*="glow"],
 html[data-oc-inactive] .cm-cursor {
     animation-play-state: paused !important;
+}
+
+/* Slightly firmer reading text and roomier navigation symbols on desktop. */
+[data-oc-personal-interactions] .markdown-content:not(.markdown-tool):not(.markdown-reasoning) {
+    color: var(--surface-foreground);
+    font-weight: 450;
+}
+[data-oc-personal-interactions] [data-session-row] {
+    color: var(--surface-foreground);
+    font-weight: 500;
+}
+[data-oc-personal-interactions] .oc-friend-activity,
+[data-oc-personal-interactions] .oc-friend-activity > svg,
+[data-oc-personal-interactions] .group\/website > button > span[aria-hidden="true"],
+[data-oc-personal-interactions] .group\/website > button > span[aria-hidden="true"] > :is(svg, img) {
+    width: 24px;
+    height: 24px;
 }

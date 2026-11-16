@@ -1,5 +1,6 @@
 import { geminiI18n } from './gemini.i18n';
 import { veniceI18n } from './venice.i18n';
+import { mistralI18n } from './mistral.i18n';
 import { healthI18n } from './health.i18n';
 import { companionI18n } from './companion.i18n';
 import { friendsI18n } from './friends.i18n';
@@ -39,6 +40,7 @@ export const dict: Record<I18nKey, string> = {
   ...chatgptI18n['uk'],
   ...claudeI18n.uk,
   ...veniceI18n.uk,
+  ...mistralI18n['uk'],
   ...geminiI18n.uk,
   ...meetingsI18n.uk,
   'meeting.quickStart': 'Почати зустріч',
@@ -3426,6 +3428,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.formDock.stepAria': 'Запитання {index}: {title}',
   'chat.formDock.linkInfo': 'Відкрийте посилання, потім продовжуйте.',
   'chat.permissionCard.title': 'Потрібен дозвіл',
+  'chat.permissionCard.replyPending': 'Надсилання вашого рішення…',
+  'chat.permissionCard.replyFailed': 'Не вдалося надіслати ваше рішення. Запит досі відкритий. Виберіть дію, щоб спробувати ще раз.',
   'chat.permissionCard.summary.externalDirectory': "Доступ до файлів поза проєктом",
   'chat.permissionCard.summary.read': "Прочитати файл",
   'chat.permissionCard.summary.edit': "Змінити файли",

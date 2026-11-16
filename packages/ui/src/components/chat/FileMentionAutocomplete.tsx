@@ -18,7 +18,7 @@ import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight
 import { mentionServerQuery, rankFileMentionResults } from './fileMentionResults';
 import { matchesRankQuery, rankByQuery } from '@/lib/search/fuzzySearch';
 import { AutocompleteRowTooltip } from './composer/ui/AutocompleteRowTooltip';
-import { usePersonalReferences, useNotionReferences, type PersonalReference } from '@/lib/personal-workspace/references';
+import { usePersonalReferences, useNotionReferences, NATIVE_APP_SOURCES, type PersonalReference } from '@/lib/personal-workspace/references';
 import { personalHomeSupported, connectHomeNotion } from '@/lib/personal-home';
 
 type FileInfo = ProjectFileSearchHit;
@@ -58,8 +58,15 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   const notion = useNotionReferences(searchQuery, { enabled: notionEnabled });
   const references = React.useMemo(() => {
     if (!onReferenceSelect) return [];
-    return [...notion.references, ...personal.references];
-  }, [onReferenceSelect, notion.references, personal.references]);
+    // Connected apps the desktop can read in the background. Offered beside
+    // Notion pages so "@calendar" reaches the same consent flow as any read.
+    const native = personalHomeSupported()
+      ? NATIVE_APP_SOURCES
+          .filter((source) => matchesRankQuery([source.title, source.detail], searchQuery.trim()))
+          .map((source): PersonalReference => ({ kind: 'native', id: source.app, title: source.title, detail: source.detail, app: source.app }))
+      : [];
+    return [...native, ...notion.references, ...personal.references];
+  }, [onReferenceSelect, notion.references, personal.references, searchQuery]);
   const currentDirectory = useChatSearchDirectory() ?? '';
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const activeProjectPath = useProjectsStore(
@@ -453,7 +460,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
           {references.map((reference, index) => <button type="button" key={`${reference.kind}:${reference.id}`} ref={(element) => { itemRefs.current[index] = element; }}
             className={cn('flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left typography-ui-label', selectedIndex === index ? 'bg-interactive-selection text-interactive-selection-foreground' : 'hover:bg-interactive-hover')}
             onClick={() => onReferenceSelect?.(reference)} onMouseMove={() => setSelectedIndex(index)}>
-            <span className="w-16 shrink-0 typography-meta text-muted-foreground">{t(`workspace.${reference.kind}`)}</span>
+            <span className="w-16 shrink-0 typography-meta text-muted-foreground">{t(reference.kind === 'native' ? 'workspace.connected' : `workspace.${reference.kind}`)}</span>
             <span className="min-w-0 flex-1"><span className="block truncate font-medium">{reference.title}</span><span className="block truncate typography-meta text-muted-foreground">{reference.detail}</span></span>
           </button>)}
         </div>}

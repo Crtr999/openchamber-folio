@@ -2,6 +2,7 @@ import { GeminiFolder } from '../shell/GeminiFolder';
 import React from 'react';
 import { ChatGPTFolder } from '../shell/ChatGPTFolder';
 import { VeniceFolder } from '../shell/VeniceFolder';
+import { MistralFolder } from '../shell/MistralFolder';
 import { ClaudeFolder } from '../shell/ClaudeFolder';
 import { cn } from '@/lib/utils';
 import {
@@ -130,6 +131,7 @@ function SortableWebsiteFolder({ websiteId, disabled }: { websiteId: WebsiteSide
   const folder = websiteId === 'website:chatgpt' ? <ChatGPTFolder {...drag} />
     : websiteId === 'website:claude' ? <ClaudeFolder {...drag} />
     : websiteId === 'website:venice' ? <VeniceFolder {...drag} />
+    : websiteId === 'website:mistral' ? <MistralFolder {...drag} />
     : <GeminiFolder {...drag} />;
   return <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={cn(isDragging && 'opacity-30')}>{folder}</div>;
 }
@@ -550,6 +552,7 @@ function SessionProjectScrollerComponent({ model, view, actions, leadingContent 
           <ClaudeFolder />
           <VeniceFolder />
           <GeminiFolder />
+          <MistralFolder />
         </>}
       </ScrollableOverlay>
     </CrossfadeZoneHeaders>

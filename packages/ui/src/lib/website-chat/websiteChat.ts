@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-type WebsiteAccount = 'venice' | 'gemini';
+type WebsiteAccount = 'venice' | 'gemini' | 'mistral';
 const messageSchema = z.object({ role: z.enum(['user', 'assistant']), text: z.string().max(350_000), rich: z.boolean() });
 export const websiteChatSnapshotSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('ready'), url: z.string().url(), account: z.string().min(1).max(1000), messages: z.array(messageSchema).max(120), busy: z.boolean(), draft: z.string().max(350_000), partial: z.boolean(), userCount: z.number().int().nonnegative() }),
@@ -142,6 +142,7 @@ export const websiteAccountActionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('names'), names: z.array(z.string().max(120)).max(300), paid: z.array(z.string().max(120)).max(300) }),
   z.object({ kind: z.literal('gemini-usage'), plan: z.string().max(40).nullable(), windows: z.array(z.object({ key: z.enum(['session', 'weekly']), usedPercent: z.number(), resetText: z.string().max(80).nullable() })).max(4) }),
   z.object({ kind: z.literal('venice-usage'), plan: z.string().max(40).nullable(), balance: z.string().max(30).nullable(), limits: z.array(z.object({ label: z.string().max(40), remaining: z.number(), resetText: z.string().max(40).nullable() })).max(12) }),
+  z.object({ kind: z.literal('mistral-usage'), plan: z.string().max(40).nullable(), allowances: z.array(z.object({ key: z.enum(['api', 'vibe']), used: z.number().min(0), total: z.number().min(0), resetText: z.string().max(40).nullable() })).max(4) }),
   z.object({ kind: z.literal('failed'), reason: z.string().max(300) }),
 ]);
 type WebsiteAccountAction = { kind: 'models' } | { kind: 'select-model'; name: string; tab?: 'text' | 'image' } | { kind: 'current-model' } | { kind: 'usage' };
@@ -161,7 +162,7 @@ async function operateAccount(provider: WebsiteAccount, action: WebsiteAccountAc
   };
   const click = (el: Element) => { (el as HTMLElement).click(); };
   const textLines = () => (document.body.innerText || '').split('\n').map(line => line.trim()).filter(Boolean);
-  const origin = provider === 'venice' ? 'https://venice.ai' : 'https://gemini.google.com';
+  const origin = provider === 'venice' ? 'https://venice.ai' : provider === 'mistral' ? 'https://admin.mistral.ai' : 'https://gemini.google.com';
   if (location.origin !== origin) return { kind: 'failed', reason: 'The website is not showing its own page.' };
 
   // ----- model picker -----
@@ -240,6 +241,31 @@ async function operateAccount(provider: WebsiteAccount, action: WebsiteAccountAc
   }
 
   // ----- usage -----
+  if (provider === 'mistral') {
+    // The admin console's Subscription page lists each included allowance as
+    // "Included … usage", then the spent and total amounts, then "Resets in …".
+    const signedIn = await waitFor(() => /included .*usage/i.test(document.body.innerText || '') || /sign in|log in/i.test(document.body.innerText || ''), 15000);
+    if (!signedIn) return { kind: 'failed', reason: 'The Mistral console did not finish loading.' };
+    const lines = textLines();
+    if (!/included .*usage/i.test(document.body.innerText || '')) return { kind: 'failed', reason: 'Mistral is not signed in. Sign in through the account connection.' };
+    const allowances: Array<{ key: 'api' | 'vibe'; used: number; total: number; resetText: string | null }> = [];
+    for (const [key, heading] of [['api', /^included api usage/i], ['vibe', /^included vibe( code)? usage/i]] as const) {
+      const start = lines.findIndex(line => heading.test(line));
+      if (start < 0) continue;
+      let used: number | null = null, total: number | null = null, reset: string | null = null;
+      for (const line of lines.slice(start + 1, start + 10)) {
+        if (/^included /i.test(line)) break;
+        const amount = line.match(/^\$\s*([\d,]+(?:\.\d+)?)$/);
+        if (amount) { if (used === null) used = Number(amount[1].replace(/,/g, '')); else if (total === null) total = Number(amount[1].replace(/,/g, '')); }
+        if (/^resets? in\b/i.test(line) && reset === null) reset = line.slice(0, 40);
+        if (used !== null && total !== null && reset !== null) break;
+      }
+      if (used !== null && total !== null && total > 0) allowances.push({ key, used, total, resetText: reset });
+    }
+    if (!allowances.length) return { kind: 'failed', reason: 'The Mistral subscription page did not show any included allowances.' };
+    const plan = lines.find(line => /^pay-as-you-go$/i.test(line) || /^(free|pro|team|enterprise|standard|premium)$/i.test(line)) ?? null;
+    return { kind: 'mistral-usage', plan: plan ? plan.slice(0, 40) : null, allowances };
+  }
   if (provider === 'gemini') {
     const found = await waitFor(() => /\d+%\s*used/i.test(document.body.innerText || ''), 15000);
     if (!found) return { kind: 'failed', reason: 'Gemini’s usage page did not show any limits. Sign in through the account connection.' };

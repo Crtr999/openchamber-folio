@@ -18,6 +18,7 @@ const METERS: Array<{ id: QuotaProviderId; name: string }> = [
   { id: 'claude', name: 'Claude' },
   { id: 'gemini-website', name: 'Gemini' },
   { id: 'venice-website', name: 'Venice' },
+  { id: 'mistral-website', name: 'Mistral' },
 ];
 
 const SIZE = 32;
@@ -174,6 +175,10 @@ const MeterButton: React.FC<{
     meter.error,
   ].filter(Boolean).join('. ');
 
+  React.useEffect(() => () => {
+    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+  }, []);
+
   const clearClose = () => {
     if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
     closeTimer.current = null;
@@ -191,9 +196,17 @@ const MeterButton: React.FC<{
 
   return (
     <DropdownMenu
+      modal={false}
       open={open}
       onOpenChange={(next, details) => {
+        if (!next && details.reason === 'trigger-press' && !pinned.current) {
+          clearClose();
+          pinned.current = true;
+          onOpen();
+          return;
+        }
         if (!next) {
+          clearClose();
           pinned.current = false;
           setOpen(false);
           return;
@@ -214,7 +227,6 @@ const MeterButton: React.FC<{
           aria-busy={meter.fetching}
           onMouseEnter={show}
           onMouseLeave={hide}
-          onFocus={show}
           className="app-region-no-drag relative inline-flex h-8 w-8 items-center justify-center rounded-md text-foreground hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="size-8 -rotate-90" aria-hidden>

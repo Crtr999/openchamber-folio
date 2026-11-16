@@ -53,9 +53,9 @@ export const HomeGreeting: React.FC = () => {
     }, []);
     return (
         <div className="oc-home-greeting">
-            <p className="text-[11.5px] font-medium uppercase tracking-[0.14em] text-foreground/70">
+            <p className="text-xs font-medium text-muted-foreground">
                 {now.toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric' })}
-                {running ? <span className="ml-2 normal-case tracking-normal text-foreground/60">· {t('home.greeting.working', { count: running })}</span> : null}
+                {running ? <span className="ms-2">· {t('home.greeting.working', { count: running })}</span> : null}
             </p>
             <h1 className="oc-home-greeting-title mt-1 text-balance text-foreground">{t(greetingKey(now))}, <em>Carter</em></h1>
             <HomeScenePicker />
@@ -139,7 +139,7 @@ export const HomeDashboard: React.FC = () => {
     return (
         <div className="flex min-w-0 flex-col gap-4">
         <HomeQuickActions className="flex justify-end xl:hidden" />
-        <HomePersonalPanels>{(personalPanels) => <HomeWidgetLayout widgets={{
+        <HomePersonalPanels>{(personalPanels) => <>{personalPanels.sources}<HomeWidgetLayout widgets={{
             friends: { label: t('friends.title'), content: <HomeFriends /> },
             week: { label: 'This week', content: <HomeThisWeek /> },
             working: { label: t('home.working'), content: <section>
@@ -210,7 +210,7 @@ export const HomeDashboard: React.FC = () => {
                     <Icon name="arrow-right" className="ml-auto size-3.5 opacity-40" />
                 </Button>
             </section> },
-        }} />}</HomePersonalPanels>
+        }} /></>}</HomePersonalPanels>
         </div>
     );
 };

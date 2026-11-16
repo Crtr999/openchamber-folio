@@ -68,7 +68,8 @@ writes when the dialog closes, while a new file is only created on confirm.
 ## Providers
 
 `providers/` is not an autosave page. Connecting a provider is an action, not a
-setting: an API key is submitted, an OAuth flow is completed, a credential is
+setting: an API key is submitted, an OAuth flow is completed, an external
+credential reference is connected, or a credential is
 removed. OpenCode owns the credential store and announces every change
 (`credential.*`, `provider.updated`, `model.updated`), and it watches the config file a custom
 provider is written to, so the page never asks for a reload or a restart: it
@@ -80,6 +81,12 @@ The "Add provider" list is `GET /api/integration` minus the integrations that
 already have a connection and minus MCP OAuth registrations (`mcp_*`); v2's
 `GET /api/provider` lists only what is configured or connected right now, so
 it cannot offer anything new.
+
+Claude Agent uses the external `claude-login` method. Connect records a reference
+to the official Claude Code login through `integration.connect.external`; it does
+not copy Claude credentials or run an OAuth flow inside OpenChamber. The existing
+provider-entry gate refuses this route in enterprise mode. Claude Code must be
+installed and signed in on the OpenCode server machine.
 
 ### MCP OAuth
 

@@ -37,6 +37,53 @@
         0 22px 44px -18px rgb(0 0 0 / 0.8);
 }
 
+/* Notion-like dark reading surfaces, scoped to the Open Carter theme. */
+:root.dark[data-theme-id="openchamber-dark"] {
+    --surface-background: #191919;
+    --oc-notion-sidebar: #202020;
+    --oc-notion-composer: #252525;
+    --oc-notion-divider: #393939;
+    --text-markdown: 0.9375rem;
+    --text-ui-header: 0.9375rem;
+    --text-ui-label: 0.90625rem;
+    --text-meta: 0.8125rem;
+    --text-micro: 0.8125rem;
+}
+:root.dark[data-theme-id="openchamber-dark"] [data-oc-personal-interactions] {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+:root.dark[data-theme-id="openchamber-dark"] [data-oc-personal-interactions] .oc-scene-art {
+    opacity: 0;
+    animation: none;
+}
+:root.dark[data-theme-id="openchamber-dark"] [data-oc-personal-interactions] aside.bg-background[style*="--oc-left-sidebar-width"] {
+    background-color: var(--oc-notion-sidebar) !important;
+    border-right: 1px solid var(--oc-notion-divider);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+    --text-ui-label: 0.90625rem;
+}
+:root.dark[data-theme-id="openchamber-dark"] [data-oc-personal-interactions] .oc-glass-composer {
+    background: var(--oc-notion-composer);
+    border: 1px solid var(--oc-notion-divider);
+    border-radius: 16px;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+:root.dark[data-theme-id="openchamber-dark"] [data-oc-personal-interactions] .oc-home-greeting {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+:root.dark[data-theme-id="openchamber-dark"] [data-oc-personal-interactions] aside.bg-background .oc-friend-avatar {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
 /* ── Selection ──────────────────────────────────────────────── */
 :root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) ::selection {
     background-color: var(--oc-selection);
@@ -44,6 +91,50 @@
 /* Focus rings come from the themes' cobalt focusRing token. */
 
 /* ── Sidebar: section headers that only print a ground once they stick ── */
+/* A quieter, opaque reading surface only for the left desktop sidebar. Keep
+   the artwork and the other frosted panes intact, and let theme tokens choose
+   the correct light/dark foreground and background. */
+html[data-oc-home] [data-oc-personal-interactions] aside.bg-background[style*="--oc-left-sidebar-width"],
+html:not([data-oc-home]) [data-oc-personal-interactions] aside.bg-background[style*="--oc-left-sidebar-width"] {
+    background-color: color-mix(in srgb, var(--surface-background) 94%, var(--surface-foreground)) !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --text-ui-label: 0.875rem;
+}
+/* This follows the generic sidebar rule so the dark theme's larger labels
+   and flat surface remain in force on both Home and conversation screens. */
+html.dark[data-theme-id="openchamber-dark"] [data-oc-personal-interactions] aside.bg-background[style*="--oc-left-sidebar-width"] {
+    background-color: var(--oc-notion-sidebar) !important;
+    --text-ui-label: 0.90625rem;
+}
+/* The personal desktop's imported dark theme keeps its own palette and theme
+   preference. Give its actual sidebar and composer the same quiet, readable
+   treatment without changing the theme's root tokens or other themes. */
+html.dark[data-theme-id="imported-vscode-32c6ff4ff123c3b43047be70"] [data-oc-personal-interactions] aside.bg-background[style*="--oc-left-sidebar-width"] {
+    background-color: var(--surface-muted) !important;
+    background-color: color-mix(in srgb, var(--surface-background) 90%, var(--surface-foreground)) !important;
+    border-right: 1px solid var(--interactive-border);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+    --text-ui-label: 0.90625rem;
+}
+html.dark[data-theme-id="imported-vscode-32c6ff4ff123c3b43047be70"] [data-oc-personal-interactions] .oc-glass-composer[style*="border-radius"]:not([data-composer-box]) {
+    background: var(--surface-elevated);
+    background: color-mix(in srgb, var(--surface-elevated) 87%, var(--surface-foreground));
+    border: 1px solid var(--interactive-border);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+[data-oc-personal-interactions] aside.bg-background[style*="--oc-left-sidebar-width"] [data-sidebar-sticky-header] {
+    background-color: transparent !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+[data-oc-personal-interactions] [data-sidebar-toolbar] button > svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: var(--surface-foreground);
+}
 /* The old 86% wash read as a muddy band over the frosted pane. A header now
    sits on the pane itself; once it sticks it frosts the rows sliding under
    it (the pane is its backdrop root) and draws a hairline. */
@@ -319,21 +410,7 @@
     border-radius: 999px;
 }
 
-/* ── Empty states ─────────────────────────────────────────────────────── */
-/* A short serif line on a faint stipple band, like the poster's dust. */
-:root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) [data-oc-personal-interactions] .oc-home-empty {
-    position: relative;
-    padding: 12px 8px 10px;
-    border-radius: 12px;
-    background:
-        radial-gradient(circle, color-mix(in srgb, var(--primary-base) 18%, transparent) 0.6px, transparent 1px) 0 0 / 6px 6px;
-    -webkit-mask-image: linear-gradient(to right, #000 0%, #000 70%, rgb(0 0 0 / 0.85) 100%);
-    color: var(--surface-muted-foreground);
-    font-family: var(--oc-font-serif);
-    font-size: 15px;
-    font-style: italic;
-    line-height: 1.35;
-}
+/* Home empty-state type and spacing live with its section styling. */
 :root:is([data-theme-id="openchamber-light"], [data-theme-id="openchamber-dark"]) .oc-empty-badge {
     color: var(--oc-ink-cobalt);
     background:

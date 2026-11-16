@@ -1,5 +1,6 @@
 import { geminiI18n } from './gemini.i18n';
 import { veniceI18n } from './venice.i18n';
+import { mistralI18n } from './mistral.i18n';
 import { healthI18n } from './health.i18n';
 import { companionI18n } from './companion.i18n';
 import { friendsI18n } from './friends.i18n';
@@ -38,6 +39,7 @@ export const dict = {
   ...chatgptI18n['tr'],
   ...claudeI18n.tr,
   ...veniceI18n.tr,
+  ...mistralI18n['tr'],
   ...geminiI18n.tr,
   ...meetingsI18n.tr,
   'meeting.quickStart': 'Toplantı başlat',
@@ -3423,6 +3425,8 @@ export const dict = {
   'chat.formDock.stepAria': 'Soru {index}: {title}',
   'chat.formDock.linkInfo': 'Bağlantıyı açın, sonra devam edin.',
   'chat.permissionCard.title': 'İzin gerekli',
+  'chat.permissionCard.replyPending': 'Kararınız gönderiliyor…',
+  'chat.permissionCard.replyFailed': 'Kararınız gönderilemedi. İstek hâlâ açık. Yeniden denemek için bir eylem seçin.',
   'chat.permissionCard.summary.externalDirectory': "Proje dışındaki dosyalara erişim",
   'chat.permissionCard.summary.read': "Dosya oku",
   'chat.permissionCard.summary.edit': "Dosyaları düzenle",

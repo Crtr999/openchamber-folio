@@ -55,6 +55,13 @@ describe("translateWireEvent", () => {
     expect(syncEventSessionID(forked[0])).toBe("ses_fork")
   })
 
+  test("native archive events preserve archive and restore transitions", () => {
+    expect(translateWireEvent({ ...base, type: "session.archived", durable, data: { sessionID: "ses_1" } }))
+      .toEqual([{ type: "session.patched", properties: { sessionID: "ses_1", patch: { time: { archived: 1000 } } } }])
+    expect(translateWireEvent({ ...base, type: "session.unarchived", durable, data: { sessionID: "ses_1" } }))
+      .toEqual([{ type: "session.patched", properties: { sessionID: "ses_1", patch: { time: { archived: null } } } }])
+  })
+
   test("session lifecycle events patch the session and emit switch messages", () => {
     const renamed = translateWireEvent({ ...base, type: "session.renamed", durable, data: { sessionID: "ses_1", title: "New" } })
     expect(renamed).toEqual([{ type: "session.patched", properties: { sessionID: "ses_1", patch: { title: "New", time: { updated: 1000 } } } }])

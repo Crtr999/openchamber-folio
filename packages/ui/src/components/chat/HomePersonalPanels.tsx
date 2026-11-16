@@ -1,4 +1,6 @@
 import React from 'react';
+import { HomeSources } from './HomeSources';
+import { useHomeSourceReads } from './useHomeSourceReads';
 import { HomeTaskComposer } from './HomeTaskComposer';
 import { openMeetingWorkspace } from '@/lib/meetings/workspace';
 import { toast } from 'sonner';
@@ -62,12 +64,16 @@ export const HomeChatExport: React.FC<{ session: Session }> = ({ session }) => {
     </>;
 };
 
-type PersonalPanels = { tasks: React.ReactNode; calendar: React.ReactNode; habits: React.ReactNode };
+type PersonalPanels = { tasks: React.ReactNode; calendar: React.ReactNode; habits: React.ReactNode; sources: React.ReactNode };
 export const HomePersonalPanels: React.FC<{ children: (panels: PersonalPanels) => React.ReactNode }> = ({ children }) => {
     const { t, locale } = useI18n();
     const blocked = useEnterpriseMode();
     const networkBlocked = useEnterprisePolicyStore((state) => state.networkAccessBlocked);
     const [runtime, setRuntime] = React.useState(getRuntimeKey);
+    const [sourceOwner, setSourceOwner] = React.useState(runtime);
+    const { reads: sourceReads, beginRead, resetReads } = useHomeSourceReads(runtime);
+    const notionSourceIdentity = React.useRef<string | null>(null);
+    const notionSourceRevision = React.useRef(0);
     React.useEffect(() => subscribeRuntimeEndpointChanged(() => setRuntime(getRuntimeKey())), []);
     const [status, setStatus] = React.useState<HomeNotionStatus | null>(null);
     const [board, setBoard] = React.useState<HomeNotionBoard | null>(null);
@@ -115,6 +121,37 @@ export const HomePersonalPanels: React.FC<{ children: (panels: PersonalPanels) =
     }, [confirmTask]);
     const fail = React.useCallback((key: string, error: Error | string) => setErrors((previous) => ({ ...previous, [key]: message(error) })), []);
     const clear = (key: string) => setErrors((previous) => ({ ...previous, [key]: '' }));
+    const resetNotionSources = React.useCallback(() => {
+        notionSourceRevision.current += 1;
+        resetReads('board', 'habits');
+        boardPending.current = null;
+        setBoard(null); setHabits(null);
+    }, [resetReads]);
+    const loadBoard = React.useCallback(async (version = generation.current) => {
+        const owner = getRuntimeKey();
+        const revision = boardRevision.current;
+        const sourceRevision = notionSourceRevision.current;
+        const observation = beginRead('board');
+        const accepted = () => version === generation.current && owner === getRuntimeKey() && revision === boardRevision.current && sourceRevision === notionSourceRevision.current;
+        try {
+            const next = await readHomeBoard();
+            if (!accepted()) return;
+            setBoard(next); observation.success();
+            setErrors((previous) => ({ ...previous, board: '' }));
+        } catch (error) { if (accepted()) observation.failure(); throw error; }
+    }, [beginRead]);
+    const loadHabits = React.useCallback(async (readDay: string, version = generation.current) => {
+        const owner = getRuntimeKey();
+        const sourceRevision = notionSourceRevision.current;
+        const observation = beginRead('habits');
+        const accepted = () => version === generation.current && owner === getRuntimeKey() && sourceRevision === notionSourceRevision.current;
+        try {
+            const next = await readHomeHabits(readDay);
+            if (!accepted()) return;
+            setHabits(next); observation.success();
+            setErrors((previous) => ({ ...previous, habits: '' }));
+        } catch (error) { if (accepted()) observation.failure(); throw error; }
+    }, [beginRead]);
     React.useEffect(() => {
         if (!boardLoading) { setBoardSlow(false); return; }
         const timer = window.setTimeout(() => setBoardSlow(true), 15_000);
@@ -123,50 +160,58 @@ export const HomePersonalPanels: React.FC<{ children: (panels: PersonalPanels) =
     const refreshDailyBoard = React.useCallback((version = generation.current) => {
         if (!notionAllowed || taskViewRef.current !== 'personal') return Promise.resolve();
         if (boardPending.current) return boardPending.current;
-        const revision = boardRevision.current;
         const owner = getRuntimeKey();
+        const sourceRevision = notionSourceRevision.current;
         setBoardLoading(true);
-        const request = readHomeBoard().then((next) => {
-            if (version !== generation.current || owner !== getRuntimeKey() || revision !== boardRevision.current) return;
-            setBoard(next); setErrors((previous) => ({ ...previous, board: '' }));
-        }).catch((error: Error) => { if (version === generation.current && owner === getRuntimeKey()) fail('board', error); }).finally(() => {
+        const request = loadBoard(version).catch((error: Error) => { if (version === generation.current && owner === getRuntimeKey() && sourceRevision === notionSourceRevision.current) fail('board', error); }).finally(() => {
             if (boardPending.current === request) { boardPending.current = null; setBoardLoading(false); }
         });
         boardPending.current = request;
         return request;
-    }, [notionAllowed, fail]);
+    }, [notionAllowed, fail, loadBoard]);
     const refreshNotion = React.useCallback((version = generation.current) => {
         if (!notionAllowed) return Promise.resolve();
         if (notionPending.current) return notionPending.current;
+        const owner = getRuntimeKey();
+        let sourceRevision = notionSourceRevision.current;
         const request = (async () => {
         try {
             const next = await readHomeNotionStatus();
-            if (version !== generation.current) return;
+            if (version !== generation.current || owner !== getRuntimeKey() || sourceRevision !== notionSourceRevision.current) return;
+            const identity = JSON.stringify([next.connected, next.board, next.habits, next.destination]);
+            if (identity !== notionSourceIdentity.current) {
+                resetNotionSources();
+                notionSourceIdentity.current = identity;
+                sourceRevision = notionSourceRevision.current;
+            }
             setStatus(next);
             setErrors((previous) => ({ ...previous, notion: '' }));
             if (!next.connected) { setBoard(null); setHabits(null); return; }
             // Daily To-Do is demand-loaded. Habits still belong to their
             // visible widget, but neither source waits for the other to paint.
-            const habitsRead = readHomeHabits(day).then((nextHabits) => {
-                if (version === generation.current) { setHabits(nextHabits); setErrors((previous) => ({ ...previous, habits: '' })); }
-            }).catch((error: Error) => { if (version === generation.current) fail('habits', error); });
+            const habitsRead = loadHabits(day, version).catch((error: Error) => { if (version === generation.current && owner === getRuntimeKey() && sourceRevision === notionSourceRevision.current) fail('habits', error); });
             await Promise.all([refreshDailyBoard(version), habitsRead]);
-        } catch (e) { if (version === generation.current) fail('notion', e instanceof Error ? e : String(e)); }
+        } catch (e) { if (version === generation.current && owner === getRuntimeKey() && sourceRevision === notionSourceRevision.current) fail('notion', e instanceof Error ? e : String(e)); }
         })().finally(() => { if (notionPending.current === request) notionPending.current = null; });
         notionPending.current = request;
         return request;
-    }, [notionAllowed, day, fail, refreshDailyBoard]);
+    }, [notionAllowed, day, fail, refreshDailyBoard, loadHabits, resetNotionSources]);
     React.useEffect(() => {
         if (taskView === 'personal' && status?.connected && !board) void refreshDailyBoard();
     }, [taskView, status?.connected, board, refreshDailyBoard]);
     const refreshCalendar = React.useCallback(async (connect = false, version = generation.current) => {
         if (!supported) return;
+        const owner = getRuntimeKey();
+        const observation = beginRead('calendar');
         try {
             const next = await readHomeCalendar(connect);
-            if (version !== generation.current) return;
+            if (version !== generation.current || owner !== getRuntimeKey()) return;
+            if (next.access !== 'connected') resetReads('calendar');
+            else if (next.error) observation.failure();
+            else observation.success();
             setCalendar(next); if (next.error) fail('calendar', next.error); else setErrors((previous) => ({ ...previous, calendar: '' }));
-        } catch (e) { if (version === generation.current) fail('calendar', e instanceof Error ? e : String(e)); }
-    }, [supported, fail]);
+        } catch (e) { if (version === generation.current && owner === getRuntimeKey()) { observation.failure(); fail('calendar', e instanceof Error ? e : String(e)); } }
+    }, [supported, fail, beginRead, resetReads]);
     // Tasks added elsewhere (e.g. meeting action items) refresh the board.
     React.useEffect(() => {
         const onChange = () => { void refreshNotion(); };
@@ -178,6 +223,7 @@ export const HomePersonalPanels: React.FC<{ children: (panels: PersonalPanels) =
         boardRevision.current += 1; movePending.current = false; setPendingPage(''); setBusy('');
         notionPending.current = null; boardPending.current = null; setBoardLoading(false);
         setStatus(null); setBoard(null); setHabits(null); setCalendar(null); setErrors({});
+        setSourceOwner(runtime);
         void refreshNotion(version); void refreshCalendar(false, version);
         return () => { generation.current += 1; };
     }, [refreshNotion, refreshCalendar, runtime]);
@@ -186,7 +232,7 @@ export const HomePersonalPanels: React.FC<{ children: (panels: PersonalPanels) =
         setBusy(key); clear(key); setNotice('');
         try { await action(); } catch (e) { fail(key, e instanceof Error ? e : String(e)); } finally { setBusy(''); }
     };
-    const addTask = () => run('board', async () => { await createHomeTask(taskDraft.trim()); setTaskDraft(''); setBoard(await readHomeBoard()); });
+    const addTask = () => run('board', async () => { await createHomeTask(taskDraft.trim()); setTaskDraft(''); await loadBoard(); });
     const moveTask = async (page: string, destination: string) => {
         const row = board?.rows.find((item) => item.url === page);
         if (!notionAllowed || busy || movePending.current || !row || !board?.columns.includes(destination) || row.status === destination) return;
@@ -210,7 +256,7 @@ export const HomePersonalPanels: React.FC<{ children: (panels: PersonalPanels) =
         if (editingTask !== page) return;
         const title = editDraft.trim();
         if (!title) { setEditingTask(''); return; }
-        await run('board', async () => { await renameHomeTask(page, title); setEditingTask((current) => (current === page ? '' : current)); setBoard(await readHomeBoard()); });
+        await run('board', async () => { await renameHomeTask(page, title); setEditingTask((current) => (current === page ? '' : current)); await loadBoard(); });
     };
     const openEvent = (existing?: HomeCalendarEvent) => {
         const start = new Date(); start.setMinutes(0, 0, 0); start.setHours(start.getHours() + 1);
@@ -221,7 +267,10 @@ export const HomePersonalPanels: React.FC<{ children: (panels: PersonalPanels) =
     const errorText = (key: string) => errors[key] ? <p role="alert" className="oc-home-empty text-destructive">{errors[key]}</p> : null;
     const stateText = !supported ? t('home.desktopOnly') : blocked || networkBlocked ? t('home.blocked') : !status ? t('common.loading') : status.signingIn ? t('home.finishConnect') : status.connected ? '' : t('home.connectFirst');
     return <>
-        {children({ tasks: <><div className="mb-2 flex gap-1">
+        {children({ sources: <HomeSources supported={supported} blocked={blocked} networkBlocked={networkBlocked}
+            notion={sourceOwner === runtime ? status : null} calendar={sourceOwner === runtime ? calendar : null}
+            notionFailed={sourceOwner === runtime && Boolean(errors.notion)} calendarFailed={sourceOwner === runtime && Boolean(errors.calendar)} reads={sourceReads} />,
+        tasks: <><div className="mb-2 flex gap-1">
             <Button variant="chip" size="xs" aria-pressed={taskView === 'ai'} onClick={() => chooseTaskView('ai')}>{t('home.aiTitle')}</Button>
             <Button variant="chip" size="xs" aria-pressed={taskView === 'personal'} onClick={() => chooseTaskView('personal')}>{t('home.tasks')}</Button>
         </div>{taskView !== 'personal' ? null : <section className="oc-home-task-panel">
@@ -246,7 +295,7 @@ export const HomePersonalPanels: React.FC<{ children: (panels: PersonalPanels) =
                                 <a href={row.url} target="_blank" rel="noreferrer" dir="auto" className="block min-w-0 flex-1 break-words text-xs leading-relaxed hover:underline">{row.title || t('home.untitled')}</a>
                                 <Button type="button" variant="ghost" size="icon" className="size-5 shrink-0" aria-label={t('home.editTask')} title={t('home.editTask')} disabled={Boolean(busy)} onClick={() => { setEditingTask(row.url); setEditDraft(row.title ?? ''); }}><Icon name="pencil" className="size-3" /></Button>
                                 {confirmTask === row.url
-                                    ? <Button type="button" variant="ghost" size="sm" className="h-5 px-1.5 text-[10px]" disabled={Boolean(busy)} onClick={() => void run('board', async () => { await deleteHomeTask(row.url); setConfirmTask(''); setNotice(t('home.taskDeleted')); setBoard(await readHomeBoard()); })}>{t('home.deleteTaskConfirm')}</Button>
+                                    ? <Button type="button" variant="ghost" size="sm" className="h-5 px-1.5 text-[10px]" disabled={Boolean(busy)} onClick={() => void run('board', async () => { await deleteHomeTask(row.url); setConfirmTask(''); setNotice(t('home.taskDeleted')); await loadBoard(); })}>{t('home.deleteTaskConfirm')}</Button>
                                     : <Button type="button" variant="ghost" size="icon" className="size-5 shrink-0" aria-label={t('home.deleteTask')} title={t('home.deleteTask')} disabled={Boolean(busy)} onClick={() => setConfirmTask(row.url)}><Icon name="delete-bin" className="size-3" /></Button>}
                             </div>}
                     </>} />
@@ -270,11 +319,11 @@ export const HomePersonalPanels: React.FC<{ children: (panels: PersonalPanels) =
         </section>, habits: <section>
             <h2 className="oc-home-card-heading"><Icon name="check" className="size-3.5" />{t('home.habits')}<span className="ml-auto text-[10px] tabular-nums">{habits?.page ? `${habits.items.filter((item) => item.checked).length} / ${habits.items.length}` : day}</span></h2>
             {errorText('habits')}
-            {habits && notionAllowed ? habits.page ? <div className="oc-home-habits" data-complete={habits.items.length > 0 && habits.items.every((item) => item.checked) ? 'true' : undefined}>{habits.items.map((item) => <label key={item.name} className="flex min-w-0 items-center gap-2 py-1.5 text-xs"><Checkbox checked={item.checked} ariaLabel={item.name} disabled={Boolean(busy)} onChange={(checked) => void run('habits', async () => { if (habits.day !== today()) { setDay(today()); return; } await toggleHomeHabit(habits.page!, item.name, checked); setHabits(await readHomeHabits(today())); })} /><span className={item.checked ? 'truncate text-muted-foreground line-through' : 'truncate'}>{item.name}</span></label>)}</div> : <><p className="oc-home-empty">{t('home.noDay')}</p><Button type="button" variant="ghost" size="sm" disabled={Boolean(busy)} onClick={() => void run('habits', async () => setHabits(await startHomeDay(today())))}>{t('home.startDay')}</Button></> : <p className="oc-home-empty">{stateText || t('common.loading')}</p>}
+            {habits && notionAllowed ? habits.page ? <div className="oc-home-habits" data-complete={habits.items.length > 0 && habits.items.every((item) => item.checked) ? 'true' : undefined}>{habits.items.map((item) => <label key={item.name} className="flex min-w-0 items-center gap-2 py-1.5 text-xs"><Checkbox checked={item.checked} ariaLabel={item.name} disabled={Boolean(busy)} onChange={(checked) => void run('habits', async () => { if (habits.day !== today()) { setDay(today()); return; } await toggleHomeHabit(habits.page!, item.name, checked); await loadHabits(today()); })} /><span className={item.checked ? 'truncate text-muted-foreground line-through' : 'truncate'}>{item.name}</span></label>)}</div> : <><p className="oc-home-empty">{t('home.noDay')}</p><Button type="button" variant="ghost" size="sm" disabled={Boolean(busy)} onClick={() => void run('habits', async () => setHabits(await startHomeDay(today())))}>{t('home.startDay')}</Button></> : <p className="oc-home-empty">{stateText || t('common.loading')}</p>}
         </section> })}
         <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}><DialogContent><DialogHeader><DialogTitle>{t('home.connections')}</DialogTitle><DialogDescription>{t('home.connectionDescription')}</DialogDescription></DialogHeader>
             {(['board', 'habits', 'destination'] as const).map((key) => <label key={key} className="space-y-2 text-xs">{t(key === 'board' ? 'home.tasks' : key === 'habits' ? 'home.habits' : 'home.destination')}<Input value={config[key]} onChange={(e) => setConfig({ ...config, [key]: e.target.value })} /></label>)}
-            {errorText('config')}<div className="flex justify-between"><Button type="button" variant="ghost" disabled={Boolean(busy)} onClick={() => void run('config', async () => { await disconnectHomeNotion(); setSettingsOpen(false); await refreshNotion(); })}>{t('home.disconnect')}</Button><Button type="button" disabled={Boolean(busy)} onClick={() => void run('config', async () => { await configureHomeNotion(config.board.trim(), config.habits.trim(), config.destination.trim()); setSettingsOpen(false); await refreshNotion(); })}>{t('home.save')}</Button></div>
+            {errorText('config')}<div className="flex justify-between"><Button type="button" variant="ghost" disabled={Boolean(busy)} onClick={() => void run('config', async () => { await disconnectHomeNotion(); resetNotionSources(); notionPending.current = null; setStatus(null); setSettingsOpen(false); await refreshNotion(); })}>{t('home.disconnect')}</Button><Button type="button" disabled={Boolean(busy)} onClick={() => void run('config', async () => { await configureHomeNotion(config.board.trim(), config.habits.trim(), config.destination.trim()); resetNotionSources(); notionPending.current = null; setStatus(null); setSettingsOpen(false); await refreshNotion(); })}>{t('home.save')}</Button></div>
         </DialogContent></Dialog>
         <Dialog open={eventOpen} onOpenChange={setEventOpen}><DialogContent><DialogHeader><DialogTitle>{event.id ? t('home.editEvent') : t('home.newEvent')}</DialogTitle><DialogDescription>{t('home.eventDescription')}</DialogDescription></DialogHeader>
             <label className="space-y-2 text-xs">{t('home.eventTitle')}<Input value={event.title} onChange={(e) => setEvent({ ...event, title: e.target.value })} /></label>

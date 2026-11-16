@@ -7,9 +7,9 @@ import type { PermissionRequest } from '@/types/permission';
 import { useScopedBlockingPermissions } from '@/sync/sync-context';
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
 import {
-    PermissionActions,
     PermissionRequestContent,
 } from './PermissionCard';
+import { PermissionActions } from './PermissionActions';
 import { getPermissionToolPresentation } from './permissionToolPresentation';
 import { usePermissionFromSubagent, usePermissionResponse } from './usePermissionResponse';
 
@@ -76,23 +76,27 @@ const PermissionDockRequest: React.FC<{
     availableMaxHeight: number | undefined;
     t: ReturnType<typeof useI18n>['t'];
 }> = ({ permission, permissions, currentIndex, collapsed, onToggleCollapsed, onSelect, bodyRef, availableMaxHeight, t }) => {
-    const { isResponding, respond } = usePermissionResponse(permission);
+    const { isResponding, hasResponded, hasError, respond } = usePermissionResponse(permission, undefined, !collapsed);
     const isFromSubagent = usePermissionFromSubagent(permission);
     const tool = getPermissionToolPresentation(permission);
     const title = t('chat.permissionCard.title');
+    const contentId = React.useId();
+
+    if (hasResponded) return null;
 
     return (
         <ComposerFloatingPanel
-            role="dialog"
+            role="region"
             ariaLabel={title}
             compact={collapsed}
             header={<>
                 <button
                     type="button"
                     onClick={onToggleCollapsed}
-                    aria-expanded={!collapsed}
+                     aria-expanded={!collapsed}
+                     aria-controls={contentId}
                     aria-label={collapsed ? t('chat.permissionDock.expandAria') : t('chat.permissionDock.collapseAria')}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground transition-colors hover:text-foreground"
+                     className="flex min-h-6 min-w-0 flex-1 items-center gap-2 rounded text-start text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
                 >
                     <Icon name="question" className="size-3.5 shrink-0 text-[var(--status-warning)]" />
                     <Icon name={collapsed ? 'arrow-up-s' : 'arrow-down-s'} className="size-4 shrink-0" />
@@ -110,21 +114,21 @@ const PermissionDockRequest: React.FC<{
                 </button>
                 {/* One dot per pending request, the current one solid. */}
                 {!collapsed && permissions.length > 1 ? (
-                    <div className="flex shrink-0 items-center gap-1" role="tablist">
+                     <div className="flex min-w-0 flex-wrap items-center gap-1" role="group" aria-label={title}>
                         {permissions.map((entry, index) => {
                             const label = t('chat.permissionDock.stepAria', { index: String(index + 1), tool: getPermissionToolPresentation(entry).name });
                             return (
                                 <button
                                     key={entry.id}
                                     type="button"
-                                    role="tab"
-                                    aria-selected={index === currentIndex}
+                                     aria-pressed={index === currentIndex}
                                     aria-label={label}
                                     title={label}
-                                    onClick={() => onSelect(entry.id)}
-                                    className="flex size-4 items-center justify-center"
+                                     onClick={() => onSelect(entry.id)}
+                                     disabled={isResponding}
+                                     className={cn('flex size-6 items-center justify-center rounded focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50', index === currentIndex && 'bg-interactive-selection text-interactive-selection-foreground')}
                                 >
-                                    <span className={cn('block size-1.5 rounded-full transition-colors', index === currentIndex ? 'bg-primary' : 'bg-foreground/15')} />
+                                     <span className={cn('block size-1.5 rounded-full transition-colors', index === currentIndex ? 'bg-current' : 'bg-foreground/15')} />
                                 </button>
                             );
                         })}
@@ -136,8 +140,7 @@ const PermissionDockRequest: React.FC<{
                 </span>
             </>}
         >
-            {!collapsed ? (
-                <div>
+                <div id={contentId} hidden={collapsed}>
                     <div
                         ref={bodyRef}
                         className="max-h-[50vh] overflow-y-auto overscroll-contain px-1.5"
@@ -147,12 +150,12 @@ const PermissionDockRequest: React.FC<{
                     </div>
                     <PermissionActions
                         permission={permission}
-                        isResponding={isResponding}
+                         isResponding={isResponding}
+                         hasError={hasError}
                         onRespond={(response) => void respond(response)}
                         variant="dock"
                     />
                 </div>
-            ) : null}
         </ComposerFloatingPanel>
     );
 };

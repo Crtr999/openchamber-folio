@@ -23,7 +23,8 @@ export type QuotaProviderId =
   | 'neuralwatt'
   | 'xai'
   | 'gemini-website'
-  | 'venice-website';
+  | 'venice-website'
+  | 'mistral-website';
 
 export interface UsageWindow {
   usedPercent: number | null;

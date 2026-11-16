@@ -65,7 +65,16 @@ Alt+Enter, Alt+Shift+Enter and Alt+Backspace answer the current request. A
 pending permission hides the form dock, the queue chips and the suggestion.
 The BTW sheet keeps the inline `PermissionCard` for its child session's
 requests; both render the request through `PermissionRequestContent` and
-`PermissionActions`.
+`PermissionActions.tsx`. The content keeps the complete original request in
+a native Details disclosure, including metadata and save patterns that a tool
+preview may not explain. `permissionReply.ts` owns one mounted request's
+idle, pending, failed and settled reply states. It locks synchronously before
+submitting, never retries automatically, and leaves failed requests available
+for another explicit choice. `usePermissionResponse` connects that lifecycle
+to the existing session action and ignores repeated or composing shortcut
+events. Both presentations announce pending and failed replies; the dock's
+request selector stays locked during submission. The reply contract remains
+`once`, `always`, or `reject`; there is no separate session-scoped grant.
 
 `SessionSuggestionChip` is not a frame: it renders as the composer's own top
 row, inside the box and inside the mobile pill, so the surface stays one

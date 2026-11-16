@@ -48,7 +48,7 @@ database first and the legacy file second (see the opencode module docs).
 | `wafer` | Wafer.ai | `providers/wafer.js` | `wafer`, `wafer-ai`, `wafer_ai`, `wafer.ai` |
 | `opencode-go` | OpenCode Go | `providers/opencode-go.js` | `opencode-go` API key from OpenCode `auth.json` |
 | `neuralwatt` | NeuralWatt | `providers/neuralwatt.js` | `neuralwatt` (API key under `key` or `token`) |
-| `xai` | xAI | `providers/xai.js` | `xai` OAuth entry in OpenCode `auth.json` |
+| `xai` | xAI | `providers/xai.js` | Active native `xai` OAuth credential in OpenCode’s credential store |
 
 ## Internal-only provider module
 - `providers/openai.js` exists for logic parity/reuse but is intentionally not registered for dispatcher ID routing.
@@ -67,6 +67,16 @@ exe.dev, Ollama Cloud, and Cursor credentials are explicitly managed through Set
 Command Code usage resolves account scope through `GET /alpha/whoami`, then reads server-backed credit balances and five-hour/weekly limits from `GET /alpha/billing/credits?orgId=...`. Personal accounts return `org: null` and use `/alpha/billing/credits` without an `orgId`; organization accounts include their organization id. Web/Electron and VS Code read the standard `command-code` OpenCode auth entry (including OAuth `access`) or `COMMAND_CODE_API_KEY`; credentials remain in the owning runtime and are never returned to shared UI.
 
 On the first OpenCode Go usage refresh after upgrading, OpenChamber deletes the obsolete `quota/opencode-go.json` credential file without reading its cookie value.
+
+## xAI native OAuth ownership
+
+OpenCode's built-in xAI integration owns SuperGrok device sign-in, credential
+storage and refresh. The usage provider reads its active credential fresh for
+each request and never calls the OAuth token endpoint. This applies to the web
+server, Electron, connected mobile clients and the VS Code extension host.
+An expired or missing access token reports an explicit OpenCode-managed sign-in
+state. Send a Grok message to let OpenCode renew the login, or reconnect xAI in
+Providers. The existing billing read and usage parser remain unchanged.
 
 ## Claude credential and limit semantics
 

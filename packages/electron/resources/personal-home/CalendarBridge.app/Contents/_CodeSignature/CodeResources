@@ -5,7 +5,17 @@
 	<key>files</key>
 	<dict/>
 	<key>files2</key>
-	<dict/>
+	<dict>
+		<key>MacOS/NativeAppReader</key>
+		<dict>
+			<key>cdhash</key>
+			<data>
+			4n0KUFHttRxlo6GltVGbDeKr3/8=
+			</data>
+			<key>requirement</key>
+			<string>cdhash H"e27d0a5051edb51c65a3a1a5b5519b0de2abdfff"</string>
+		</dict>
+	</dict>
 	<key>rules</key>
 	<dict>
 		<key>^Resources/</key>

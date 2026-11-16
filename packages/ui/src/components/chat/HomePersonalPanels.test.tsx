@@ -1,6 +1,7 @@
 import { afterAll, expect, test } from 'bun:test';
 import React, { act } from 'react';
 import { Window } from 'happy-dom';
+import type { HomeCalendar, HomeHabits, HomeNotionBoard } from '@/lib/personal-home';
 
 const browser = new Window({ url: 'http://localhost' });
 const descriptors = new Map<string, PropertyDescriptor | undefined>();
@@ -60,6 +61,93 @@ async function fixture(initialView: 'personal' | 'fresh' | 'remembered' = 'perso
     };
     return { host, calls, move, finish: () => act(async () => finish?.()), fail: () => act(async () => reject?.(new Error('Fixture write failed'))), cleanup: async () => { await act(async () => root.unmount()); host.remove(); } };
 }
+
+test('source observations use only existing content reads and retain failed read times until source reset', async () => {
+    const deferred = <Value,>() => {
+        let resolve: (value: Value) => void = () => {};
+        const promise = new Promise<Value>((complete) => { resolve = complete; });
+        return { promise, resolve };
+    };
+    let board = deferred<HomeNotionBoard>();
+    let habits = deferred<HomeHabits>();
+    const calendar = deferred<HomeCalendar>();
+    let connected = true;
+    let boardId = 'first-board';
+    let failReads = false;
+    const calls: string[] = [];
+    browser.localStorage.setItem('open-carter:home-task-view:v1', 'personal');
+    useEnterprisePolicyStore.setState({ enterpriseMode: false, networkAccessBlocked: false });
+    Object.defineProperty(browser, '__OPENCHAMBER_ELECTRON__', { configurable: true, value: { runtime: 'electron' } });
+    Object.defineProperty(browser, '__OPENCHAMBER_DESKTOP__', { configurable: true, value: { invoke: async (_command: string, args: { action: string }) => {
+        calls.push(args.action);
+        if (args.action === 'status') return { connected, signingIn: false, board: boardId, habits: 'habits', destination: 'parent' };
+        if (failReads) throw new Error('Read failed');
+        if (args.action === 'board') return board.promise;
+        if (args.action === 'habits') return habits.promise;
+        if (args.action === 'calendar') return calendar.promise;
+        throw new Error('Unexpected source read');
+    } } });
+    const host = document.createElement('div'); document.body.append(host);
+    const root = createRoot(host);
+    const rail = () => {
+        const source = host.querySelector('.oc-home-sources');
+        if (!source) throw new Error('Source status missing');
+        return source;
+    };
+    const times = () => [...rail().querySelectorAll('time')].map((time) => time.getAttribute('datetime'));
+    const refreshNotion = () => act(async () => { browser.dispatchEvent(new browser.Event('open-carter:tasks-changed')); });
+    try {
+        await act(async () => root.render(<I18nProvider><HomePersonalPanels>{({ sources, calendar }) => <>{sources}{calendar}</>}</HomePersonalPanels></I18nProvider>));
+        // Token/status success alone does not establish a content read time.
+        expect(rail().textContent).toContain('Connection saved');
+        expect(times()).toEqual([]);
+        expect([...calls].sort()).toEqual(['board', 'calendar', 'habits', 'status']);
+        await act(async () => {
+            habits.resolve({ day: '2026-11-16', page: null, items: [] });
+            calendar.resolve({ access: 'connected', calendars: [], events: [] });
+        });
+        expect(times()).toHaveLength(2);
+        expect(rail().querySelectorAll('[data-read-state="unknown"]')).toHaveLength(1);
+        await act(async () => board.resolve({ name: 'Board', columns: [], rows: [], limited: false }));
+        const successfulTimes = times();
+        expect(successfulTimes).toHaveLength(3);
+        expect(calls).toHaveLength(4);
+        failReads = true;
+        await refreshNotion();
+        expect(times()).toEqual(successfulTimes);
+        expect(rail().querySelectorAll('[data-read-state="failed"]')).toHaveLength(2);
+        expect(calls).toHaveLength(7);
+        const calendarRefresh = browser.document.querySelector('button[aria-label="Refresh"]');
+        if (!calendarRefresh) throw new Error('Calendar refresh missing');
+        await act(async () => calendarRefresh.dispatchEvent(new browser.MouseEvent('click', { bubbles: true })));
+        expect(times()).toEqual(successfulTimes);
+        expect(rail().querySelectorAll('[data-read-state="failed"]')).toHaveLength(3);
+        expect(calls).toHaveLength(8);
+
+        // A source configuration change clears only Notion's observations.
+        failReads = false; boardId = 'second-board';
+        board = deferred<HomeNotionBoard>(); habits = deferred<HomeHabits>();
+        await refreshNotion();
+        expect(times()).toEqual(successfulTimes.slice(2));
+        expect(rail().querySelectorAll('[data-read-state="unknown"]')).toHaveLength(2);
+        // Repeated refresh events still coalesce with these existing reads.
+        const pendingCallCount = calls.length;
+        await refreshNotion();
+        expect(calls).toHaveLength(pendingCallCount);
+        await act(async () => {
+            board.resolve({ name: 'New board', columns: [], rows: [], limited: false });
+            habits.resolve({ day: '2026-11-16', page: null, items: [] });
+        });
+        expect(times()).toHaveLength(3);
+        connected = false;
+        await refreshNotion();
+        expect(rail().textContent).toContain('Not connected');
+        expect(times()).toEqual(successfulTimes.slice(2));
+    } finally {
+        await act(async () => root.unmount());
+        host.remove();
+    }
+});
 
 test('task cards show exact due dates without a status select and preserve real categories', async () => {
     const view = await fixture();

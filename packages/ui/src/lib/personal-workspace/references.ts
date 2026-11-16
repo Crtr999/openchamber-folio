@@ -16,7 +16,16 @@ export type PersonalReference =
   | { kind: 'chat'; id: string; title: string; detail: string; directory: string }
   | { kind: 'project'; id: string; title: string; detail: string }
   | { kind: 'meeting'; id: string; title: string; detail: string; meeting: Meeting }
-  | { kind: 'notion'; id: string; title: string; detail: string; notion: NotionPageSummary };
+  | { kind: 'notion'; id: string; title: string; detail: string; notion: NotionPageSummary }
+  | { kind: 'native'; id: string; title: string; detail: string; app: NativeAppSource };
+/** A macOS app the desktop can read in the background through the bundled
+ *  EventKit helper. The mention names the source; it never carries content,
+ *  and reading still needs the user's own container grant. */
+export type NativeAppSource = 'calendar' | 'reminders';
+export const NATIVE_APP_SOURCES: ReadonlyArray<{ app: NativeAppSource; title: string; detail: string }> = [
+  { app: 'calendar', title: 'Calendar', detail: 'Apple Calendar, read in the background' },
+  { app: 'reminders', title: 'Reminders', detail: 'Apple Reminders, read in the background' },
+];
 const SITE_EVENT = 'open-carter:sites-changed';
 const storageKey = (runtime: string) => `open-carter:sites:v1:${runtime}`;
 export function readSites(runtime: string): SavedSite[] {
@@ -144,6 +153,10 @@ export async function resolveReference(reference: PersonalReference, signal: Abo
   }
   if (reference.kind === 'notion') {
     return header + 'This is a pointer to a Notion page, not its contents. Fetch the page with the Notion tools (notion-fetch) using the URL above before you answer anything about it, and fetch it again if the page may have changed since it was attached. If the Notion tools are not available, say that you cannot read the page rather than guessing what it says. Cite the page by its title and URL.';
+  }
+  if (reference.kind === 'native') {
+    const app = reference.app;
+    return header + `This attaches the ${app === 'calendar' ? 'Apple Calendar' : 'Apple Reminders'} source only, not its contents. Read it with the native tool using app: '${app}'. The user must approve the exact ${app === 'calendar' ? 'calendar' : 'reminder list'} in a native dialog before any content is returned; request that approval with requestedByUser: true and the container the user chooses. Read only the date range the user asked about, never a wider window. If the tool reports permission-required, permission-denied or unsupported, say so plainly instead of guessing at what the ${app === 'calendar' ? 'calendar' : 'reminders'} contain.`;
   }
   const page = await opencodeClient.getSessionMessages(reference.id, { limit: 20, order: 'desc', signal }, reference.directory);
   const messages = page.items.slice().reverse().flatMap(({ info, parts }) => {

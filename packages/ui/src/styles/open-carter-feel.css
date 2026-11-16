@@ -17,9 +17,6 @@
         inset 0 1px 0 0 color-mix(in srgb, var(--surface-foreground) 3%, transparent),
         0 1px 2px rgb(0 0 0 / 0.06),
         0 4px 14px -6px rgb(0 0 0 / 0.1);
-    --oc-shadow-lift:
-        0 2px 4px rgb(0 0 0 / 0.06),
-        0 14px 30px -12px rgb(0 0 0 / 0.22);
     --oc-shadow-composer:
         inset 0 1px 0 0 color-mix(in srgb, var(--surface-foreground) 4%, transparent),
         0 1px 2px rgb(0 0 0 / 0.06),
@@ -31,10 +28,6 @@
         inset 0 1px 0 0 color-mix(in srgb, var(--surface-foreground) 5%, transparent),
         0 1px 2px rgb(0 0 0 / 0.3),
         0 6px 18px -8px rgb(0 0 0 / 0.45);
-    --oc-shadow-lift:
-        inset 0 1px 0 0 color-mix(in srgb, var(--surface-foreground) 7%, transparent),
-        0 2px 6px rgb(0 0 0 / 0.35),
-        0 18px 36px -14px rgb(0 0 0 / 0.6);
     --oc-shadow-composer:
         inset 0 1px 0 0 color-mix(in srgb, var(--surface-foreground) 7%, transparent),
         0 1px 2px rgb(0 0 0 / 0.35),
@@ -141,60 +134,7 @@
     to { opacity: 1; transform: none; }
 }
 
-/* ── Surfaces ──────────────────────────────────────────────────────────── */
-/* Home cards: one radius, a translucent hairline, a soft drop, and a lift
-   layer that fades in on hover. Cards are sortable, so they never move. */
-[data-oc-personal-interactions] .oc-home-card {
-    border-color: var(--oc-hairline);
-    border-radius: var(--oc-radius-card);
-    box-shadow: var(--oc-shadow-card);
-}
-[data-oc-personal-interactions] .oc-home-card::after,
-[data-oc-personal-interactions] .oc-friend-card::after {
-    content: "";
-    position: absolute;
-    inset: -1px;
-    border-radius: inherit;
-    box-shadow: var(--oc-shadow-lift);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 180ms var(--oc-ease-settle);
-}
-[data-oc-personal-interactions] .oc-home-card:hover,
-[data-oc-personal-interactions] .oc-friend-card:hover {
-    border-color: var(--oc-hairline-strong);
-}
-[data-oc-personal-interactions] .oc-home-card:hover::after,
-[data-oc-personal-interactions] .oc-friend-card:hover::after { opacity: 1; }
-[data-oc-personal-interactions] .oc-home-card.oc-home-dragging::after { opacity: 1; }
-
-/* Friends: cards rise toward the pointer and press back down. Not sortable. */
-[data-oc-personal-interactions] .oc-friend-card {
-    border-color: var(--oc-hairline);
-    border-radius: var(--oc-radius-card);
-    background:
-        linear-gradient(to bottom, color-mix(in srgb, var(--surface-foreground) 3%, transparent), transparent 60%),
-        var(--surface-elevated);
-    box-shadow: var(--oc-shadow-card);
-    transition: border-color 110ms var(--oc-ease-settle), transform 280ms var(--oc-ease-spring);
-}
-[data-oc-personal-interactions] .oc-friend-card:hover { transform: translate3d(0, -2px, 0); }
-/* On press the card drops back while its button presses in (index.css). */
-[data-oc-personal-interactions] .oc-friend-card:active {
-    transform: translate3d(0, 0, 0);
-    transition-duration: 110ms, 80ms;
-}
-[data-oc-personal-interactions] .oc-friend-card-main.oc-friend-card-main { border-radius: calc(var(--oc-radius-card) - 2px); }
-[data-oc-personal-interactions] .oc-friend-card-avatar { transition: transform 320ms var(--oc-ease-spring); }
-[data-oc-personal-interactions] .oc-friend-card:hover .oc-friend-card-avatar { transform: translate3d(0, -2px, 0) rotate(-6deg) scale(1.06); }
-
-/* Board/AI task cards match the card language. */
-[data-oc-personal-interactions] :is(.oc-home-task, .oc-ai-task) {
-    border-color: var(--oc-hairline);
-    border-radius: 10px;
-    box-shadow: inset 0 1px 0 0 color-mix(in srgb, var(--surface-foreground) 3%, transparent);
-}
-[data-oc-personal-interactions] :is(.oc-home-task, .oc-ai-task):hover { border-color: var(--oc-hairline-strong); }
+/* Home section, friend and task styling lives in HomeDashboard.css. */
 
 /* The landscape dissolves into the page instead of ending on a line. */
 [data-oc-personal-interactions] .oc-home-landscape {

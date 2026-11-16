@@ -1,8 +1,10 @@
 import { aiTasksI18n } from './ai-tasks.i18n';
+import { homeSourcesI18n } from './home-sources.i18n';
 
 export const homeI18n = {
   "en": {
     ...aiTasksI18n.en,
+    ...homeSourcesI18n.en,
     "home.noDueDate": "No due date",
     "home.dragTask": "Drag task to another status",
     "home.moveTask": "Move task",
@@ -60,6 +62,7 @@ export const homeI18n = {
   },
   "de": {
     ...aiTasksI18n.de,
+    ...homeSourcesI18n.de,
     "home.noDueDate": "Kein Fälligkeitsdatum",
     "home.dragTask": "Aufgabe in einen anderen Status ziehen",
     "home.moveTask": "Aufgabe verschieben",
@@ -117,6 +120,7 @@ export const homeI18n = {
   },
   "es": {
     ...aiTasksI18n.es,
+    ...homeSourcesI18n.es,
     "home.noDueDate": "Sin fecha de vencimiento",
     "home.dragTask": "Arrastrar la tarea a otro estado",
     "home.moveTask": "Mover tarea",
@@ -174,6 +178,7 @@ export const homeI18n = {
   },
   "fr": {
     ...aiTasksI18n.fr,
+    ...homeSourcesI18n.fr,
     "home.noDueDate": "Sans date d'échéance",
     "home.dragTask": "Glisser la tâche vers un autre statut",
     "home.moveTask": "Déplacer la tâche",
@@ -231,6 +236,7 @@ export const homeI18n = {
   },
   "ja": {
     ...aiTasksI18n.ja,
+    ...homeSourcesI18n.ja,
     "home.noDueDate": "期限なし",
     "home.dragTask": "タスクを別のステータスにドラッグ",
     "home.moveTask": "タスクを移動",
@@ -288,6 +294,7 @@ export const homeI18n = {
   },
   "ko": {
     ...aiTasksI18n.ko,
+    ...homeSourcesI18n.ko,
     "home.noDueDate": "마감일 없음",
     "home.dragTask": "작업을 다른 상태로 드래그",
     "home.moveTask": "작업 이동",
@@ -345,6 +352,7 @@ export const homeI18n = {
   },
   "nl": {
     ...aiTasksI18n.nl,
+    ...homeSourcesI18n.nl,
     "home.noDueDate": "Geen vervaldatum",
     "home.dragTask": "Sleep de taak naar een andere status",
     "home.moveTask": "Taak verplaatsen",
@@ -402,6 +410,7 @@ export const homeI18n = {
   },
   "pl": {
     ...aiTasksI18n.pl,
+    ...homeSourcesI18n.pl,
     "home.noDueDate": "Brak terminu",
     "home.dragTask": "Przeciągnij zadanie do innego statusu",
     "home.moveTask": "Przenieś zadanie",
@@ -459,6 +468,7 @@ export const homeI18n = {
   },
   "pt-BR": {
     ...aiTasksI18n['pt-BR'],
+    ...homeSourcesI18n['pt-BR'],
     "home.noDueDate": "Sem prazo",
     "home.dragTask": "Arrastar a tarefa para outro status",
     "home.moveTask": "Mover tarefa",
@@ -516,6 +526,7 @@ export const homeI18n = {
   },
   "tr": {
     ...aiTasksI18n.tr,
+    ...homeSourcesI18n.tr,
     "home.noDueDate": "Son tarih yok",
     "home.dragTask": "Görevi başka bir duruma sürükle",
     "home.moveTask": "Görevi taşı",
@@ -573,6 +584,7 @@ export const homeI18n = {
   },
   "uk": {
     ...aiTasksI18n.uk,
+    ...homeSourcesI18n.uk,
     "home.noDueDate": "Без терміну",
     "home.dragTask": "Перетягнути завдання до іншого статусу",
     "home.moveTask": "Перемістити завдання",
@@ -630,6 +642,7 @@ export const homeI18n = {
   },
   "zh-CN": {
     ...aiTasksI18n['zh-CN'],
+    ...homeSourcesI18n['zh-CN'],
     "home.noDueDate": "无截止日期",
     "home.dragTask": "将任务拖到其他状态",
     "home.moveTask": "移动任务",
@@ -687,6 +700,7 @@ export const homeI18n = {
   },
   "zh-TW": {
     ...aiTasksI18n['zh-TW'],
+    ...homeSourcesI18n['zh-TW'],
     "home.noDueDate": "無截止日期",
     "home.dragTask": "將任務拖曳到其他狀態",
     "home.moveTask": "移動任務",

@@ -225,10 +225,6 @@ export type ProviderResult = {
 const OPENCODE_DATA_DIR = path.join(os.homedir(), '.local', 'share', 'opencode');
 
 const XAI_USAGE_ENDPOINT = 'https://grok.com/grok_api_v2.GrokBuildBilling/GetGrokCreditsConfig';
-const XAI_TOKEN_ENDPOINT = 'https://auth.x.ai/oauth2/token';
-const XAI_CLIENT_ID = 'b1a00492-073a-47ea-816f-4c329264a828';
-const XAI_REFRESH_SKEW_MS = 120_000;
-const XAI_DEFAULT_EXPIRES_IN_SECONDS = 3600;
 
 type XaiAuthEntry = Record<string, unknown> & {
   type: 'oauth';
@@ -237,7 +233,6 @@ type XaiAuthEntry = Record<string, unknown> & {
   expires?: unknown;
 };
 
-let xaiRefreshPromise: Promise<XaiAuthEntry> | null = null;
 
 
 const ANTIGRAVITY_ACCOUNTS_PATHS = [
@@ -487,11 +482,11 @@ const jwtExpiryMilliseconds = (accessToken: string): number | null => {
   }
 };
 
-const xaiAccessNeedsRefresh = (entry: XaiAuthEntry, now = Date.now()): boolean => {
+const xaiAccessExpired = (entry: XaiAuthEntry, now = Date.now()): boolean => {
   const access = asNonEmptyString(entry.access);
   if (!access) return true;
 
-  const refreshDeadline = now + XAI_REFRESH_SKEW_MS;
+  const refreshDeadline = now;
   const storedExpiry = Number(entry.expires);
   if (Number.isFinite(storedExpiry) && storedExpiry <= refreshDeadline) {
     return true;
@@ -501,67 +496,13 @@ const xaiAccessNeedsRefresh = (entry: XaiAuthEntry, now = Date.now()): boolean =
   return jwtExpiry !== null && jwtExpiry <= refreshDeadline;
 };
 
-const refreshXaiAuth = (entry: XaiAuthEntry): Promise<XaiAuthEntry> => {
-  if (xaiRefreshPromise) return xaiRefreshPromise;
-
-  const refreshToken = asNonEmptyString(entry.refresh);
-  if (!refreshToken) {
-    return Promise.reject(new Error('xAI OAuth refresh token is unavailable'));
+// OpenCode owns OAuth renewal. Usage reads never rotate its credentials.
+const getXaiAccessToken = (entry: XaiAuthEntry): string => {
+  const access = asNonEmptyString(entry.access);
+  if (!access || xaiAccessExpired(entry)) {
+    throw new Error('xAI sign-in is managed by OpenCode. Send a Grok message to refresh it, or reconnect xAI in Providers.');
   }
-
-  const pending = (async () => {
-    const response = await fetch(XAI_TOKEN_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: XAI_CLIENT_ID,
-        refresh_token: refreshToken,
-        grant_type: 'refresh_token',
-      }),
-      signal: AbortSignal.timeout(15_000),
-    });
-
-    const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
-    if (!response.ok) {
-      throw new Error(`xAI OAuth refresh failed: ${response.status}`);
-    }
-
-    const responsePayload = payload ?? {};
-    const access = asNonEmptyString(responsePayload.access_token);
-    if (!access) {
-      throw new Error('xAI OAuth refresh returned no access token');
-    }
-
-    const expiresIn = responsePayload.expires_in ?? XAI_DEFAULT_EXPIRES_IN_SECONDS;
-    if (typeof expiresIn !== 'number' || !Number.isFinite(expiresIn)) {
-      throw new Error('xAI OAuth refresh returned an invalid expiry');
-    }
-
-    const refreshed: XaiAuthEntry = {
-      ...entry,
-      type: 'oauth',
-      access,
-      refresh: asNonEmptyString(responsePayload.refresh_token) ?? refreshToken,
-      expires: Date.now() + expiresIn * 1000,
-    };
-
-    // Kept in memory for this process only: OpenCode 2.x owns the credential
-    // store, so writing it back would drift from what OpenCode actually uses.
-    return refreshed;
-  })();
-
-  const settled = pending.finally(() => {
-    if (xaiRefreshPromise === settled) {
-      xaiRefreshPromise = null;
-    }
-  });
-  xaiRefreshPromise = settled;
-  return settled;
-};
-
-const getXaiAccessToken = async (entry: XaiAuthEntry): Promise<string> => {
-  if (!xaiAccessNeedsRefresh(entry)) return entry.access!;
-  return (await refreshXaiAuth(entry)).access!;
+  return access;
 };
 
 type XaiFixed32Field = { path: number[]; value: number; order: number };
@@ -3021,7 +2962,7 @@ const fetchXaiQuota = async (): Promise<ProviderResult> => {
       });
     }
 
-    const accessToken = await getXaiAccessToken(entry);
+    const accessToken = getXaiAccessToken(entry);
     const response = await fetch(XAI_USAGE_ENDPOINT, {
       method: 'POST',
       headers: {

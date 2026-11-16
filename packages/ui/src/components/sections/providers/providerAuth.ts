@@ -9,7 +9,7 @@
  * connections rather than by a local file.
  */
 
-import type { ConnectionInfo, IntegrationInfo, IntegrationKeyMethod, IntegrationOAuthMethod } from '@opencode/client';
+import type { ConnectionInfo, IntegrationInfo, IntegrationKeyMethod, IntegrationOAuthMethod, IntegrationExternalMethod } from '@opencode/client';
 import { z } from 'zod';
 import type { Provider } from '@/lib/opencode/model';
 
@@ -58,10 +58,11 @@ export const getProviderConnections = (
   return [...(own ?? []), ...(signIn ?? [])];
 };
 
-export const getOAuthMethods = (
+export const getSignInMethods = (
   integration: IntegrationInfo | undefined,
-): IntegrationOAuthMethod[] =>
-  (integration?.methods ?? []).filter((method): method is IntegrationOAuthMethod => method.type === 'oauth');
+): (IntegrationOAuthMethod | IntegrationExternalMethod)[] =>
+  (integration?.methods ?? []).filter((method): method is IntegrationOAuthMethod | IntegrationExternalMethod =>
+    method.type === 'oauth' || method.type === 'external');
 
 export const getKeyMethod = (
   integration: IntegrationInfo | undefined,

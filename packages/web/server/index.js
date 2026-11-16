@@ -157,6 +157,7 @@ import { createSessionMetadataStore, createOpenCodeSessionMetadata } from './lib
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
 import { createHealthActions } from './lib/health/actions.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
+import { createNativeAppActions } from './lib/native-app-reader/actions.js';
 import { createPluginNotificationEmitter } from './lib/notifications/emit-route.js';
 import { OpenChamberControlError } from './lib/openchamber-control/error.js';
 import { createFileOpenRequester } from './lib/openchamber-control/file-open.js';
@@ -900,6 +901,7 @@ notificationTemplateRuntime = createNotificationTemplateRuntime({
 
 let companionCoordinator = null;
 let personalAwareness = null;
+let nativeAppReader = null;
 // The commitments list: declared here for the same reason as the coordinator.
 let commitmentChecks = null;
 let commitmentCapture = null;
@@ -1824,6 +1826,15 @@ const openChamberControlService = createOpenChamberControlService({
   browserControl: browserControlRouter,
   fileOpen: fileOpenRequester,
   commitmentActions,
+  nativeAppActions: createNativeAppActions({
+    dataDir: OPENCHAMBER_DATA_DIR,
+    getReader: () => nativeAppReader,
+    getRuntimeIdentity: () => new URL(buildOpenCodeUrl('/api/info', '')).origin,
+    readSession: async (sessionID) => {
+      const client = OpenCode.make({ baseUrl: new URL(buildOpenCodeUrl('/api/info', '')).origin, headers: getOpenCodeAuthHeaders() });
+      return client.session.get({ sessionID });
+    },
+  }),
   healthActions: createHealthActions({
     dataDir: OPENCHAMBER_DATA_DIR,
     readSession: async (sessionID) => {
@@ -1986,6 +1997,7 @@ async function main(options = {}) {
     getActiveHost: () => server?.address?.()?.address ?? null,
   });
   websiteModelRuntime = createWebsiteModelsRuntime({ enabled: options.desktopWebsiteModels === true, catalogFile: path.join(OPENCHAMBER_DATA_DIR, 'website-model-catalog.json') });
+  nativeAppReader = options.nativeAppReader ?? null;
   managedConfigRuntime = createManagedConfigRuntime({
     fsPromises,
     path,

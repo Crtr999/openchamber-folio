@@ -10,7 +10,7 @@ afterEach(() => {
 });
 
 test('the initial sidebar width is independent of its resize minimum', () => {
-  expect(useUIStore.getInitialState().sidebarWidth).toBe(280);
+  expect(useUIStore.getInitialState().sidebarWidth).toBe(300);
 });
 
 for (const width of [168, 280, 360]) {

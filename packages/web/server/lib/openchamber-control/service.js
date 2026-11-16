@@ -160,6 +160,7 @@ export const createOpenChamberControlService = (dependencies) => {
     agentMemoryActions = null,
     commitmentActions = null,
     healthActions = null,
+    nativeAppActions = null,
     // True for a follow-up conversation. It may use the commitment actions and
     // nothing else of the control surface.
     isFollowUpSession = async () => false,
@@ -518,6 +519,10 @@ export const createOpenChamberControlService = (dependencies) => {
       }
       if (action === 'computer.status') return readComputerConnection(resolveComputerEndpoint({ workingDirectory: contextDirectory }));
       if (action === 'computer.start') return startComputerConnection(resolveComputerEndpoint({ workingDirectory: contextDirectory }));
+      if (action.startsWith('native.')) {
+        if (!nativeAppActions) return { status: 'unsupported', reason: 'Native app reader is unavailable on this server.' };
+        return nativeAppActions.execute(action, input, contextDirectory, options);
+      }
       if (action.startsWith('health.')) {
         if (!healthActions) throw new OpenChamberControlError('Health data is unavailable on this server', 503);
         return healthActions.execute(action, input, contextDirectory, options);

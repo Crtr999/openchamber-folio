@@ -8,23 +8,13 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
 export const CLAUDE_PROJECT_LABEL = 'Claude';
-/** Provider registered by the claude-code-provider plugin. */
-export const CLAUDE_PROVIDER_ID = 'claude-code';
+/** OpenCode's built-in provider, using the official Claude Agent SDK. */
+export const CLAUDE_PROVIDER_ID = 'claude-agent';
 
 /**
- * Open the Claude project chat.
- *
- * This mirrors `openNativeChatGPT`: same project draft, same runtime guards,
- * same ZDR isolation. It differs in what it selects. ChatGPT can hand the
- * composer straight to a provider, because OpenCode signs in to OpenAI with
- * the subscription itself. There is no Anthropic equivalent — OpenCode's
- * `anthropic` integration only accepts an API key, and routing subscription
- * credentials through it is what Anthropic's authentication policy forbids.
- *
- * So Claude keeps the selected model as its orchestrator and reaches the
- * subscription through the `claude_code` tool, which runs the official
- * `claude` binary. The agent's own system prompt makes it hand the work over
- * and relay the answer.
+ * Open the Claude folder with OpenCode's built-in Claude Agent provider.
+ * Claude Code owns sign-in and requests; OpenCode owns the conversation,
+ * selected model, tools and permissions. No other model relays the answer.
  */
 export async function openNativeClaude(setupError: string): Promise<void> {
   if (!isElectronShell() || !isDesktopLocalOriginActive()) return;

@@ -13,5 +13,6 @@ if (process.platform === 'darwin') {
   const binary = path.join(contents, 'MacOS/CalendarBridge');
   const run = (command, args) => { const result = spawnSync(command, args, { stdio: 'inherit' }); if (result.status !== 0) throw new Error(`${command} failed`); };
   run('xcrun', ['swiftc', '-O', '-framework', 'EventKit', path.join(root, 'native/CalendarBridge.swift'), '-o', binary]);
+  run('xcrun', ['swiftc', '-O', '-framework', 'EventKit', path.join(root, 'native/NativeAppReader.swift'), '-o', path.join(contents, 'MacOS/NativeAppReader')]);
   run('codesign', ['--force', '--sign', '-', path.join(resources, 'CalendarBridge.app')]);
 }

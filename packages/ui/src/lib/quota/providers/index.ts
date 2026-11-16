@@ -29,4 +29,5 @@ export const QUOTA_PROVIDERS: QuotaProviderMeta[] = [
   { id: 'xai', name: 'xAI' },
   { id: 'gemini-website', name: 'Gemini' },
   { id: 'venice-website', name: 'Venice' },
+  { id: 'mistral-website', name: 'Mistral' },
 ];

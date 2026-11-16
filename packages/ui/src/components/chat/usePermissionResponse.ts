@@ -3,9 +3,12 @@ import type { PermissionReply, PermissionRequest } from '@/types/permission';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessions } from '@/sync/sync-context';
 import * as sessionActions from '@/sync/session-actions';
+import { getPermissionReply } from '@/sync/permission-replies';
+import { getSyncChildStores } from '@/sync/sync-refs';
+import { getRuntimeKey } from '@/lib/runtime-switch';
 
 // Newest pending card owns the keyboard; older cards wait their turn.
-const activePermissionCardIds: string[] = [];
+const activePermissionCards: symbol[] = [];
 
 /** The request was raised by a child of the session the user is looking at. */
 export const usePermissionFromSubagent = (permission: PermissionRequest): boolean => {
@@ -26,32 +29,35 @@ export const usePermissionFromSubagent = (permission: PermissionRequest): boolea
 export const usePermissionResponse = (
   permission: PermissionRequest,
   onResponse?: (response: PermissionReply) => void,
+  shortcutsEnabled = true,
 ) => {
-  const [isResponding, setIsResponding] = React.useState(false);
-  const [hasResponded, setHasResponded] = React.useState(false);
-  const respondToPermission = sessionActions.respondToPermission;
+  const manager = getSyncChildStores();
+  const reply = React.useMemo(() => {
+    const runtimeKey = getRuntimeKey();
+    return getPermissionReply(manager, runtimeKey, permission.sessionID, permission.id,
+      (response) => sessionActions.respondToPermission(permission.sessionID, permission.id, response, undefined, runtimeKey),
+    );
+  }, [manager, permission.id, permission.sessionID]);
+  const state = React.useSyncExternalStore(reply.subscribe, reply.getSnapshot, reply.getSnapshot);
+  const isResponding = state === 'pending';
+  const hasResponded = state === 'settled';
 
   const respond = React.useCallback(async (response: PermissionReply) => {
-    setIsResponding(true);
-    try {
-      await respondToPermission(permission.sessionID, permission.id, response);
-      setHasResponded(true);
+    if (await reply.respond(response)) {
       onResponse?.(response);
-    } catch (error) {
-      console.error('[PermissionCard] Failed to respond to permission:', error);
-    } finally {
-      setIsResponding(false);
     }
-  }, [onResponse, permission.id, permission.sessionID, respondToPermission]);
+  }, [onResponse, reply]);
 
   const respondRef = React.useRef(respond);
   respondRef.current = respond;
 
   React.useEffect(() => {
-    if (hasResponded) return;
-    activePermissionCardIds.push(permission.id);
+    if (hasResponded || !shortcutsEnabled) return;
+    const owner = Symbol('permission-shortcuts');
+    activePermissionCards.push(owner);
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (activePermissionCardIds.at(-1) !== permission.id) return;
+      if (activePermissionCards.at(-1) !== owner || document.hidden) return;
+      if (event.repeat || event.isComposing || event.defaultPrevented) return;
       if (!event.altKey || event.metaKey || event.ctrlKey) return;
       const response = event.key === 'Enter'
         ? (event.shiftKey ? 'always' as const : 'once' as const)
@@ -66,10 +72,10 @@ export const usePermissionResponse = (
     window.addEventListener('keydown', handleKeyDown, true);
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
-      const index = activePermissionCardIds.lastIndexOf(permission.id);
-      if (index !== -1) activePermissionCardIds.splice(index, 1);
+      const index = activePermissionCards.lastIndexOf(owner);
+      if (index !== -1) activePermissionCards.splice(index, 1);
     };
-  }, [hasResponded, permission.id]);
+  }, [hasResponded, permission.id, shortcutsEnabled]);
 
-  return { isResponding, hasResponded, respond };
+  return { isResponding, hasResponded, hasError: state === 'failed', respond };
 };

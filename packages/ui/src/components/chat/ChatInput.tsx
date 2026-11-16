@@ -3622,9 +3622,20 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         && !isMobile
         && !isVSCode
         && !isMiniChatSurface;
+    // Home's widgets load Notion, calendar and habits on mount. Unmounting Home
+    // for every chat made returning to it a full remount plus a fresh round of
+    // requests, which is the lag felt on the Home button. Once Home has been
+    // shown, keep it mounted and only hide it: the widgets stay warm and the
+    // return is a paint instead of a reload.
+    const [homeHasBeenShown, setHomeHasBeenShown] = React.useState(showDesktopDraftPresentation);
+    React.useEffect(() => {
+        if (showDesktopDraftPresentation) setHomeHasBeenShown(true);
+    }, [showDesktopDraftPresentation]);
+    const keepHomeMounted = showDesktopDraftPresentation || homeHasBeenShown;
     const draftPresentationClassName = cn(
         'transition-opacity duration-[120ms] ease-out motion-reduce:transition-none',
         draftPresentationExiting && 'pointer-events-none opacity-0',
+        !showDesktopDraftPresentation && 'pointer-events-none opacity-0 invisible',
     );
 
     React.useEffect(() => {
@@ -4276,8 +4287,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     />
                 ) : null}
             </div>
-            {showDesktopDraftPresentation ? (
-                <div className={draftPresentationClassName}>
+            {keepHomeMounted ? (
+                <div className={draftPresentationClassName} aria-hidden={!showDesktopDraftPresentation}>
                     <HomeDashboard />
                 </div>
             ) : null}

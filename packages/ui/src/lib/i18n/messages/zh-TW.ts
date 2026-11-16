@@ -1,5 +1,6 @@
 import { geminiI18n } from './gemini.i18n';
 import { veniceI18n } from './venice.i18n';
+import { mistralI18n } from './mistral.i18n';
 import { healthI18n } from './health.i18n';
 import { companionI18n } from './companion.i18n';
 import { friendsI18n } from './friends.i18n';
@@ -39,6 +40,7 @@ export const dict: Record<I18nKey, string> = {
   ...chatgptI18n['zh-TW'],
   ...claudeI18n['zh-TW'],
   ...veniceI18n['zh-TW'],
+  ...mistralI18n['zh-TW'],
   ...geminiI18n['zh-TW'],
   ...meetingsI18n['zh-TW'],
   'meeting.quickStart': '開始會議',
@@ -3425,6 +3427,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.formDock.stepAria': '問題 {index}：{title}',
   'chat.formDock.linkInfo': '開啟連結後再繼續。',
   'chat.permissionCard.title': '需要權限',
+  'chat.permissionCard.replyPending': '正在傳送您的決定…',
+  'chat.permissionCard.replyFailed': '無法傳送您的決定。請求仍待處理。請選擇一項操作以重試。',
   'chat.permissionCard.summary.externalDirectory': "存取專案外的檔案",
   'chat.permissionCard.summary.read': "讀取檔案",
   'chat.permissionCard.summary.edit': "編輯檔案",

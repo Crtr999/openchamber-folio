@@ -1,5 +1,6 @@
 import { geminiI18n } from './gemini.i18n';
 import { veniceI18n } from './venice.i18n';
+import { mistralI18n } from './mistral.i18n';
 import { healthI18n } from './health.i18n';
 import { companionI18n } from './companion.i18n';
 import { friendsI18n } from './friends.i18n';
@@ -39,6 +40,7 @@ export const dict: Record<I18nKey, string> = {
   ...chatgptI18n['ko'],
   ...claudeI18n.ko,
   ...veniceI18n.ko,
+  ...mistralI18n['ko'],
   ...geminiI18n.ko,
   ...meetingsI18n.ko,
   'meeting.quickStart': '회의 시작',
@@ -3425,6 +3427,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.formDock.stepAria': '질문 {index}: {title}',
   'chat.formDock.linkInfo': '링크를 연 다음 계속하세요.',
   'chat.permissionCard.title': '권한 필요',
+  'chat.permissionCard.replyPending': '선택한 결정을 전송하는 중…',
+  'chat.permissionCard.replyFailed': '결정을 전송하지 못했습니다. 요청이 아직 열려 있습니다. 작업을 선택하여 다시 시도하세요.',
   'chat.permissionCard.summary.externalDirectory': "프로젝트 외부 파일에 접근",
   'chat.permissionCard.summary.read': "파일 읽기",
   'chat.permissionCard.summary.edit': "파일 편집",

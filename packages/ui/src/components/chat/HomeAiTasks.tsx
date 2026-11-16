@@ -22,7 +22,7 @@ const READY = 'Ready for AI';
 const ALL_CHATS = 'openchamber:all-chats';
 const modelKey = (model: AiTaskModel) => `${model.providerID}/${model.id}`;
 // Provider names are product names, so they are not translated.
-const providerNames = new Map([['openai', 'ChatGPT'], ['openrouter', 'OpenRouter'], ['opencode', 'OpenCode'], ['anthropic', 'Claude'], ['claude-code', 'Claude']]);
+const providerNames = new Map([['openai', 'ChatGPT'], ['openrouter', 'OpenRouter'], ['opencode', 'OpenCode'], ['anthropic', 'Claude'], ['claude-agent', 'Claude'], ['claude-code', 'Claude']]);
 const modelLabel = (model: AiTaskModel & { name: string }) => `${providerNames.get(model.providerID) ?? model.providerID} · ${model.name}`;
 // The last model chosen for a folder is a convenience default, never an authorization.
 const rememberedModel = z.object({ providerID: z.string().min(1), id: z.string().min(1) });

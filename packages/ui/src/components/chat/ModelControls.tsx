@@ -629,7 +629,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         if (selection || currentSessionId || !providerBinding || providerBinding.length === 0) return;
         if (!currentAgentName || selectableDesktopAgents.length === 0) return;
         const lowered = currentAgentName.trim().toLowerCase();
-        const boundProvider = lowered === 'claude' ? 'claude-code' : lowered === 'chatgpt' ? 'openai' : lowered === 'zdr' ? 'openrouter-zdr' : null;
+        const boundProvider = lowered === 'claude' ? (providerBinding?.includes('claude-agent') ? 'claude-agent' : 'claude-code') : lowered === 'chatgpt' ? 'openai' : lowered === 'zdr' ? 'openrouter-zdr' : null;
         const current = agents.find((agent) => agent.name === currentAgentName);
         const allowed = Boolean(current)
             && (!isStrictlyZdrBound(providerBinding) || lowered === 'zdr')
@@ -638,7 +638,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         if (allowed) return;
         const preferred = isStrictlyZdrBound(providerBinding)
             ? 'zdr'
-            : providerBinding.includes('claude-code')
+            : (providerBinding.includes('claude-agent') || providerBinding.includes('claude-code'))
                 ? 'claude'
                 : providerBinding.includes('openai')
                     ? 'chatgpt'
@@ -1428,7 +1428,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 // the ChatGPT folder, say) stays right where the user is.
                 const picked = agents.find((agent) => agent.name === agentName);
                 const lowered = agentName.trim().toLowerCase();
-                const boundProvider = lowered === 'claude' ? 'claude-code' : lowered === 'chatgpt' ? 'openai' : null;
+                const boundProvider = lowered === 'claude' ? (effectiveBinding?.includes('claude-agent') ? 'claude-agent' : 'claude-code') : lowered === 'chatgpt' ? 'openai' : null;
                 const inBoundFolder = Boolean(effectiveBinding && effectiveBinding.length > 0);
                 const allowedHere = !inBoundFolder
                     || (picked ? agentAllowedByBinding(picked, effectiveBinding) : !isBoundAgentName(agentName))

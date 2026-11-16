@@ -1,0 +1,214 @@
+/* notion.css — scoped to sidebar readability, typography, composer & icons.
+   Notion cues: softer dark (#202020) sidebar, tiered text colors (#f0efed /
+   #bcbab6 / #9b9a97), 30px sidebar rows @ 14px medium, 12px caps section
+   labels, 8px pill search, 16px radius composer with 28px round controls,
+   bigger/poppier icons + avatars, smooth 100ms transitions.
+   Keeps the existing poster palette; no scene removal, no theme swap. */
+
+/* ===== TYPOGRAPHY (Notion scale) ===== */
+:root {
+  --text-markdown: 0.875rem;      /* 14px */
+  --text-ui-header: 0.875rem;     /* 14px */
+  --text-ui-label: 0.875rem;      /* 14px */
+  --text-meta: 0.75rem;           /* 12px */
+  --text-micro: 0.75rem;          /* 12px */
+  --text-settings-page-title: 1.125rem; /* 18px */
+  --text-h1: 1.25rem;             /* 20px */
+  --text-h2: 1.125rem;            /* 18px */
+  --text-h3: 1rem;                /* 16px */
+  --text-h4: 0.875rem;            /* 14px */
+  --text-h5-h6: 0.8125rem;        /* 13px */
+  --ui-regular-weight: 400;
+  --ui-medium-weight: 500;
+  --ui-bold-weight: 700;
+}
+
+/* ===== SIDEBAR READABILITY ===== */
+[data-oc-sidebar],
+aside {
+  background-color: var(--sidebar) !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+  font-size: 14px !important;
+  line-height: 1.4286 !important;
+}
+
+[data-oc-sidebar] [data-session-row],
+[data-oc-sidebar] [data-session-row] * {
+  min-height: 30px !important;
+  height: 30px !important;
+  border-radius: 6px !important;
+  padding-right: 10px !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: #f0efed !important;           /* primary sidebar text */
+  transition: background-color 100ms ease, color 100ms ease !important;
+}
+
+[data-oc-sidebar] [data-session-row]:hover {
+  background-color: rgba(255, 255, 255, 0.055) !important;
+}
+
+[data-oc-sidebar] [data-session-row][aria-current="page"],
+[data-oc-sidebar] [data-session-row].bg-interactive-selection\/70 {
+  background-color: rgba(0, 0, 0, 0.03) !important;
+  color: #ffffff !important;
+}
+
+[data-oc-sidebar] [data-oc-section-label],
+[data-oc-sidebar] h2,
+[data-oc-sidebar] .text-xs,
+[data-oc-sidebar] .text-\[11px\] {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.2em !important;
+  text-transform: uppercase !important;
+  color: #9b9a97 !important;
+}
+
+[data-oc-sidebar] input {
+  height: 32px !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  background-color: transparent !important;
+}
+[data-oc-sidebar] input:hover {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+[data-oc-sidebar] button,
+[data-oc-sidebar] [role="button"] {
+  height: 32px !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+}
+
+/* Sidebar section row height padding */
+[data-oc-sidebar] [data-session-row] > div,
+[data-oc-sidebar] [data-session-row] span {
+  font-size: 14px !important;
+}
+
+/* ===== BIGGER / POPPYER ICONS & AVATARS ===== */
+[data-oc-sidebar] svg,
+[data-oc-sidebar] [role="img"] {
+  width: 16px !important;
+  height: 16px !important;
+  font-size: 16px !important;
+  fill: #bcbab6 !important;
+  color: #bcbab6 !important;
+  filter: drop-shadow(0 0 1.5px rgba(255,255,255,0.25)) !important;
+}
+[data-oc-sidebar] [data-session-row]:hover svg,
+[data-oc-sidebar] [data-session-row]:hover [role="img"] {
+  fill: #f0efed !important;
+  color: #f0efed !important;
+}
+
+/* Session list avatars / icon circles */
+.oc-home-row svg,
+[data-oc-session-row] svg,
+[data-oc-session-select] svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+/* Sidebar header / pill controls */
+header {
+  height: 44px !important;
+}
+[data-oc-sidebar] header,
+[data-oc-sidebar] .search-bar,
+[data-oc-sidebar] [aria-label="Search chats"] {
+  height: 32px !important;
+  border-radius: 8px !important;
+}
+
+/* ===== COMPOSER ===== */
+.oc-glass-composer {
+  border-radius: 16px !important;
+  padding: 12px 12px 8px !important;
+}
+.oc-glass-composer textarea,
+.oc-glass-composer [contenteditable] {
+  font-size: 14px !important;
+  line-height: 20px !important;
+}
+.oc-glass-composer [data-slot="button"][data-size="icon"],
+.oc-glass-composer [aria-label="Send message"],
+.oc-glass-composer [data-testid="agent-chat-send-button"] {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 50% !important;
+}
+
+/* ===== SMOOTH TRANSITIONS ===== */
+[data-oc-personal-interactions] * {
+  transition-duration: 100ms !important;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+[data-oc-personal-interactions] button:not(:disabled),
+[data-oc-personal-interactions] [role="button"] {
+  transform: none !important;
+  scale: 1 !important;
+}
+[data-oc-personal-interactions] button:not(:disabled):active,
+[data-oc-personal-interactions] [role="button"]:active {
+  transform: none !important;
+  scale: 1 !important;
+}
+
+/* ===== CHIPS / TOOLBARS (neutral, small) ===== */
+[data-slot="button"] {
+  border-radius: 6px !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+}
+[data-slot="button"][data-size="sm"] {
+  height: 28px !important;
+}
+[data-slot="button"][data-size="icon"] {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 50% !important;
+}
+
+/* ===== MARKDOWN / TEXT SIZES ===== */
+.markdown-content {
+  font-size: var(--text-markdown) !important;
+  line-height: 1.43 !important;
+}
+.markdown-content p,
+.markdown-content li,
+.markdown-content td,
+.markdown-content th {
+  margin: 0.5em 0 !important;
+}
+.markdown-content h1 {
+  font-size: var(--text-h1) !important;
+  font-weight: var(--ui-bold-weight);
+  margin: 1.2em 0 0.4em !important;
+}
+.markdown-content h2 {
+  font-size: var(--text-h2) !important;
+  font-weight: var(--ui-bold-weight);
+  margin: 1.1em 0 0.4em !important;
+}
+.markdown-content h3 {
+  font-size: var(--text-h3) !important;
+  font-weight: var(--ui-bold-weight);
+  margin: 1em 0 0.3em !important;
+}
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+  font-size: var(--text-h4) !important;
+  font-weight: var(--ui-bold-weight);
+  margin: 0.9em 0 0.3em !important;
+}
+.markdown-content code[data-markdown="inline-code"] {
+  border-radius: 4px !important;
+  padding: 0.1em 0.35em !important;
+  font-size: 0.9em !important;
+}

@@ -19,10 +19,11 @@ describe('mergeSidebarItemOrder', () => {
       'website:claude',
       'website:venice',
       'website:gemini',
+      'website:mistral',
     ]);
   });
 
-  test('recognizes only the four website sidebar ids', () => {
+  test('recognizes only the five website sidebar ids', () => {
     expect(isWebsiteSidebarId('website:claude')).toBe(true);
     expect(isWebsiteSidebarId('project-a')).toBe(false);
   });

@@ -241,6 +241,10 @@ export function translateWireEvent(event: OpenCodeEvent): SyncEvent[] {
     // No `session.created` follows a fork in 2.x; see the sync event's doc.
     case "session.forked":
       return [{ type: "session.forked", properties: { sessionID: event.data.sessionID, parentID: event.data.parentID } }]
+    case "session.archived":
+      return [sessionEvent(event.data.sessionID, { time: { archived: event.created } })]
+    case "session.unarchived":
+      return [sessionEvent(event.data.sessionID, { time: { archived: null } })]
     case "session.renamed":
       return [sessionEvent(event.data.sessionID, { title: event.data.title, time: { updated: event.created } })]
     // OpenCode's record holds the full metadata, so this replaces it.
@@ -827,6 +831,7 @@ export function translateWireEvent(event: OpenCodeEvent): SyncEvent[] {
       return []
     // Catalogs OpenChamber does not surface as lists of their own.
     case "models-dev.refreshed":
+    case "artifact.updated":
     case "reference.updated":
       return []
     // Resources of an MCP server; OpenChamber shows connection status only
@@ -849,6 +854,7 @@ export function translateWireEvent(event: OpenCodeEvent): SyncEvent[] {
     case "pty.updated":
     case "pty.deleted":
     case "pty.exited":
+    case "persistent-pty.updated":
     case "persistent-pty.added":
     case "persistent-pty.removed":
       return []

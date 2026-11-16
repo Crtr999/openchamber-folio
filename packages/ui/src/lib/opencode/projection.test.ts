@@ -210,7 +210,7 @@ describe("projectMessage (other roles)", () => {
       { id: "2", type: "system", time: { created: 2 }, text: "sys", description: "d" },
       { id: "3", type: "skill", time: { created: 3 }, skill: "sk", name: "Skill", text: "t" },
       { id: "4", type: "shell", time: { created: 4 }, shellID: "sh", command: "ls", status: "exited", exit: 0 },
-      { id: "5", type: "compaction", time: { created: 5 }, status: "running", reason: "auto", summary: "", recent: "" },
+      { id: "5", type: "compaction", time: { created: 5 }, status: "running", reason: "auto", summary: "" },
       {
         id: "6",
         type: "compaction",
@@ -279,7 +279,7 @@ describe("deniesAnyProvider", () => {
   test("sees a provider.use deny in any layer, even when a later document has its own experimental block", () => {
     const entries = [
       doc("/home/u/.config/opencode/opencode.json", { policies: [{ action: "provider.use", resource: "*", effect: "deny" }] }),
-      doc("/repo/opencode.json", { policies: [{ action: "permission", resource: "shell:*", effect: "deny" }] }),
+      doc("/repo/opencode.json", { policies: [{ action: "tool.use", resource: "shell:*", effect: "deny" }] }),
     ]
     expect(deniesAnyProvider(entries)).toBe(true)
   })
@@ -288,7 +288,7 @@ describe("deniesAnyProvider", () => {
     expect(deniesAnyProvider([
       doc("/repo/opencode.json", { policies: [
         { action: "provider.use", resource: "anthropic", effect: "allow" },
-        { action: "permission", resource: "shell:*", effect: "deny" },
+        { action: "tool.use", resource: "shell:*", effect: "deny" },
       ] }),
     ])).toBe(false)
     expect(deniesAnyProvider([doc("/repo/opencode.json")])).toBe(false)

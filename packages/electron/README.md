@@ -245,6 +245,21 @@ app's login item or change its opt-out.
 
 ## Native Features Owned Here
 
+- `CommandOrControl+Shift+Space` summons the main window after desktop startup,
+  including a background launch. It restores a minimized window, reveals an
+  unfocused or hidden window, and hides the main window only when it is focused.
+  Revealing a live window does not navigate it or replace its chat or draft.
+  Repeated presses share an in-flight reveal when a closed window is recreated.
+  The shortcut is registered at runtime without writing settings or requesting
+  macOS permissions. If registration fails or the accelerator is already owned,
+  Desktop logs that it is unavailable and keeps the existing tray, menu and Dock
+  paths. It does not claim success or choose another shortcut. Actual exit
+  unregisters only this shortcut; canceling quit leaves it active.
+  Stopping the shortcut or confirming quit also cancels delayed summon reveals,
+  including a new window's pending `ready-to-show` callback. Shortcut conflicts
+  are reported in the Electron log, not through a new dialog or menu item.
+  Existing native titlebars and saved window geometry are unchanged. Web,
+  VS Code, hosted mobile and Capacitor do not register a global shortcut.
 - Floating Mini Chat windows.
 - Mini Chat loads from the resolved local UI origin in HMR development, not the
   API server origin. Bundled mode keeps `openchamber-ui://` assets. Native zoom
@@ -402,6 +417,10 @@ bun run lint
 
 ## Personal homepage
 
+`HomeDashboard.css` owns Home's flat section dividers and quiet headings on one
+solid reading canvas. Home widgets have no individual blur, shadow or card
+animation. The feel, vibe and polish stylesheets no longer override Home cards.
+
 Home's task widget also offers AI Tasks, separate from Daily To-Do. The user can
 create a private database with the required workflow or connect an existing one.
 Creation does not enable execution. Setup separately opts into sending task
@@ -427,6 +446,20 @@ controls. Enterprise mode blocks both setup and every Notion request.
 Home widgets fill the available workspace. Each column stacks its widgets independently so a tall board does not leave holes beneath shorter widgets. Handles reorder within or across columns with mouse, touch or keyboard. Drag the divider between adjacent columns to adjust their widths continuously. Focus the divider and use Left/Right, Shift for larger steps, or Home/End to reach the limits. Escape cancels an active resize. Columns keep a 240px minimum and stack below 640px of dashboard space. Full width / Column width changes each widget span. Order, spans and fractional width preferences persist locally in `openchamber.personalHome.layout.v2`; existing v1 and v2 layouts migrate to equal columns without changing order or spans. Resize previews stay in memory until released; a failed save leaves the on-screen layout usable and shows an error. Reset layout restores the initial arrangement. This presentation setting does not move Notion pages or events. Hosted MCP update arguments follow its advertised `data` wrapper, and page links normalize to IDs before writes. Calendar accepts ISO times with or without fractional seconds, and the event picker displays calendar names.
 
 Desktop draft mode displays a landscape, live work, recent chats and native personal panels. Existing project/session/rules navigation stays in the sidebar; selecting or sending a chat returns to the ordinary chat workspace. Mobile and VS Code retain the compact draft.
+
+Home source evidence is owned by `HomePersonalPanels.tsx`, projected by
+`homeSourceState.ts` and rendered by `HomeSources.tsx`. The rail adds no reads or
+permission prompts. A saved Notion connection is not proof of live access.
+`useHomeSourceReads.ts` records in-memory completion times only for accepted
+board and habits reads, and Calendar reads with granted access and no error.
+Token/status reads and successful writes do not establish content freshness.
+Each localized Last read timestamp means the last successful Home read, not a
+source modification or sync time. Native cache age remains unknown. Failed
+reads retain the last successful time with a stale warning. Runtime changes
+clear observations; source configuration changes and disconnections clear the
+affected observations and invalidate their pending completions. Unsupported
+runtimes show native sources as unavailable. Enterprise and network policy
+block Notion evidence, not local EventKit Calendar access or its read times.
 
 Notion uses the hosted MCP OAuth PKCE connection (encrypted by Electron safeStorage in personal-home.json). Connect is explicit; reads occur when Home opens or Refresh is pressed. Task statuses and habit checkboxes use fetched schema and known page membership. The two personal Home data sources are the defaults; Connections changes their IDs and the saved-chat parent. Chat export is explicit and sends text only, excluding attachments, reasoning and tools. It is not an automatic sync or a Notion document editor.
 

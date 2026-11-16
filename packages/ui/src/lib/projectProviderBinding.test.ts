@@ -61,7 +61,7 @@ describe('provider binding helpers', () => {
     expect(pickBoundModel({ providers, binding: ['missing'] })).toBeNull()
   })
   test('derives a fallback binding only for Open Carter workspace folders and ZDR Legal folders', () => {
-    expect(providerBindingFromFolderName('/Users/c/Documents/Open Carter/Claude')).toEqual(['claude-code'])
+    expect(providerBindingFromFolderName('/Users/c/Documents/Open Carter/Claude')).toEqual(['claude-agent', 'claude-code'])
     expect(providerBindingFromFolderName('/Users/c/Documents/Open Carter/ChatGPT')).toEqual(['openai'])
     expect(providerBindingFromFolderName('/Users/c/Built Apps/ZDR Management')).toEqual(['openrouter-zdr'])
     expect(providerBindingFromFolderName('/Users/c/code/Claude')).toBeNull()

@@ -229,6 +229,7 @@ describe('enterprise policy', () => {
       '/api/integration/anthropic/connect/oauth',
       '/api/integration/anthropic/connect/oauth/att_1/complete',
       '/api/integration/github-copilot/connect/command',
+      '/api/integration/claude-agent/connect/external',
       '/api/experimental/integration/wellknown',
     ])('refuses POST %s', (requestPath) => {
       expect(isProviderConnectRequest('POST', requestPath)).toBe(true);

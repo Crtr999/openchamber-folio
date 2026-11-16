@@ -35,7 +35,7 @@ import {
   shouldShowModelsSection,
   findIntegrationForProvider,
   getCredentialConnections,
-  getOAuthMethods,
+  getSignInMethods,
   getProviderConnections,
   getSignInIntegrationId,
   readProviderApiKeySetting,
@@ -837,7 +837,7 @@ export const ProvidersPage: React.FC = () => {
                 <>
                   {(() => {
                     const candidateIntegration = findIntegrationForProvider(integrations ?? [], candidateProviderId);
-                    const candidateOAuthMethods = getOAuthMethods(
+                    const candidateOAuthMethods = getSignInMethods(
                       findIntegrationForProvider(integrations ?? [], getSignInIntegrationId(candidateProviderId)),
                     );
                     const showApiKey = shouldShowApiKeyAuth(candidateIntegration);
@@ -910,7 +910,7 @@ export const ProvidersPage: React.FC = () => {
 
   const providerModels = Array.isArray(selectedProvider.models) ? selectedProvider.models : [];
   const selectedIntegration = findIntegrationForProvider(integrations ?? [], selectedProvider.id);
-  const oauthAuthMethods = getOAuthMethods(
+  const oauthAuthMethods = getSignInMethods(
     findIntegrationForProvider(integrations ?? [], getSignInIntegrationId(selectedProvider.id)),
   );
   const showApiKeyAuth = shouldShowApiKeyAuth(selectedIntegration);

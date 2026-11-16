@@ -501,7 +501,7 @@ describe('buildSessionSidebarRowModel', () => {
     ));
 
     const mixed = buildSessionSidebarRowModel(input);
-    expect(headers(mixed)).toEqual(['project-b', 'website:chatgpt', 'project-a', 'website:claude', 'website:venice', 'website:gemini']);
+    expect(headers(mixed)).toEqual(['project-b', 'website:chatgpt', 'project-a', 'website:claude', 'website:venice', 'website:gemini', 'website:mistral']);
     expect(mixed.rows.find((row) => row.kind === 'website-folder')).toMatchObject({ key: 'website:chatgpt', websiteId: 'website:chatgpt', estimateSize: 40 });
 
     const defaults = buildSessionSidebarRowModel({ ...input, sidebarItemOrder: [] });

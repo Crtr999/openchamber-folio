@@ -1,4 +1,6 @@
 import { createPersonalHome } from './personal-home.mjs';
+import { createNativeAppReader } from './native-app-reader.mjs';
+import { createNativeAppApproval } from './native-app-approval.mjs';
 import { z } from 'zod';
 import { createMeetingBoundary, isMeetingCommand, supportsMeetingSystemAudio } from './meeting-boundary.mjs';
 import { createMeetingService } from '@openchamber/web/server/lib/meetings/service.js';
@@ -11,7 +13,7 @@ import { canReuseManagedOpenCodePreflight } from './opencode-readiness.mjs';
 import { createMacAiHost } from './mac-ai-host.mjs';
 import { createLocalTeamBridge } from './local-team-bridge.mjs';
 import { createChatGPTAutomationsBridge } from './chatgpt-automations.mjs';
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, MessageChannelMain, nativeImage, nativeTheme, net as electronNet, Notification, powerMonitor, powerSaveBlocker, protocol, safeStorage, session, shell, Tray, webContents } from 'electron';
+import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, MessageChannelMain, nativeImage, nativeTheme, net as electronNet, Notification, powerMonitor, powerSaveBlocker, protocol, safeStorage, screen, session, shell, Tray, webContents } from 'electron';
 import contextMenu from 'electron-context-menu';
 import log from 'electron-log/main.js';
 import dgram from 'node:dgram';
@@ -26,6 +28,8 @@ import updaterPkg from 'electron-updater';
 import { ElectronSshManager } from './ssh-manager.mjs';
 import { replaceFileWithRetry } from './windows-file-replace.mjs';
 import { createTrayController } from './tray.mjs';
+import { createSummonShortcut } from './summon-shortcut.mjs';
+import { createNotchPanel } from './notch-panel.mjs';
 import { createOpenRouterCredits, readOpencodeOpenRouterKey, isOfficialOpenRouterBillingConnection, isOpenRouterCreditsAuthorized } from './openrouter-credits.mjs';
 import { resolveManagedOpenCodeCwd } from './opencode-cwd.mjs';
 import { stopEmbeddedServer } from './server-shutdown.mjs';
@@ -368,6 +372,13 @@ const personalHome = createPersonalHome({
   openExternal: (url) => shell.openExternal(url),
   isBlocked: () => isEnterpriseMode(),
   calendar: createPersonalCalendar({ executable: path.join(app.isPackaged ? process.resourcesPath : app.getAppPath() + '/resources', 'personal-home/CalendarBridge.app/Contents/MacOS/CalendarBridge') }),
+});
+
+const requestNativeAppApproval = createNativeAppApproval({
+  getOwner: () => state.mainWindow,
+  isLocalOwner: (owner) => owner === state.mainWindow && !owner.isDestroyed()
+    && authorizeOpenRouterCredits({ sender: owner.webContents, senderFrame: owner.webContents.mainFrame }),
+  showMessageBox: (owner, options) => dialog.showMessageBox(owner, options),
 });
 
 let aiTasks = null;
@@ -1513,6 +1524,10 @@ const startLocalServer = async () => {
 
   const handle = await startWebUiServer({
     desktopWebsiteModels: true,
+    nativeAppReader: createNativeAppReader({
+      executable: path.join(app.isPackaged ? process.resourcesPath : app.getAppPath() + '/resources', 'personal-home/CalendarBridge.app/Contents/MacOS/NativeAppReader'),
+      requestApproval: requestNativeAppApproval,
+    }),
     port: chosenPort,
     host: bindHost,
     uiPassword: desktopUiPassword || null,
@@ -2300,7 +2315,7 @@ const canUseTitleBarOverlay = (browserWindow) => (
 
 // `adopt` hands over the window the entry module created before this module
 // loaded; it is already on the splash and shows itself on ready-to-show.
-const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {}, adopt = null }) => {
+const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {}, adopt = null, shouldShow = () => true }) => {
   const { bounds, maximized } = adopt
     ? { bounds: null, maximized: adopt.maximized }
     : restoreGeometry ? resolveMainWindowBounds() : { bounds: null, maximized: false };
@@ -2550,6 +2565,7 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {}, 
 
   if (!adopt) {
     browserWindow.once('ready-to-show', () => {
+      if (browserWindow.isDestroyed() || !shouldShow()) return;
       if (browserWindow.__ocLabel === 'main') {
         recordElectronStartupPerformance('electron.window.ready-to-show', {
           documentClass: classifyStartupDocument(browserWindow.webContents.getURL()),
@@ -2598,11 +2614,13 @@ const showMainWindowWithSplash = () => {
   });
 };
 
-const activateMainWindow = async (url, localOrigin, bootOutcome, runtimeConfig = {}) => {
+const activateMainWindow = async (url, localOrigin, bootOutcome, runtimeConfig = {}, shouldShow = () => true) => {
+  if (!shouldShow()) return null;
   // Stop capture before any host config changes, even when the document stays put.
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     await meetingBoundary.interrupt('navigation', state.mainWindow.webContents);
   }
+  if (!shouldShow()) return null;
   state.startupResolved = true;
   state.localOrigin = localOrigin;
   state.apiBaseUrl = typeof runtimeConfig.apiBaseUrl === 'string' ? runtimeConfig.apiBaseUrl : state.apiBaseUrl;
@@ -2628,6 +2646,7 @@ const activateMainWindow = async (url, localOrigin, bootOutcome, runtimeConfig =
     mainWindow.__ocRuntimeConfig = rendererRuntimeConfig;
     mainWindow.__ocInitScript = state.initScript;
     await navigateWindow(mainWindow, url, { allowAbort: true });
+    if (mainWindow.isDestroyed() || !shouldShow()) return null;
     mainWindow.show();
     mainWindow.focus();
     return mainWindow;
@@ -2638,14 +2657,16 @@ const activateMainWindow = async (url, localOrigin, bootOutcome, runtimeConfig =
     restoreGeometry: true,
     url,
     runtimeConfig,
+    shouldShow,
   });
   return state.mainWindow;
 };
 
-const openMainWindow = async () => {
+const openMainWindow = async ({ shouldShow = () => true } = {}) => {
+  if (!shouldShow()) return null;
   if (!state.startupResolved) {
     const { initialUrl, localOrigin, bootOutcome, apiBaseUrl, clientToken, requestHeaders } = await resolveInitialUrl();
-    return activateMainWindow(initialUrl, localOrigin, bootOutcome, { apiBaseUrl, clientToken, requestHeaders });
+    return activateMainWindow(initialUrl, localOrigin, bootOutcome, { apiBaseUrl, clientToken, requestHeaders }, shouldShow);
   }
 
   const config = readDesktopHostsConfig();
@@ -2665,7 +2686,7 @@ const openMainWindow = async () => {
       apiBaseUrl: localApiBaseUrl,
       clientToken: localToken,
       requestHeaders: {},
-    });
+    }, shouldShow);
   }
   const apiBaseUrl = host?.apiUrl || host?.url || state.sidecarUrl || state.apiBaseUrl || '';
   const clientToken = host?.clientToken || resolveStoredClientTokenForUrl(apiBaseUrl, config) || state.clientToken || '';
@@ -2673,7 +2694,7 @@ const openMainWindow = async () => {
   const targetUrl = host?.url && apiBaseUrl && !state.unreachableHosts.has(apiBaseUrl)
     ? (shouldUsePackagedUi() ? buildPackagedUiUrl('/index.html') : host.url)
     : localUiUrl;
-  return activateMainWindow(targetUrl, state.localOrigin, state.bootOutcome, { apiBaseUrl, clientToken, requestHeaders });
+  return activateMainWindow(targetUrl, state.localOrigin, state.bootOutcome, { apiBaseUrl, clientToken, requestHeaders }, shouldShow);
 };
 
 const createAdditionalWindow = async (url, runtimeConfig = {}) => {
@@ -5444,18 +5465,132 @@ const setupTray = () => {
 // but showing an existing window must not. This mirrors desktop_focus_main_window
 // and the notification "open session" path; calling openMainWindow on a live
 // window navigates it (full reload), which is the bug we're avoiding here.
-const revealMainWindow = async () => {
+const revealMainWindow = async (shouldShow = () => true) => {
+  if (!shouldShow()) return null;
   let target = state.mainWindow;
   if (!target || target.isDestroyed()) {
-    target = await openMainWindow().catch(() => null) || state.mainWindow;
+    target = await openMainWindow({ shouldShow }).catch((error) => {
+      log.warn('[electron] could not reveal the main window', error);
+      return null;
+    }) || state.mainWindow;
   }
-  if (target && !target.isDestroyed()) {
+  if (shouldShow() && target && !target.isDestroyed()) {
     if (target.isMinimized()) target.restore();
     target.show();
     target.focus();
   }
   return target;
 };
+
+const summonShortcut = createSummonShortcut({
+  globalShortcut,
+  getWindow: () => state.mainWindow,
+  revealWindow: revealMainWindow,
+  beforeHide: (target) => debounceWindowStatePersist(target, true),
+  canToggle: () => !state.quitConfirmed && !state.backgroundShutdownPromise && !state.installingUpdate,
+  onUnavailable: (accelerator) => log.warn(`[electron] summon shortcut ${accelerator} is unavailable. Existing window, tray and menu actions are unchanged. No alternate shortcut was registered.`),
+  onError: (error) => log.warn('[electron] could not summon the main window', error),
+});
+
+// A canceled quit keeps the shortcut. Remove it only when Electron is exiting.
+app.once('will-quit', () => summonShortcut.stop());
+
+// The notch panel is a second, always-available chat surface pinned under the
+// MacBook notch. It is created lazily on first summon so startup is unchanged,
+// and it never takes focus until the user asks for it.
+const NOTCH_ACCELERATOR = 'CommandOrControl+Shift+N';
+const notchPanel = createNotchPanel({
+  createWindow: ({ bounds }) => {
+    const panel = new BrowserWindow({
+      ...bounds,
+      show: false,
+      frame: false,
+      transparent: true,
+      resizable: false,
+      movable: false,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      skipTaskbar: true,
+      hasShadow: true,
+      alwaysOnTop: true,
+      acceptFirstMouse: true,
+      backgroundColor: '#00000000',
+      webPreferences: {
+        additionalArguments: buildRendererAdditionalArguments({
+          localOrigin: state.localOrigin || '',
+          apiBaseUrl: state.apiBaseUrl || '',
+          clientToken: state.clientToken || '',
+          requestHeaders: sanitizeRuntimeRequestHeaders(state.requestHeaders || {}),
+        }),
+        preload: resolvePreloadPath(),
+        backgroundThrottling: false,
+        contextIsolation: true,
+        nodeIntegration: false,
+        webviewTag: true,
+        sandbox: false,
+      },
+    });
+    panel.__ocLabel = nextWindowLabel();
+    panel.__ocNotchPanel = true;
+    panel.setAlwaysOnTop(true, 'floating');
+    panel.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    // Escape closes the panel, matching a menu-bar surface rather than a window.
+    panel.webContents.on('before-input-event', (event, input) => {
+      if (input.type === 'keyDown' && input.key === 'Escape') {
+        event.preventDefault();
+        notchPanel.hide();
+      }
+    });
+    const panelUrl = buildMiniChatUrl({ mode: 'draft' });
+    void navigateWindow(panel, panelUrl).catch((error) => {
+      log.warn('[electron] could not load the notch panel', error);
+    });
+    return panel;
+  },
+  getCursorPoint: () => screen.getCursorScreenPoint(),
+  getDisplayForPoint: (point) => screen.getDisplayNearestPoint(point),
+});
+const toggleNotchPanel = () => {
+  if (!notchPanel.supported) return;
+  const result = notchPanel.toggle();
+  if (result.ok === false) log.warn(`[electron] notch panel unavailable: ${result.reason}`);
+};
+// Registration must wait for app ready: globalShortcut throws before that.
+const startNotchShortcut = () => {
+  if (!notchPanel.supported) {
+    log.info('[electron] notch panel is unsupported on this platform');
+    return;
+  }
+  try {
+    if (globalShortcut.isRegistered(NOTCH_ACCELERATOR)) {
+      log.info(`[electron] notch shortcut ${NOTCH_ACCELERATOR} was already registered`);
+      return;
+    }
+    const ok = globalShortcut.register(NOTCH_ACCELERATOR, toggleNotchPanel);
+    if (ok) {
+      log.info(`[electron] notch shortcut ${NOTCH_ACCELERATOR} registered`);
+    } else {
+      log.warn(`[electron] notch shortcut ${NOTCH_ACCELERATOR} is unavailable. The panel still opens from its menu action.`);
+    }
+  } catch (error) {
+    log.warn('[electron] could not register the notch shortcut', error);
+  }
+};
+app.once('will-quit', () => {
+  try { globalShortcut.unregister(NOTCH_ACCELERATOR); } catch { /* Exiting anyway. */ }
+  notchPanel.dispose();
+});
+// Verification hook: OPENCHAMBER_OPEN_NOTCH=1 opens the panel once at startup so
+// its geometry and visibility can be checked without a synthetic key press.
+if (process.env.OPENCHAMBER_OPEN_NOTCH === '1') {
+  app.whenReady().then(() => {
+    setTimeout(() => {
+      const result = notchPanel.show();
+      log.info(`[electron] notch panel startup open: ${JSON.stringify(result)}`);
+    }, 2500);
+  });
+}
 
 // Open a session in the main window, creating one first if none is alive. A
 // freshly created window can't receive an immediate emit (its renderer hasn't
@@ -5757,6 +5892,8 @@ app.whenReady().then(async () => {
     state.startupResolved = !(await shouldSkipLocalServer());
     state.initScript = buildInitScript(localOrigin, state.bootOutcome, apiBaseUrl, clientToken, state.requestHeaders);
     log.info('[electron] started in background without window');
+    summonShortcut.start();
+    startNotchShortcut();
     replayDeferredAppEvents();
     return;
   }
@@ -5767,6 +5904,8 @@ app.whenReady().then(async () => {
   await mainWindowShown;
   const { initialUrl, localOrigin, bootOutcome, apiBaseUrl, clientToken, requestHeaders } = await resolveInitialUrl();
   await activateMainWindow(initialUrl, localOrigin, bootOutcome, { apiBaseUrl, clientToken, requestHeaders });
+  summonShortcut.start();
+  startNotchShortcut();
   replayDeferredAppEvents();
 
 }).catch((error) => {

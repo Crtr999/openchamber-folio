@@ -1,5 +1,6 @@
 import { geminiI18n } from './gemini.i18n';
 import { veniceI18n } from './venice.i18n';
+import { mistralI18n } from './mistral.i18n';
 import { healthI18n } from './health.i18n';
 import { companionI18n } from './companion.i18n';
 import { friendsI18n } from './friends.i18n';
@@ -38,6 +39,7 @@ export const dict = {
   ...chatgptI18n['nl'],
   ...claudeI18n.nl,
   ...veniceI18n.nl,
+  ...mistralI18n['nl'],
   ...geminiI18n.nl,
   ...meetingsI18n.nl,
   'meeting.quickStart': 'Vergadering starten',
@@ -3404,6 +3406,8 @@ export const dict = {
   'chat.formDock.stepAria': 'Vraag {index}: {title}',
   'chat.formDock.linkInfo': 'Open de link en ga dan verder.',
   'chat.permissionCard.title': 'Toestemming vereist',
+  'chat.permissionCard.replyPending': 'Je beslissing wordt verstuurd…',
+  'chat.permissionCard.replyFailed': 'Je beslissing kon niet worden verstuurd. Het verzoek staat nog open. Kies een actie om het opnieuw te proberen.',
   'chat.permissionCard.summary.externalDirectory': "Bestanden buiten het project benaderen",
   'chat.permissionCard.summary.read': "Een bestand lezen",
   'chat.permissionCard.summary.edit': "Bestanden bewerken",

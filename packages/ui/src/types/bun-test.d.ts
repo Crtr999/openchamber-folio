@@ -24,11 +24,16 @@ declare module "bun:test" {
     toBeLessThanOrEqual(expected: number): void;
     toHaveLength(expected: number): void;
     toBeInstanceOf(expected: unknown): void;
+    toHaveBeenCalled(): void;
+    toHaveBeenCalledTimes(expected: number): void;
+    toHaveBeenCalledWith(...expected: unknown[]): void;
     not: {
       toEqual(expected: unknown): void;
       toBe(expected: unknown): void;
       toContain(expected: unknown): void;
       toBeNull(): void;
+      toHaveBeenCalled(): void;
+      toHaveBeenCalledTimes(expected: number): void;
     };
   }
   export function expect(value: unknown): ExpectResult;

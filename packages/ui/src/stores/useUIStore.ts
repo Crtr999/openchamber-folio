@@ -229,7 +229,7 @@ const CONTEXT_PANEL_MAX_PERSISTED_WIDTH = 10000;
 /** Per surface, not per panel: see clampContextPanelTabs. */
 const CONTEXT_PANEL_MAX_TABS = 12;
 const CONTEXT_PANEL_MAX_LABEL_LENGTH = 120;
-const LEFT_SIDEBAR_DEFAULT_WIDTH = 280;
+const LEFT_SIDEBAR_DEFAULT_WIDTH = 300;
 /** Separates browser tabs opened in the same millisecond. */
 let browserTabSequence = 0;
 
@@ -861,6 +861,7 @@ interface UIStore {
   isClaudePageOpen: boolean;
   isVenicePageOpen: boolean;
   isGeminiPageOpen: boolean;
+  isMistralPageOpen: boolean;
   isUsageStatsPageOpen: boolean;
   openGuestPageId: string | null;
   worktreesPageProjectId: string | null;
@@ -1134,6 +1135,7 @@ interface UIStore {
   setClaudePageOpen: (open: boolean) => void;
   setVenicePageOpen: (open: boolean) => void;
   setGeminiPageOpen: (open: boolean) => void;
+  setMistralPageOpen: (open: boolean) => void;
   setUsageStatsPageOpen: (open: boolean) => void;
   setOpenGuestPage: (id: string | null) => void;
   setWorktreesPageProjectId: (projectId: string | null) => void;
@@ -1345,7 +1347,7 @@ export const useUIStore = create<UIStore>()(
         isArchivePageOpen: false,
         isChatGPTPageOpen: false,
        
-        isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false,
+        isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false, isMistralPageOpen: false,
         isUsageStatsPageOpen: false,
         openGuestPageId: null,
         worktreesPageProjectId: null,
@@ -2125,31 +2127,31 @@ export const useUIStore = create<UIStore>()(
 
         setScheduledTasksDialogOpen: (open) => {
           set(open
-            ? { isScheduledTasksDialogOpen: true, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false }
+            ? { isScheduledTasksDialogOpen: true, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false, isMistralPageOpen: false }
             : { isScheduledTasksDialogOpen: false });
         },
 
         setArchivePageOpen: (open) => {
           set(open
-            ? { isArchivePageOpen: true, isUsageStatsPageOpen: false, isScheduledTasksDialogOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false }
+            ? { isArchivePageOpen: true, isUsageStatsPageOpen: false, isScheduledTasksDialogOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false, isMistralPageOpen: false }
             : { isArchivePageOpen: false });
         },
 
         setUsageStatsPageOpen: (open) => {
           set(open
-            ? { isUsageStatsPageOpen: true, isArchivePageOpen: false, isScheduledTasksDialogOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false }
+            ? { isUsageStatsPageOpen: true, isArchivePageOpen: false, isScheduledTasksDialogOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false, isMistralPageOpen: false }
             : { isUsageStatsPageOpen: false });
         },
 
         setWorktreesPageProjectId: (projectId) => {
           set(projectId
-            ? { worktreesPageProjectId: projectId, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false }
+            ? { worktreesPageProjectId: projectId, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, runOverviewKey: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false, isMistralPageOpen: false }
             : { worktreesPageProjectId: null });
         },
 
         setOpenGuestPage: (id) => {
-          set(id ? { openGuestPageId: id, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null }
-            : { openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false });
+          set(id ? { openGuestPageId: id, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false, isMistralPageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null }
+            : { openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false, isMistralPageOpen: false });
         },
 
         setChatGPTPageOpen: (open) => {
@@ -2166,19 +2168,25 @@ export const useUIStore = create<UIStore>()(
 
         setVenicePageOpen: (open) => {
           set(open
-            ? { isVenicePageOpen: true, isGeminiPageOpen: false, isClaudePageOpen: false, isChatGPTPageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
+            ? { isVenicePageOpen: true, isGeminiPageOpen: false, isClaudePageOpen: false, isChatGPTPageOpen: false, isMistralPageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
             : { isVenicePageOpen: false });
         },
 
         setGeminiPageOpen: (open) => {
           set(open
-            ? { isGeminiPageOpen: true, isVenicePageOpen: false, isClaudePageOpen: false, isChatGPTPageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
+            ? { isGeminiPageOpen: true, isVenicePageOpen: false, isClaudePageOpen: false, isChatGPTPageOpen: false, isMistralPageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
             : { isGeminiPageOpen: false });
+        },
+
+        setMistralPageOpen: (open) => {
+          set(open
+            ? { isMistralPageOpen: true, isVenicePageOpen: false, isGeminiPageOpen: false, isClaudePageOpen: false, isChatGPTPageOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, runOverviewKey: null, openGuestPageId: null }
+            : { isMistralPageOpen: false });
         },
 
         closeMainSurfaces: () => {
           const state = get();
-          if (!state.isScheduledTasksDialogOpen && !state.isArchivePageOpen && !state.isUsageStatsPageOpen && !state.worktreesPageProjectId && !state.runOverviewKey && !state.openGuestPageId && !state.isChatGPTPageOpen && !state.isClaudePageOpen && !state.isVenicePageOpen && !state.isGeminiPageOpen) {
+          if (!state.isScheduledTasksDialogOpen && !state.isArchivePageOpen && !state.isUsageStatsPageOpen && !state.worktreesPageProjectId && !state.runOverviewKey && !state.openGuestPageId && !state.isChatGPTPageOpen && !state.isClaudePageOpen && !state.isVenicePageOpen && !state.isGeminiPageOpen && !state.isMistralPageOpen) {
             return;
           }
           set({
@@ -2190,7 +2198,7 @@ export const useUIStore = create<UIStore>()(
             openGuestPageId: null,
             isChatGPTPageOpen: false,
            
-            isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false,
+            isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false, isMistralPageOpen: false,
           });
         },
 
@@ -2769,7 +2777,7 @@ export const useUIStore = create<UIStore>()(
         // opening it closes the other surfaces and vice versa.
         setRunOverviewKey: (runKey) => {
           set(runKey
-            ? { runOverviewKey: runKey, isSessionSwitcherOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false }
+            ? { runOverviewKey: runKey, isSessionSwitcherOpen: false, isScheduledTasksDialogOpen: false, isArchivePageOpen: false, isUsageStatsPageOpen: false, worktreesPageProjectId: null, openGuestPageId: null, isChatGPTPageOpen: false, isClaudePageOpen: false, isVenicePageOpen: false, isGeminiPageOpen: false, isMistralPageOpen: false }
             : { runOverviewKey: null });
         },
 

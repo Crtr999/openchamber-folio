@@ -38,7 +38,7 @@ import { getImperativeSessionMessageLoader } from "./session-message-loader"
 import { cleanupPersistedSessionState } from "./session-deletion-cleanup"
 import { requestSessionArchiveBatch, requestSessionMetadataUpdate, requestSessionUnarchiveBatch, type SessionArchiveStamp } from "./session-archive-batch"
 import { registerBulkArchiveEchoes, releaseBulkArchiveEchoes } from "./bulk-archive-echo"
-import { getRuntimeKey } from "@/lib/runtime-switch"
+import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from "@/lib/runtime-switch"
 import { isRelayModeActive } from "@/lib/relay/runtime-tunnel"
 import { getErrorStatus, isAmbiguousSendFailure } from "./send-failure-classification"
 import { getStaleRunningToolMessageID } from "./materialization"
@@ -359,15 +359,33 @@ const CONNECTION_GRACE_MS = 2000
 const CONNECTION_PROBE_MS = 500
 const RELAY_CONNECTION_GRACE_MS = 3000
 const RELAY_CONNECTION_PROBE_MS = 3000
-export async function waitForConnectionOrThrow(): Promise<void> {
+export async function waitForConnectionOrThrow(options: { isAborted?: () => boolean } = {}): Promise<void> {
   const relayed = isRelayModeActive()
   const deadline = Date.now() + (relayed ? RELAY_CONNECTION_GRACE_MS : CONNECTION_GRACE_MS)
   const probeMs = relayed ? RELAY_CONNECTION_PROBE_MS : CONNECTION_PROBE_MS
   while (Date.now() < deadline) {
+    if (options.isAborted?.()) return
     if (useConfigStore.getState().isConnected) return
     const remainingMs = deadline - Date.now()
     if (remainingMs <= 0) break
-    if (await useConfigStore.getState().probeConnection({ timeoutMs: Math.min(probeMs, remainingMs) })) return
+    // A probe that ignores its own timeout must not hang the caller: race it
+    // against the remaining grace window so the deadline still governs.
+    const probeBudget = Math.min(probeMs, remainingMs)
+    const connected = await new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => resolve(false), probeBudget)
+      let settled = false
+      const settle = (value: boolean) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        resolve(value)
+      }
+      Promise.resolve()
+        .then(() => useConfigStore.getState().probeConnection({ timeoutMs: probeBudget }))
+        .then((result) => settle(result === true), () => settle(false))
+    })
+    if (options.isAborted?.()) return
+    if (connected) return
     const sleepMs = Math.min(100, deadline - Date.now())
     if (sleepMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, sleepMs))
@@ -2120,14 +2138,39 @@ export async function respondToPermission(
   requestId: string,
   response: "once" | "always" | "reject",
   directoryOverride?: string,
+  expectedRuntimeKey = getRuntimeKey(),
 ): Promise<void> {
-  await waitForConnectionOrThrow()
-  const directory = directoryOverride
-    || resolveDirectoryForBlockingRequest("permission", sessionId, requestId)
-    || getSessionDirectory(sessionId)
-    || dir()
-  if (await opencodeClient.replyToPermission(sessionId, requestId, response, { directory }) !== true) {
-    throw new Error("Permission reply failed")
+  let runtimeChanged = false
+  const unsubscribe = subscribeRuntimeEndpointWillChange(() => { runtimeChanged = true })
+  // The event is a fast hint; the runtime key itself is authoritative, so a
+  // missed event can never let a reply cross runtimes.
+  const runtimeChangedNow = () => runtimeChanged || getRuntimeKey() !== expectedRuntimeKey
+  const assertRuntime = () => {
+    if (runtimeChangedNow() || isStaleRuntime(expectedRuntimeKey)) throw new Error("runtime changed")
+  }
+  try {
+    assertRuntime()
+    try {
+      await waitForConnectionOrThrow({ isAborted: runtimeChangedNow })
+    } catch (error) {
+      // A runtime change during recovery is the real cause, not the lost
+      // connection it produced.
+      assertRuntime()
+      throw error
+    }
+    assertRuntime()
+    const directory = directoryOverride
+      || resolveDirectoryForBlockingRequest("permission", sessionId, requestId)
+      || getSessionDirectory(sessionId)
+      || dir()
+    // No await between this guard and dispatch: never route the captured IDs
+    // through another runtime, including an away-and-back connection recovery.
+    assertRuntime()
+    if (await opencodeClient.replyToPermission(sessionId, requestId, response, { directory }) !== true) {
+      throw new Error("Permission reply failed")
+    }
+  } finally {
+    unsubscribe()
   }
 }
 

@@ -1,4 +1,4 @@
-export const WEBSITE_SIDEBAR_IDS = ['website:chatgpt', 'website:claude', 'website:venice', 'website:gemini'] as const;
+export const WEBSITE_SIDEBAR_IDS = ['website:chatgpt', 'website:claude', 'website:venice', 'website:gemini', 'website:mistral'] as const;
 
 export type WebsiteSidebarId = (typeof WEBSITE_SIDEBAR_IDS)[number];
 

@@ -5,9 +5,15 @@ const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', '
 const CACHE_MS = 45_000;
 const STALE_MS = 24 * 3600_000;
 
-/** Reads "5:07 PM" or "Oct 29 at 5:07 PM" as the next time that clock reading occurs. */
+/** Reads "5:07 PM", "Oct 29 at 5:07 PM", or a relative span such as "Resets in 26 days". */
 export const parseResetText = (text, now = new Date()) => {
   if (typeof text !== 'string') return null;
+  const relative = text.match(/\bin\s+([\d.]+)\s*(second|minute|hour|day|week)s?\b/i);
+  if (relative) {
+    const scale = { second: 1000, minute: 60_000, hour: 3_600_000, day: 86_400_000, week: 604_800_000 }[relative[2].toLowerCase()];
+    const ms = Number(relative[1]) * scale;
+    return Number.isFinite(ms) && ms > 0 ? now.getTime() + ms : null;
+  }
   const time = text.match(/(\d{1,2}):(\d{2})\s*([AP]M)/i);
   if (!time) return null;
   let hour = Number(time[1]) % 12;
@@ -64,6 +70,31 @@ export const gemini = make({
       windows[row.key] = toUsageWindow({ usedPercent: percent(row.usedPercent), windowSeconds: null, resetAt: parseResetText(row.resetText) });
     }
     if (!Object.keys(windows).length) throw new Error('Gemini’s usage page did not report any limits.');
+    return { usage: { windows }, planLabel: typeof data?.plan === 'string' ? data.plan.slice(0, 40) : null };
+  },
+});
+
+/** Mistral's admin console lists the subscription's included monthly allowances
+ * as dollar amounts, so the ring is share-of-allowance and the label carries the dollars. */
+const MISTRAL_WINDOW_SECONDS = 30 * 86_400;
+
+export const mistral = make({
+  providerId: 'mistral-website',
+  providerName: 'Mistral',
+  site: 'mistral',
+  toResult: data => {
+    const windows = {};
+    for (const row of Array.isArray(data?.allowances) ? data.allowances : []) {
+      if (!['api', 'vibe'].includes(row?.key) || typeof row.used !== 'number' || typeof row.total !== 'number' || !(row.total > 0)) continue;
+      const label = row.key === 'api' ? 'API' : 'Vibe Code';
+      windows[label] = toUsageWindow({
+        usedPercent: Math.min(100, Math.max(0, (row.used / row.total) * 100)),
+        windowSeconds: MISTRAL_WINDOW_SECONDS,
+        resetAt: parseResetText(row.resetText),
+        valueLabel: '$' + row.used + ' of $' + row.total + ' used',
+      });
+    }
+    if (!Object.keys(windows).length) throw new Error('Mistral’s subscription page did not report any allowances.');
     return { usage: { windows }, planLabel: typeof data?.plan === 'string' ? data.plan.slice(0, 40) : null };
   },
 });

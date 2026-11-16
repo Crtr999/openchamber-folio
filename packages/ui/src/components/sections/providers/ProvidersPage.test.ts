@@ -5,7 +5,7 @@ import {
   findIntegrationForProvider,
   getCredentialConnections,
   getKeyMethod,
-  getOAuthMethods,
+  getSignInMethods,
   getProviderConnections,
   getProviderCardStatus,
   getSignInIntegrationId,
@@ -56,18 +56,20 @@ describe('integration method helpers', () => {
     expect(shouldShowApiKeyAuth(integration({ methods: [{ type: 'key' }] }))).toBe(true);
     // A provider OpenCode has no integration for (a custom one from
     // opencode.json) is still keyed by an API key.
+    expect(shouldShowApiKeyAuth(integration({ methods: [{ type: 'external', id: 'claude-login', label: 'Claude Code login' }] }))).toBe(false);
     expect(shouldShowApiKeyAuth(undefined)).toBe(true);
   });
 
-  test('getOAuthMethods keeps only oauth methods, in declared order', () => {
+  test('getSignInMethods keeps OAuth and external login methods, in declared order', () => {
     const methods: IntegrationInfo['methods'] = [
       { type: 'key', label: 'API Key' },
       { type: 'oauth', id: 'browser', label: 'OAuth' },
       { type: 'env', names: ['OPENAI_API_KEY'] },
+      { type: 'external', id: 'claude-login', label: 'Claude Code login (claude auth login)' },
       { type: 'oauth', id: 'device', label: 'Device' },
     ];
-    expect(getOAuthMethods(integration({ methods })).map((method) => method.id)).toEqual(['browser', 'device']);
-    expect(getOAuthMethods(undefined)).toEqual([]);
+    expect(getSignInMethods(integration({ methods })).map((method) => method.id)).toEqual(['browser', 'claude-login', 'device']);
+    expect(getSignInMethods(undefined)).toEqual([]);
   });
 
   test('getKeyMethod returns the key method when the integration accepts one', () => {

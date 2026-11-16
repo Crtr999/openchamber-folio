@@ -280,7 +280,7 @@ export function resolveFolderPrimaryAgent(
     }
   }
 
-  if (allowedProviders.includes('claude-code')) {
+  if (allowedProviders.includes('claude-agent') || allowedProviders.includes('claude-code')) {
     const claudeAgent = visiblePrimary.find(item => item.name.toLowerCase() === 'claude');
     if (claudeAgent) return claudeAgent;
   }

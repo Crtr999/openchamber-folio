@@ -29,7 +29,7 @@ import * as ollamaCloud from './ollama-cloud.js';
 import * as wafer from './wafer.js';
 import * as opencodeGo from './opencode-go.js';
 import * as xai from './xai.js';
-import { gemini as geminiWebsite, venice as veniceWebsite } from './website-accounts.js';
+import { gemini as geminiWebsite, venice as veniceWebsite, mistral as mistralWebsite } from './website-accounts.js';
 
 const registry = {
   claude: {
@@ -169,6 +169,12 @@ const registry = {
     providerName: veniceWebsite.providerName,
     isConfigured: veniceWebsite.isConfigured,
     fetchQuota: veniceWebsite.fetchQuota
+  },
+  'mistral-website': {
+    providerId: mistralWebsite.providerId,
+    providerName: mistralWebsite.providerName,
+    isConfigured: mistralWebsite.isConfigured,
+    fetchQuota: mistralWebsite.fetchQuota
   },
   xai: {
     providerId: xai.providerId,

@@ -1,5 +1,5 @@
 import React from 'react';
-import type { FormField, FormValue, IntegrationOAuthMethod } from '@opencode/client';
+import type { FormField, FormValue, IntegrationOAuthMethod, IntegrationExternalMethod } from '@opencode/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -30,7 +30,7 @@ import {
 interface ProviderOAuthMethodsProps {
   /** The integration that owns these methods; it shares the provider's id. */
   integrationId: string;
-  methods: IntegrationOAuthMethod[];
+  methods: (IntegrationOAuthMethod | IntegrationExternalMethod)[];
   /** Called once a credential has been stored, so the caller can reload providers. */
   onConnected: () => void | Promise<void>;
   /**
@@ -158,8 +158,25 @@ export const ProviderOAuthMethods: React.FC<ProviderOAuthMethodsProps> = ({
     }
   };
 
-  const runConnect = async (method: IntegrationOAuthMethod, answer: Record<string, FormValue>) => {
+  const runConnect = async (method: IntegrationOAuthMethod | IntegrationExternalMethod, answer: Record<string, FormValue>) => {
     setFlow({ phase: 'connecting', methodID: method.id });
+
+    if (method.type === 'external') {
+      const client = sdk();
+      try {
+        await client.integration.connect.external({
+          integrationID: integrationId,
+          methodID: method.id,
+          answer,
+        });
+        if (sdk() !== client) return;
+        await succeed();
+      } catch (error) {
+        if (sdk() !== client) return;
+        fail(method.id, error, 'settings.providers.page.toast.oauthStartFailed');
+      }
+      return;
+    }
 
     let attempt: OAuthAttempt;
     try {
@@ -193,7 +210,7 @@ export const ProviderOAuthMethods: React.FC<ProviderOAuthMethodsProps> = ({
     await pollAttempt(method.id, attempt.attemptID);
   };
 
-  const beginConnect = (method: IntegrationOAuthMethod) => {
+  const beginConnect = (method: IntegrationOAuthMethod | IntegrationExternalMethod) => {
     const fields = (method.form ?? []).filter(isAnswerableField);
     if (fields.length === 0) {
       void runConnect(method, {});
@@ -203,7 +220,7 @@ export const ProviderOAuthMethods: React.FC<ProviderOAuthMethodsProps> = ({
     setFlow({ phase: 'prompting', methodID: method.id, fields, error: null });
   };
 
-  const submitFields = (method: IntegrationOAuthMethod) => {
+  const submitFields = (method: IntegrationOAuthMethod | IntegrationExternalMethod) => {
     if (flow.phase !== 'prompting') {
       return;
     }

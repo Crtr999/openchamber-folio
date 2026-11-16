@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import type { Server } from "http";
 import type { AiTaskConnection, AiTaskCoordinator, TeamConnection, TeamRuntime } from './lib/ai-tasks/runtime.js';
+import type { NativeAppReader } from './lib/native-app-reader/contract.js';
 
 export interface WebUiServerController {
   expressApp: Express;
@@ -32,6 +33,8 @@ export interface DesktopUpdater {
 export interface StartWebUiServerOptions {
   /** Local signed-in website accounts exposed through ordinary native model providers. */
   desktopWebsiteModels?: boolean;
+  /** Local read-only host adapter. Requests still require per-directory grants. */
+  nativeAppReader?: NativeAppReader;
   port?: number;
   host?: string;
   attachSignals?: boolean;
